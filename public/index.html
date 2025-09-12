@@ -53,4 +53,52 @@ loginBtn.addEventListener('click', async ()=>{
   errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ errorMsg.textContent=error.message; errorMsg.style.display='block'; return; }
+  userToken = data.session.access_token;
+  loginBtn.style.display='none';
+  document.getElementById('email').style.display='none';
+  document.getElementById('senha').style.display='none';
+  form.style.display='block';
+});
+
+form.addEventListener('submit', async e=>{
+  e.preventDefault();
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
+
+  const formData = new FormData(form);
+  const dataToSend = {
+    Nome: formData.get('Nome'),
+    Email: formData.get('Email'),
+    Telefone: formData.get('Telefone'),
+    Data: formData.get('Data'),
+    Horario: formData.get('Horario')
+  };
+
+  try{
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
+      headers: { "Authorization": `Bearer ${userToken}` }
+    });
+    const result = await check.json();
+    if(result.ocupados.includes(dataToSend.Horario)){
+      errorMsg.textContent='Horário já ocupado';
+      errorMsg.style.display='block';
+      return;
+    }
+  }catch(err){ console.error(err); }
+
+  try{
+    const response = await fetch(`/agendar/${cliente}`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${userToken}` },
+      body: JSON.stringify(dataToSend)
+    });
+    const result = await response.json();
+    if(response.ok){ successMsg.style.display='block'; form.reset(); }
+    else{ errorMsg.textContent=result.msg||'Erro'; errorMsg.style.display='block'; }
+  }catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
+});
+</script>
+</body>
+</html>
