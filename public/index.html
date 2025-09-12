@@ -8,14 +8,17 @@
 <body>
   <h1>Agendamento</h1>
 
+  <!-- LOGIN -->
   <div id="loginDiv">
     <h2>Login</h2>
     <input type="email" id="email" placeholder="Email"><br>
     <input type="password" id="password" placeholder="Senha"><br>
     <button onclick="login()">Entrar</button>
+    <button onclick="loginMagic()">Entrar com link mágico</button>
     <p id="loginMsg"></p>
   </div>
 
+  <!-- FORMULÁRIO DE AGENDAMENTO -->
   <div id="agendaDiv" style="display:none">
     <h2>Agendar horário</h2>
     <input type="text" id="nome" placeholder="Nome"><br>
@@ -28,14 +31,26 @@
   </div>
 
   <script>
-    // Inicializa Supabase
+    // ----------- CONFIGURAÇÃO SUPABASE -------------
     const supabaseUrl = "https://SEU_SUPABASE_URL";
     const supabaseKey = "SEU_SUPABASE_ANON_KEY";
     const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-    let token = null;
-    const clienteId = window.location.pathname.split("/")[2]; // /cliente/cliente1
+    // ----------- DETECTAR CLIENTE NA URL -------------
+    const clienteId = window.location.pathname.split("/")[1]; // "/cliente1" -> "cliente1"
 
+    // ----------- TRATAMENTO DE HASH (LINK MÁGICO) -------------
+    const hash = window.location.hash;
+    if (hash.includes("access_token")) {
+      const params = new URLSearchParams(hash.slice(1));
+      const access_token = params.get("access_token");
+      supabase.auth.setSession({ access_token }).then(() => {
+        document.getElementById("loginDiv").style.display = "none";
+        document.getElementById("agendaDiv").style.display = "block";
+      });
+    }
+
+    // ----------- FUNÇÃO LOGIN COM EMAIL/SENHA -------------
     async function login() {
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
@@ -46,11 +61,24 @@
         return;
       }
 
-      token = data.session.access_token;
       document.getElementById("loginDiv").style.display = "none";
       document.getElementById("agendaDiv").style.display = "block";
     }
 
+    // ----------- FUNÇÃO LOGIN COM LINK MÁGICO -------------
+    async function loginMagic() {
+      const email = document.getElementById("email").value;
+      const { data, error } = await supabase.auth.signInWithOtp({ email });
+
+      if (error) {
+        document.getElementById("loginMsg").innerText = error.message;
+        return;
+      }
+
+      document.getElementById("loginMsg").innerText = "✅ Confira seu e-mail para entrar!";
+    }
+
+    // ----------- FUNÇÃO PARA AGENDAR -------------
     async function agendar() {
       const registro = {
         Nome: document.getElementById("nome").value,
@@ -59,6 +87,11 @@
         Data: document.getElementById("data").value,
         Horario: document.getElementById("horario").value
       };
+
+      // Pega o token atual da sessão
+      const session = supabase.auth.getSession();
+      let token = null;
+      if (session?.data?.session) token = session.data.session.access_token;
 
       const res = await fetch(`/agendar/${clienteId}`, {
         method: "POST",
