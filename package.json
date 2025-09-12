@@ -1,5 +1,4 @@
 {
-  "type": "module",
   "name": "agendamento-bot",
   "version": "1.0.0",
   "description": "Bot de agendamento usando Google Sheets",
@@ -17,4 +16,5 @@
     "node": "20.x"
   }
 }
+
 
