@@ -1,11 +1,12 @@
 import express from "express";
 import bodyParser from "body-parser";
-import path from "path";
-import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// Conta de serviço Google
-const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
+// Config
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORT = process.env.PORT || 3000;
 
 // Supabase
 const supabase = createClient(
@@ -13,56 +14,32 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
-let creds;
-try {
-  creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT);
-} catch (e) {
-  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
-  process.exit(1);
-}
-
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static(path.join(process.cwd(), "public")));
+app.use(express.static(path.join(__dirname, "public")));
 
-const clientes = {
-  "cliente1": "11Hrgpo21LxBLn6Esoiwz0gDk5j_HAxBuLARfo59s-RA",
-  "cliente2": "ID_DA_PLANILHA_CLIENTE2"
+// 🕒 Horários padrão por cliente
+const horariosClientes = {
+  cliente1: [
+    "09:00", "10:00", "11:00", "12:00",
+    "13:00", "14:00", "15:00", "16:00",
+    "17:00", "18:00"
+  ],
+  cliente2: [
+    "08:00", "09:00", "10:00", "11:00", "12:00",
+    "13:00", "14:00", "15:00", "16:00",
+    "17:00", "18:00", "19:00", "20:00"
+  ]
 };
 
-async function accessSpreadsheet(sheetId) {
-  const doc = new GoogleSpreadsheet(sheetId);
-  await doc.useServiceAccountAuth(creds);
-  await doc.loadInfo();
-  return doc;
-}
-
-async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => {
-    await sheet.setHeaderRow(newKeys);
-  });
-
-  const currentHeaders = sheet.headerValues || [];
-  const headersToAdd = newKeys.filter((key) => !currentHeaders.includes(key));
-
-  if (headersToAdd.length > 0) {
-    const updatedHeaders = [...currentHeaders, ...headersToAdd];
-    await sheet.setHeaderRow(updatedHeaders);
-  }
-}
-// Horários de trabalho fixos (exemplo: 9h às 18h, a cada 1h)
-const horariosPadrao = [
-  "09:00", "10:00", "11:00", "12:00",
-  "13:00", "14:00", "15:00", "16:00",
-  "17:00", "18:00"
-];
-
-// Endpoint para buscar horários disponíveis
+// 🔹 Endpoint para horários disponíveis
 app.get("/horarios/:cliente/:data", async (req, res) => {
   try {
     const { cliente, data } = req.params;
 
-    // Buscar agendamentos no Supabase
+    const horariosPadrao = horariosClientes[cliente] || horariosClientes["cliente1"];
+
+    // Buscar agendamentos já feitos
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("horario")
@@ -74,7 +51,7 @@ app.get("/horarios/:cliente/:data", async (req, res) => {
       return res.status(500).json({ msg: "Erro ao consultar horários" });
     }
 
-    const ocupados = agendamentos.map(a => a.horario.slice(0,5)); // "HH:MM"
+    const ocupados = agendamentos.map(a => a.horario.slice(0, 5)); // HH:MM
     const disponiveis = horariosPadrao.filter(h => !ocupados.includes(h));
 
     res.json({ disponiveis });
@@ -84,58 +61,33 @@ app.get("/horarios/:cliente/:data", async (req, res) => {
   }
 });
 
-// Rota formulário
-app.get("/:cliente", (req, res) => {
-  const cliente = req.params.cliente;
-  if (!clientes[cliente]) return res.status(404).send("Cliente não encontrado");
-  res.sendFile(path.join(process.cwd(), "public", "index.html"));
-});
-
-// Agendar
+// 🔹 Endpoint para agendar
 app.post("/agendar/:cliente", async (req, res) => {
   try {
-    const cliente = req.params.cliente;
-    const sheetId = clientes[cliente];
-    if (!sheetId) return res.status(404).json({ msg: "Cliente não encontrado" });
+    const { cliente } = req.params;
+    const { Nome, Email, Telefone, Data, Horario } = req.body;
 
-    const data = req.body;
-
-    const defaultKeys = ["Nome", "Email", "Telefone", "Data", "Horario"];
-    defaultKeys.forEach(k => { if (!data[k]) data[k] = ""; });
-
-    // 1) Salvar no Google Sheets
-    const doc = await accessSpreadsheet(sheetId);
-    const sheet = doc.sheetsByIndex[0];
-
-    const keys = Object.keys(data);
-    await ensureDynamicHeaders(sheet, keys);
-    await sheet.addRow(data);
-
-    // 2) Salvar no Supabase
-    const { error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente,
-        nome: data.Nome,
-        email: data.Email,
-        telefone: data.Telefone,
-        data: data.Data,
-        horario: data.Horario,
-        status: "pendente"
-      }]);
-
-    if (error) {
-      console.error("Erro ao salvar no Supabase:", error);
+    if (!Nome || !Email || !Telefone || !Data || !Horario) {
+      return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
     }
 
-    res.json({ msg: "✅ Agendamento realizado com sucesso!" });
+    // Salvar no Supabase
+    const { error } = await supabase
+      .from("agendamentos")
+      .insert([{ cliente, nome: Nome, email: Email, telefone: Telefone, data: Data, horario: Horario }]);
 
+    if (error) {
+      console.error(error);
+      return res.status(500).json({ msg: "Erro ao salvar agendamento" });
+    }
+
+    res.json({ msg: "Agendamento realizado com sucesso" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: "❌ Erro ao realizar agendamento" });
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
+app.listen(PORT, () => {
+  console.log(`Servidor rodando em http://localhost:${PORT}`);
+});
