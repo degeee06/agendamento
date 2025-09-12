@@ -13,8 +13,8 @@
     <h2>Login</h2>
     <input type="email" id="email" placeholder="Email"><br>
     <input type="password" id="password" placeholder="Senha"><br>
-    <button onclick="login()">Entrar</button>
-    <button onclick="loginMagic()">Entrar com link mágico</button>
+    <button id="btnLogin">Entrar</button>
+    <button id="btnMagic">Entrar com link mágico</button>
     <p id="loginMsg"></p>
   </div>
 
@@ -26,36 +26,43 @@
     <input type="text" id="telefone" placeholder="Telefone"><br>
     <input type="date" id="data"><br>
     <input type="time" id="horario"><br>
-    <button onclick="agendar()">Agendar</button>
+    <button id="btnAgendar">Agendar</button>
     <p id="agendaMsg"></p>
   </div>
 
   <script>
-    // ----------- CONFIGURAÇÃO SUPABASE -------------
+    // ------------------- SUPABASE -------------------
     const supabaseUrl = "https://otyxjcxxqwjotnuyrvmc.supabase.co"; // substitua
-    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";    // substitua
+    const supabaseKey = "SUA_ANON_KEY"; // substitua
     const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-    // ----------- DETECTAR CLIENTE NA URL -------------
+    // ------------------- CLIENTE -------------------
     const clienteId = window.location.pathname.split("/")[1]; // "/cliente1" -> "cliente1"
 
-    // ----------- PROCESSAR LINK MÁGICO AO CARREGAR A PÁGINA -------------
-    window.addEventListener('load', async () => {
+    // ------------------- LOGIN COM MAGIC LINK -------------------
+    async function processMagicLink() {
       const hash = window.location.hash;
       if (hash.includes("access_token")) {
         const params = new URLSearchParams(hash.slice(1));
         const access_token = params.get("access_token");
-        await supabase.auth.setSession({ access_token });
-        document.getElementById("loginDiv").style.display = "none";
-        document.getElementById("agendaDiv").style.display = "block";
+        if (access_token) {
+          await supabase.auth.setSession({ access_token });
+          document.getElementById("loginDiv").style.display = "none";
+          document.getElementById("agendaDiv").style.display = "block";
+          window.location.hash = ""; // limpa o hash
+        }
       }
-    });
+    }
 
-    // ----------- FUNÇÃO LOGIN COM EMAIL/SENHA -------------
+    window.addEventListener('load', processMagicLink);
+
+    // ------------------- FUNÇÕES DE LOGIN -------------------
     async function login() {
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
+
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log("Login data:", data, "Error:", error);
 
       if (error) {
         document.getElementById("loginMsg").innerText = error.message;
@@ -70,7 +77,6 @@
       }
     }
 
-    // ----------- FUNÇÃO LOGIN COM LINK MÁGICO -------------
     async function loginMagic() {
       const email = document.getElementById("email").value;
       const { data, error } = await supabase.auth.signInWithOtp({ email });
@@ -83,9 +89,8 @@
       document.getElementById("loginMsg").innerText = "✅ Confira seu e-mail para entrar!";
     }
 
-    // ----------- FUNÇÃO PARA AGENDAR -------------
+    // ------------------- FUNÇÃO AGENDAR -------------------
     async function agendar() {
-      // Pega o token atual da sessão
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) {
@@ -113,7 +118,11 @@
       const data = await res.json();
       document.getElementById("agendaMsg").innerText = data.msg;
     }
+
+    // ------------------- EVENTOS -------------------
+    document.getElementById("btnLogin").addEventListener("click", login);
+    document.getElementById("btnMagic").addEventListener("click", loginMagic);
+    document.getElementById("btnAgendar").addEventListener("click", agendar);
   </script>
 </body>
 </html>
-
