@@ -1,100 +1,77 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Agendamento</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 500px;
-      margin: 50px auto;
-      padding: 20px;
-      background-color: #f7f7f7;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-      font-size: 16px;
-    }
-    button {
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #45a049;
-    }
-    .success, .error {
-      text-align: center;
-      margin-top: 10px;
-      font-weight: bold;
-    }
-    .success { color: green; }
-    .error { color: red; }
-  </style>
-</head>
-<body>
-  <h2>Formulário de Agendamento</h2>
-  
-  <form id="agendamentoForm">
-    <input type="text" name="Nome" placeholder="Nome" required>
-    <input type="email" name="Email" placeholder="Email" required>
-    <input type="text" name="Telefone" placeholder="Telefone" required>
-    <input type="text" name="Data" placeholder="Data do Agendamento" required>
-    <button type="submit">Agendar</button>
-  </form>
+import express from "express";
+import bodyParser from "body-parser";
+import path from "path";
+import { GoogleSpreadsheet } from "google-spreadsheet";
 
-  <div class="success" id="successMsg" style="display:none;">Agendamento realizado com sucesso!</div>
-  <div class="error" id="errorMsg" style="display:none;">Ocorreu um erro ao agendar.</div>
+const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
 
-  <script>
-    const form = document.getElementById('agendamentoForm');
-    const successMsg = document.getElementById('successMsg');
-    const errorMsg = document.getElementById('errorMsg');
+let creds;
+try {
+  creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT);
+} catch (e) {
+  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
+  process.exit(1);
+}
 
-    // Pega o cliente da URL: ex: /cliente1
-    const pathParts = window.location.pathname.split('/');
-    const cliente = pathParts[1] || '';
+const app = express();
+app.use(bodyParser.json());
+app.use(express.static(path.join(process.cwd(), "public")));
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      successMsg.style.display = 'none';
-      errorMsg.style.display = 'none';
+// Estrutura de clientes + planilhas
+const clientes = {
+  "cliente1": "ID_DA_PLANILHA_CLIENTE1",
+  "cliente2": "ID_DA_PLANILHA_CLIENTE2"
+};
 
-      const formData = new FormData(form);
-      const data = {};
-      formData.forEach((value, key) => {
-        data[key] = value;
-      });
+async function accessSpreadsheet(sheetId) {
+  const doc = new GoogleSpreadsheet(sheetId);
+  await doc.useServiceAccountAuth(creds);
+  await doc.loadInfo();
+  return doc;
+}
 
-      try {
-        const response = await fetch(`/agendar/${cliente}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
+async function ensureDynamicHeaders(sheet, newKeys) {
+  await sheet.loadHeaderRow();
+  const currentHeaders = sheet.headerValues || [];
+  const headersToAdd = newKeys.filter((key) => !currentHeaders.includes(key));
 
-        const result = await response.json();
+  if (headersToAdd.length > 0) {
+    const updatedHeaders = [...currentHeaders, ...headersToAdd];
+    await sheet.setHeaderRow(updatedHeaders);
+    console.log("Cabeçalhos atualizados na ordem de registro:", updatedHeaders);
+  }
+}
 
-        if (response.ok) {
-          successMsg.style.display = 'block';
-          form.reset();
-        } else {
-          errorMsg.textContent = result.msg || 'Ocorreu um erro';
-          errorMsg.style.display = 'block';
-        }
-      } catch (err) {
-        console.error(err);
-        errorMsg.textContent = 'Ocorreu um erro';
-        errorMsg.style.display = 'block';
-      }
-    });
-  </script>
-</body>
-</html>
+// Rota para o formulário do cliente
+app.get("/:cliente", (req, res) => {
+  const cliente = req.params.cliente;
+  if (!clientes[cliente]) return res.status(404).send("Cliente não encontrado");
+
+  // Serve o HTML do formulário normalmente
+  res.sendFile(path.join(process.cwd(), "public", "formulario.html"));
+});
+
+// Endpoint para receber agendamento
+app.post("/agendar/:cliente", async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    const sheetId = clientes[cliente];
+    if (!sheetId) return res.status(404).json({ msg: "Cliente não encontrado" });
+
+    const data = req.body;
+    const doc = await accessSpreadsheet(sheetId);
+    const sheet = doc.sheetsByIndex[0];
+
+    const keys = Object.keys(data);
+    await ensureDynamicHeaders(sheet, keys);
+
+    await sheet.addRow(data);
+    res.json({ msg: "✅ Agendamento realizado com sucesso!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "❌ Erro ao realizar agendamento" });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
