@@ -17,7 +17,7 @@ const supabase = createClient(
 
 // Clientes e IDs das planilhas deles
 const planilhasClientes = {
-  cliente1: process.env.ID_PLANILHA_CLIENTE1,
+  cliente1: process.env.11Hrgpo21LxBLn6Esoiwz0gDk5j_HAxBuLARfo59s-RA,
   cliente2: process.env.ID_PLANILHA_CLIENTE2
 };
 
@@ -149,3 +149,4 @@ app.get("/disponiveis/:cliente/:data", async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
