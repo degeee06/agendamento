@@ -27,16 +27,24 @@ app.use(express.static(path.join(process.cwd(), "public")));
 async function accessSpreadsheet() {
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
-  const sheet = doc.sheetsByIndex[0]; // primeira aba
-
-  // Cabeçalho automático se estiver vazio
-  if (!sheet.headerValues || sheet.headerValues.length === 0) {
-    const defaultHeaders = ["nome", "email", "data", "hora"];
-    await sheet.setHeaderRow(defaultHeaders);
-    console.log("Cabeçalho criado automaticamente:", defaultHeaders);
-  }
-
   return doc;
+}
+
+// Função para garantir headers dinâmicos e ordenados
+async function ensureDynamicHeaders(sheet, newKeys) {
+  await sheet.loadHeaderRow();
+  const currentHeaders = sheet.headerValues || [];
+
+  // Novos headers que precisam ser adicionados
+  const headersToAdd = newKeys.filter((key) => !currentHeaders.includes(key));
+
+  if (headersToAdd.length > 0) {
+    const updatedHeaders = [...currentHeaders, ...headersToAdd];
+    // Ordena alfabeticamente
+    updatedHeaders.sort((a, b) => a.localeCompare(b));
+    await sheet.setHeaderRow(updatedHeaders);
+    console.log("Cabeçalhos atualizados e ordenados:", updatedHeaders);
+  }
 }
 
 // Endpoint de teste (opcional)
@@ -55,6 +63,11 @@ app.post("/agendar", async (req, res) => {
   try {
     const doc = await accessSpreadsheet();
     const sheet = doc.sheetsByIndex[0]; // primeira aba
+
+    // Garantir headers dinâmicos e ordenados
+    const keys = Object.keys(req.body);
+    await ensureDynamicHeaders(sheet, keys);
+
     await sheet.addRow(req.body);
     res.json({ msg: "✅ Agendamento realizado com sucesso!" });
   } catch (err) {
