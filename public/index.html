@@ -125,20 +125,25 @@ async function carregarAgendamentos() {
   try {
     const res = await fetch('/meus-agendamentos', { headers: { "Authorization": `Bearer ${userToken}` } });
     const data = await res.json();
-    data.forEach(a => {
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td>${a.data}</td>
-    <td>${a.horario}</td>
-    <td>${a.nome}</td>
-    <td>${a.email}</td>
-    <td>${a.telefone}</td>
-    <td>${a.confirmado ? '✅' : '❌'}</td>
-    <td>${!a.confirmado ? `<button class="confirm-btn" data-id="${a.id}">Confirmar</button>` : ''}</td>
-  `;
-  tbody.appendChild(tr);
-});
+    
+    console.log("Agendamentos recebidos:", data); // <-- debug
 
+    data.forEach(a => {
+      // força boolean e padroniza id
+      const confirmado = !!a.confirmado;
+      const id = a.id; // UUID
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${a.data}</td>
+        <td>${a.horario}</td>
+        <td>${a.nome}</td>
+        <td>${a.email}</td>
+        <td>${a.telefone}</td>
+        <td>${confirmado ? '✅' : '❌'}</td>
+        <td>${!confirmado ? `<button class="confirm-btn" data-id="${id}">Confirmar</button>` : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
 
     // Adiciona evento nos botões de confirmar
     tbody.querySelectorAll('.confirm-btn').forEach(btn => {
@@ -159,10 +164,14 @@ async function carregarAgendamentos() {
         } catch(err){ console.error(err); alert('Erro'); }
       });
     });
-  } catch(err){ console.error(err); }
+
+  } catch(err){ 
+    console.error(err); 
+  }
 }
 </script>
 </body>
 </html>
+
 
 
