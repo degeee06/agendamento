@@ -48,7 +48,7 @@ app.get("/:cliente", (req, res) => {
   if (!clientes[cliente]) return res.status(404).send("Cliente não encontrado");
 
   // Serve o HTML do formulário normalmente
-  res.sendFile(path.join(process.cwd(), "public", "formulario.html"));
+  res.sendFile(path.join(process.cwd(), "public", "index.html"));
 });
 
 // Endpoint para receber agendamento
@@ -75,4 +75,5 @@ app.post("/agendar/:cliente", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
