@@ -121,6 +121,32 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// Confirmar agendamento (protegido)
+app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ status: "confirmado" })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select();
+
+    if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
+    if (!data || data.length === 0) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    res.json({ msg: "✅ Agendamento confirmado com sucesso" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "❌ Erro interno" });
+  }
+});
+
+
 // Endpoint para checar horários ocupados (protegido)
 app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   try {
