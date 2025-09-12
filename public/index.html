@@ -43,14 +43,10 @@
   <h2>Formulário de Agendamento</h2>
   
   <form id="agendamentoForm">
-    <!-- Aqui o cliente coloca o ID da planilha dele -->
-    <input type="hidden" id="sheetId" value="COLE_AQUI_O_ID_DA_PLANILHA">
-
     <input type="text" name="Nome" placeholder="Nome" required>
     <input type="email" name="Email" placeholder="Email" required>
     <input type="text" name="Telefone" placeholder="Telefone" required>
     <input type="text" name="Data" placeholder="Data do Agendamento" required>
-
     <button type="submit">Agendar</button>
   </form>
 
@@ -61,6 +57,10 @@
     const form = document.getElementById('agendamentoForm');
     const successMsg = document.getElementById('successMsg');
     const errorMsg = document.getElementById('errorMsg');
+
+    // Pega o cliente da URL: ex: /cliente1
+    const pathParts = window.location.pathname.split('/');
+    const cliente = pathParts[1] || '';
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -74,7 +74,7 @@
       });
 
       try {
-        const response = await fetch('/agendar', {
+        const response = await fetch(`/agendar/${cliente}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
