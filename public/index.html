@@ -1,102 +1,139 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Agendamento</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/supabase.min.js"></script>
+<meta charset="UTF-8">
+<title>Agendamento</title>
+<style>
+body { font-family: Arial; max-width: 500px; margin: 50px auto; padding: 20px; background: #f7f7f7; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+h2 { text-align: center; margin-bottom: 20px; }
+input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+button { background: #4CAF50; color: white; border: none; cursor: pointer; transition: 0.2s; }
+button:hover { background: #45a049; }
+.success, .error { text-align: center; margin-top: 15px; font-weight: bold; }
+.success { color: green; }
+.error { color: red; }
+</style>
 </head>
 <body>
-  <h1>Agendamento</h1>
 
-  <div id="loginDiv">
-    <h2>Login</h2>
-    <input type="email" id="email" placeholder="Email"><br>
-    <input type="password" id="password" placeholder="Senha"><br>
-    <button id="btnLogin">Entrar</button>
-    <button id="btnMagic">Entrar com link mágico</button>
-    <p id="loginMsg"></p>
-  </div>
+<h2>Login</h2>
+<form id="loginForm">
+  <input type="email" name="email" placeholder="Email" required>
+  <input type="password" name="senha" placeholder="Senha" required>
+  <button type="submit">Entrar</button>
+</form>
+<div class="error" id="loginMsg" style="display:none;"></div>
 
-  <div id="agendaDiv" style="display:none">
-    <h2>Agendar horário</h2>
-    <input type="text" id="nome" placeholder="Nome"><br>
-    <input type="email" id="emailForm" placeholder="Email"><br>
-    <input type="text" id="telefone" placeholder="Telefone"><br>
-    <input type="date" id="data"><br>
-    <input type="time" id="horario"><br>
-    <button id="btnAgendar">Agendar</button>
-    <p id="agendaMsg"></p>
-  </div>
+<div id="agendamentoContainer" style="display:none;">
+<h2>Formulário de Agendamento</h2>
+<form id="agendamentoForm">
+  <input type="text" name="Nome" placeholder="Nome" required>
+  <input type="email" name="Email" placeholder="Email" required>
+  <input type="text" name="Telefone" placeholder="Telefone" required>
+  <input type="date" name="Data" placeholder="Data do Agendamento" required>
+  <input type="time" name="Horario" placeholder="Horário" required>
+  <button type="submit">Agendar</button>
+</form>
 
-  <script>
-    // Inicializa Supabase
-    const supabaseUrl = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-    const supabaseKey = "SUA_ANON_KEY"; // Coloque sua ANON key aqui
-    window.supabase = supabase.createClient(supabaseUrl, supabaseKey);
+<div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
+<div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
+</div>
 
-    const clienteId = window.location.pathname.split("/")[1];
+<script>
+const loginForm = document.getElementById("loginForm");
+const loginMsg = document.getElementById("loginMsg");
+const agendamentoContainer = document.getElementById("agendamentoContainer");
 
-    // Processa magic link
-    window.addEventListener("load", async () => {
-      const hash = window.location.hash;
-      if (hash.includes("access_token")) {
-        const params = new URLSearchParams(hash.slice(1));
-        const access_token = params.get("access_token");
-        await supabase.auth.setSession({ access_token });
-        document.getElementById("loginDiv").style.display = "none";
-        document.getElementById("agendaDiv").style.display = "block";
-        window.location.hash = "";
-      }
-    });
+const agendamentoForm = document.getElementById("agendamentoForm");
+const successMsg = document.getElementById("successMsg");
+const errorMsg = document.getElementById("errorMsg");
 
-    // Login normal
-    async function login() {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return document.getElementById("loginMsg").innerText = error.message;
-      if (data.session) {
-        document.getElementById("loginDiv").style.display = "none";
-        document.getElementById("agendaDiv").style.display = "block";
-      }
-    }
+let token = localStorage.getItem("token");
+let clienteId = null;
 
-    // Login magic link
-    async function loginMagic() {
-      const email = document.getElementById("email").value;
-      const { data, error } = await supabase.auth.signInWithOtp({ email });
-      if (error) return document.getElementById("loginMsg").innerText = error.message;
-      document.getElementById("loginMsg").innerText = "✅ Confira seu e-mail para entrar!";
-    }
-
-    // Agendar horário
-    async function agendar() {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return document.getElementById("agendaMsg").innerText = "❌ Usuário não autenticado";
-
-      const registro = {
-        Nome: document.getElementById("nome").value,
-        Email: document.getElementById("emailForm").value,
-        Telefone: document.getElementById("telefone").value,
-        Data: document.getElementById("data").value,
-        Horario: document.getElementById("horario").value
-      };
-
-      const res = await fetch(`/agendar/${clienteId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-        body: JSON.stringify(registro)
-      });
-
+async function fetchClienteId() {
+  if(!token) return;
+  try {
+    const res = await fetch("/minhas-info", { headers: { "Authorization": "Bearer " + token } });
+    if(res.ok){
       const data = await res.json();
-      document.getElementById("agendaMsg").innerText = data.msg;
+      clienteId = data.cliente.id;
+      agendamentoContainer.style.display = "block";
+      loginForm.style.display = "none";
+    } else {
+      localStorage.removeItem("token");
     }
+  } catch(err) { console.error(err); }
+}
 
-    // Eventos
-    document.getElementById("btnLogin").addEventListener("click", login);
-    document.getElementById("btnMagic").addEventListener("click", loginMagic);
-    document.getElementById("btnAgendar").addEventListener("click", agendar);
-  </script>
+fetchClienteId();
+
+// Login
+loginForm.addEventListener("submit", async(e)=>{
+  e.preventDefault();
+  loginMsg.style.display = 'none';
+  const email = loginForm.email.value;
+  const senha = loginForm.senha.value;
+
+  try {
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ email, senha })
+    });
+    const data = await res.json();
+    if(res.ok){
+      token = data.token;
+      localStorage.setItem("token", token);
+      await fetchClienteId();
+    } else {
+      loginMsg.textContent = data.msg || "Erro no login";
+      loginMsg.style.display = "block";
+    }
+  } catch(err){
+    console.error(err);
+    loginMsg.textContent = "Erro no login";
+    loginMsg.style.display = "block";
+  }
+});
+
+// Agendamento
+agendamentoForm.addEventListener("submit", async(e)=>{
+  e.preventDefault();
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
+  
+  const formData = new FormData(agendamentoForm);
+  const data = {};
+  formData.forEach((v,k)=>data[k]=v);
+
+  try {
+    // Verifica se horário ocupado
+    const check = await fetch(`/disponiveis/${clienteId}/${data.Data}`, { headers: { "Authorization": "Bearer " + token } });
+    const result = await check.json();
+    if(result.ocupados.includes(data.Horario)){
+      errorMsg.textContent='Horário já ocupado';
+      errorMsg.style.display='block';
+      return;
+    }
+  } catch(err){ console.error(err); }
+
+  try {
+    const res = await fetch(`/agendar/${clienteId}`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', "Authorization":"Bearer "+token },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if(res.ok){ successMsg.style.display='block'; agendamentoForm.reset(); }
+    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+  } catch(err){
+    console.error(err);
+    errorMsg.textContent='Erro';
+    errorMsg.style.display='block';
+  }
+});
+</script>
+
 </body>
 </html>
