@@ -122,24 +122,53 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 });
 
 // Confirmar agendamento (protegido)
+// Confirmar agendamento (protegido)
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (req.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Acesso negado" });
+    }
 
     const { id } = req.params;
 
+    // 1. Atualiza no Supabase
     const { data, error } = await supabase
       .from("agendamentos")
-      .update({ status: "confirmado" })
+      .update({ status: "confirmado", confirmado: true })
       .eq("id", id)
       .eq("cliente", cliente)
-      .select();
+      .select()
+      .single();
 
     if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
-    if (!data || data.length === 0) return res.status(404).json({ msg: "Agendamento não encontrado" });
+    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    res.json({ msg: "✅ Agendamento confirmado com sucesso" });
+    // 2. Atualiza no Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(data));
+
+    // tenta localizar a linha correspondente
+    await sheet.loadCells(); // garante acesso
+    const rows = await sheet.getRows();
+    const row = rows.find(
+      (r) =>
+        r.get("email") === data.email &&
+        r.get("data") === data.data &&
+        r.get("horario") === data.horario
+    );
+
+    if (row) {
+      row.set("status", "confirmado");
+      row.set("confirmado", true);
+      await row.save();
+    } else {
+      // fallback: se não achar, cria nova linha com os dados atualizados
+      await sheet.addRow(data);
+    }
+
+    res.json({ msg: "✅ Agendamento confirmado", agendamento: data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "❌ Erro interno" });
@@ -147,26 +176,5 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
 });
 
 
-// Endpoint para checar horários ocupados (protegido)
-app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { data: agendamentos, error } = await supabase
-      .from("agendamentos")
-      .select("horario")
-      .eq("cliente", cliente)
-      .eq("data", req.params.data);
-
-    if (error) return res.status(500).json({ msg: "Erro Supabase" });
-
-    const ocupados = agendamentos.map(a => a.horario);
-    res.json({ ocupados });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
