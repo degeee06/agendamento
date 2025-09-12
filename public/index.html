@@ -26,7 +26,7 @@ button:hover{background:#45a049;}
 <input type="email" name="Email" placeholder="Email" required>
 <input type="text" name="Telefone" placeholder="Telefone" required>
 <input type="date" name="Data" placeholder="Data do Agendamento" required>
-<input type="time" name="Horario" placeholder="Horario" required>
+<input type="time" name="Horario" placeholder="Horário" required>
 <button type="submit">Agendar</button>
 </form>
 
@@ -40,46 +40,72 @@ button:hover{background:#45a049;}
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 let userToken = null;
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
-
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-loginBtn.addEventListener('click', async ()=>{
+async function listarAgendamentos(){
+  if(!userToken) return;
+  try {
+    const res = await fetch(`/meus-agendamentos/${cliente}`, {
+      headers: { "Authorization": `Bearer ${userToken}` }
+    });
+    const { agendamentos } = await res.json();
+    const container = document.getElementById("meusAgendamentos");
+    container.innerHTML = "";
+    if(agendamentos.length === 0){ container.textContent="Nenhum agendamento."; return; }
+    agendamentos.forEach(a=>{
+      const div=document.createElement("div");
+      div.style.marginBottom="10px";
+      div.style.border="1px solid #ccc";
+      div.style.padding="8px";
+      div.style.borderRadius="6px";
+      div.innerHTML=`<strong>${a.data} ${a.horario}</strong> - ${a.nome} - Status: ${a.status}
+        ${!a.confirmado?'<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>':''}`;
+      container.appendChild(div);
+      const btn = div.querySelector("button");
+      if(btn){
+        btn.addEventListener("click", async ()=>{
+          try{
+            const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST",headers:{"Authorization":`Bearer ${userToken}`}});
+            if(res.ok){ listarAgendamentos(); }
+          }catch(e){ console.error(e); }
+        });
+      }
+    });
+  }catch(e){ console.error(e); }
+}
+
+loginBtn.addEventListener('click', async () => {
   errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ errorMsg.textContent=error.message; errorMsg.style.display='block'; return; }
+  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
   userToken = data.session.access_token;
-  loginBtn.style.display='none';
-  document.getElementById('email').style.display='none';
-  document.getElementById('senha').style.display='none';
-  form.style.display='block';
+  loginBtn.style.display = 'none';
+  document.getElementById('email').style.display = 'none';
+  document.getElementById('senha').style.display = 'none';
+  form.style.display = 'block';
+  listarAgendamentos();
 });
 
-form.addEventListener('submit', async e=>{
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   successMsg.style.display='none';
   errorMsg.style.display='none';
-
   const formData = new FormData(form);
-  const dataToSend = {
-    Nome: formData.get('Nome'),
-    Email: formData.get('Email'),
-    Telefone: formData.get('Telefone'),
-    Data: formData.get('Data'),
-    Horario: formData.get('Horario')
-  };
+  const dataToSend = {};
+  formData.forEach((v,k)=>dataToSend[k]=v);
 
-  try{
+  try {
     const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
       headers: { "Authorization": `Bearer ${userToken}` }
     });
@@ -89,20 +115,19 @@ form.addEventListener('submit', async e=>{
       errorMsg.style.display='block';
       return;
     }
-  }catch(err){ console.error(err); }
+  } catch(err){ console.error(err); }
 
-  try{
+  try {
     const response = await fetch(`/agendar/${cliente}`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${userToken}` },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
-    if(response.ok){ successMsg.style.display='block'; form.reset(); }
-    else{ errorMsg.textContent=result.msg||'Erro'; errorMsg.style.display='block'; }
-  }catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
+    if(response.ok){ successMsg.style.display='block'; form.reset(); listarAgendamentos(); }
+    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+  } catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
 });
 </script>
 </body>
 </html>
-
