@@ -85,4 +85,18 @@
 
       const res = await fetch(`/agendar/${clienteId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "B
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+        body: JSON.stringify(registro)
+      });
+
+      const data = await res.json();
+      document.getElementById("agendaMsg").innerText = data.msg;
+    }
+
+    // Eventos
+    document.getElementById("btnLogin").addEventListener("click", login);
+    document.getElementById("btnMagic").addEventListener("click", loginMagic);
+    document.getElementById("btnAgendar").addEventListener("click", agendar);
+  </script>
+</body>
+</html>
