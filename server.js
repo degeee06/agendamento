@@ -2,34 +2,40 @@ import express from "express";
 import bodyParser from "body-parser";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Pega as variáveis de ambiente do Render
+// Pega variáveis de ambiente do Render
 const SPREADSHEET_ID = process.env.ID_DA_PLANILHA;
-const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
+
+// Converte a string JSON da variável de ambiente em objeto
+let creds;
+try {
+  creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT);
+} catch (e) {
+  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
+  process.exit(1); // Encerra se JSON inválido
+}
 
 const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
 
+const app = express();
+app.use(bodyParser.json());
+
 async function accessSpreadsheet() {
-  try {
-    await doc.useServiceAccountAuth(creds);
-    await doc.loadInfo();
-    console.log(`Planilha carregada: ${doc.title}`);
-  } catch (error) {
-    console.error("Erro ao acessar planilha:", error);
-  }
+  await doc.useServiceAccountAuth(creds);
+  await doc.loadInfo();
+  return doc;
 }
 
-// Rota de teste
 app.get("/", async (req, res) => {
-  await accessSpreadsheet();
-  res.send("Servidor rodando e planilha acessada!");
+  try {
+    const doc = await accessSpreadsheet();
+    res.send(`Planilha: ${doc.title}`);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Erro ao acessar a planilha");
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
+// Usa porta do Render ou 3000 por padrão
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
