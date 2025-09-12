@@ -6,7 +6,7 @@
 <style>
 body { font-family: Arial; max-width: 500px; margin: 50px auto; padding: 20px; background: #f7f7f7; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 h2 { text-align: center; margin-bottom: 20px; }
-input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; box-sizing:border-box; }
 button { background: #4CAF50; color: white; border: none; cursor: pointer; transition: 0.2s; }
 button:hover { background: #45a049; }
 .success, .error { text-align: center; margin-top: 15px; font-weight: bold; }
@@ -39,7 +39,12 @@ button:hover { background: #45a049; }
 <div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/supabase.min.js"></script>
 <script>
+const SUPABASE_URL = "COLE_AQUI_SEU_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "COLE_AQUI_SUA_SUPABASE_ANON_KEY";
+const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const loginForm = document.getElementById("loginForm");
 const loginMsg = document.getElementById("loginMsg");
 const agendamentoContainer = document.getElementById("agendamentoContainer");
@@ -48,68 +53,60 @@ const agendamentoForm = document.getElementById("agendamentoForm");
 const successMsg = document.getElementById("successMsg");
 const errorMsg = document.getElementById("errorMsg");
 
-let token = localStorage.getItem("token");
+let token = null;
 let clienteId = null;
 
-async function fetchClienteId() {
-  if(!token) return;
-  try {
-    const res = await fetch("/minhas-info", { headers: { "Authorization": "Bearer " + token } });
-    if(res.ok){
-      const data = await res.json();
-      clienteId = data.cliente.id;
-      agendamentoContainer.style.display = "block";
-      loginForm.style.display = "none";
-    } else {
-      localStorage.removeItem("token");
-    }
-  } catch(err) { console.error(err); }
-}
-
-fetchClienteId();
-
+// ------------------------
 // Login
+// ------------------------
 loginForm.addEventListener("submit", async(e)=>{
   e.preventDefault();
   loginMsg.style.display = 'none';
+
   const email = loginForm.email.value;
   const senha = loginForm.senha.value;
 
   try {
-    const res = await fetch("/login", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ email, senha })
-    });
-    const data = await res.json();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    if(error) throw error;
+
+    token = data.session.access_token;
+    localStorage.setItem("token", token);
+
+    // Pega info do cliente logado
+    const res = await fetch("/minhas-info", { headers: { "Authorization": "Bearer " + token } });
+    const info = await res.json();
     if(res.ok){
-      token = data.token;
-      localStorage.setItem("token", token);
-      await fetchClienteId();
+      clienteId = info.cliente.id;
+      agendamentoContainer.style.display = "block";
+      loginForm.style.display = "none";
     } else {
-      loginMsg.textContent = data.msg || "Erro no login";
-      loginMsg.style.display = "block";
+      throw new Error(info.msg || "Erro ao carregar info");
     }
   } catch(err){
     console.error(err);
-    loginMsg.textContent = "Erro no login";
+    loginMsg.textContent = err.message || "Erro no login";
     loginMsg.style.display = "block";
   }
 });
 
+// ------------------------
 // Agendamento
+// ------------------------
 agendamentoForm.addEventListener("submit", async(e)=>{
   e.preventDefault();
   successMsg.style.display='none';
   errorMsg.style.display='none';
-  
+
   const formData = new FormData(agendamentoForm);
   const data = {};
   formData.forEach((v,k)=>data[k]=v);
 
   try {
     // Verifica se horário ocupado
-    const check = await fetch(`/disponiveis/${clienteId}/${data.Data}`, { headers: { "Authorization": "Bearer " + token } });
+    const check = await fetch(`/disponiveis/${clienteId}/${data.Data}`, {
+      headers: { "Authorization": "Bearer " + token }
+    });
     const result = await check.json();
     if(result.ocupados.includes(data.Horario)){
       errorMsg.textContent='Horário já ocupado';
@@ -125,8 +122,13 @@ agendamentoForm.addEventListener("submit", async(e)=>{
       body: JSON.stringify(data)
     });
     const result = await res.json();
-    if(res.ok){ successMsg.style.display='block'; agendamentoForm.reset(); }
-    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+    if(res.ok){ 
+      successMsg.style.display='block'; 
+      agendamentoForm.reset(); 
+    } else { 
+      errorMsg.textContent=result.msg || 'Erro'; 
+      errorMsg.style.display='block'; 
+    }
   } catch(err){
     console.error(err);
     errorMsg.textContent='Erro';
@@ -134,6 +136,5 @@ agendamentoForm.addEventListener("submit", async(e)=>{
   }
 });
 </script>
-
 </body>
 </html>
