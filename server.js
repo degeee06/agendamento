@@ -8,9 +8,9 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Inicializa o Google Spreadsheet usando variável de ambiente
-const SPREADSHEET_ID = "SEU_SPREADSHEET_ID_AQUI"; // Substitua pelo ID real
-const creds = JSON.parse(process.env.GOOGLE_CREDS); // Aqui pega do Render
+// Pega as variáveis de ambiente do Render
+const SPREADSHEET_ID = process.env.ID_DA_PLANILHA;
+const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
 
 const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
 
@@ -24,7 +24,7 @@ async function accessSpreadsheet() {
   }
 }
 
-// Exemplo de rota
+// Rota de teste
 app.get("/", async (req, res) => {
   await accessSpreadsheet();
   res.send("Servidor rodando e planilha acessada!");
