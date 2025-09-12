@@ -32,23 +32,24 @@
 
   <script>
     // ----------- CONFIGURAÇÃO SUPABASE -------------
-    const supabaseUrl = "https://SEU_SUPABASE_URL";
-    const supabaseKey = "SEU_SUPABASE_ANON_KEY";
+    const supabaseUrl = "https://SEU_SUPABASE_URL"; // substitua
+    const supabaseKey = "SEU_SUPABASE_ANON_KEY";    // substitua
     const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
     // ----------- DETECTAR CLIENTE NA URL -------------
     const clienteId = window.location.pathname.split("/")[1]; // "/cliente1" -> "cliente1"
 
-    // ----------- TRATAMENTO DE HASH (LINK MÁGICO) -------------
-    const hash = window.location.hash;
-    if (hash.includes("access_token")) {
-      const params = new URLSearchParams(hash.slice(1));
-      const access_token = params.get("access_token");
-      supabase.auth.setSession({ access_token }).then(() => {
+    // ----------- PROCESSAR LINK MÁGICO AO CARREGAR A PÁGINA -------------
+    window.addEventListener('load', async () => {
+      const hash = window.location.hash;
+      if (hash.includes("access_token")) {
+        const params = new URLSearchParams(hash.slice(1));
+        const access_token = params.get("access_token");
+        await supabase.auth.setSession({ access_token });
         document.getElementById("loginDiv").style.display = "none";
         document.getElementById("agendaDiv").style.display = "block";
-      });
-    }
+      }
+    });
 
     // ----------- FUNÇÃO LOGIN COM EMAIL/SENHA -------------
     async function login() {
@@ -61,8 +62,12 @@
         return;
       }
 
-      document.getElementById("loginDiv").style.display = "none";
-      document.getElementById("agendaDiv").style.display = "block";
+      if (data.session) {
+        document.getElementById("loginDiv").style.display = "none";
+        document.getElementById("agendaDiv").style.display = "block";
+      } else {
+        document.getElementById("loginMsg").innerText = "Não foi possível iniciar a sessão";
+      }
     }
 
     // ----------- FUNÇÃO LOGIN COM LINK MÁGICO -------------
@@ -80,6 +85,14 @@
 
     // ----------- FUNÇÃO PARA AGENDAR -------------
     async function agendar() {
+      // Pega o token atual da sessão
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        document.getElementById("agendaMsg").innerText = "❌ Usuário não autenticado";
+        return;
+      }
+
       const registro = {
         Nome: document.getElementById("nome").value,
         Email: document.getElementById("emailForm").value,
@@ -87,11 +100,6 @@
         Data: document.getElementById("data").value,
         Horario: document.getElementById("horario").value
       };
-
-      // Pega o token atual da sessão
-      const session = supabase.auth.getSession();
-      let token = null;
-      if (session?.data?.session) token = session.data.session.access_token;
 
       const res = await fetch(`/agendar/${clienteId}`, {
         method: "POST",
