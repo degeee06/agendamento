@@ -4,43 +4,95 @@
   <meta charset="UTF-8">
   <title>Agendamento</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; }
-    input, button { width: 100%; padding: 10px; margin: 8px 0; }
-    #msg { margin-top: 10px; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f7f7f7;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .success, .error {
+      text-align: center;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    .success { color: green; }
+    .error { color: red; }
   </style>
 </head>
 <body>
-  <h2>📅 Agende seu horário</h2>
-  <form id="formAgendamento">
-    <input type="text" name="nome" placeholder="Nome" required />
-    <input type="email" name="email" placeholder="Email" required />
-    <input type="date" name="data" required />
-    <input type="time" name="hora" required />
+  <h2>Formulário de Agendamento</h2>
+  
+  <form id="agendamentoForm">
+    <!-- Aqui o cliente coloca o ID da planilha dele -->
+    <input type="hidden" id="sheetId" value="COLE_AQUI_O_ID_DA_PLANILHA">
+
+    <input type="text" name="Nome" placeholder="Nome" required>
+    <input type="email" name="Email" placeholder="Email" required>
+    <input type="text" name="Telefone" placeholder="Telefone" required>
+    <input type="text" name="Data" placeholder="Data do Agendamento" required>
+
     <button type="submit">Agendar</button>
   </form>
-  <div id="msg"></div>
+
+  <div class="success" id="successMsg" style="display:none;">Agendamento realizado com sucesso!</div>
+  <div class="error" id="errorMsg" style="display:none;">Ocorreu um erro ao agendar.</div>
 
   <script>
-    const form = document.getElementById("formAgendamento");
-    const msgDiv = document.getElementById("msg");
+    const form = document.getElementById('agendamentoForm');
+    const successMsg = document.getElementById('successMsg');
+    const errorMsg = document.getElementById('errorMsg');
 
-    form.addEventListener("submit", async (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      successMsg.style.display = 'none';
+      errorMsg.style.display = 'none';
+
       const formData = new FormData(form);
-      const data = Object.fromEntries(formData.entries());
+      const data = {};
+      formData.forEach((value, key) => {
+        data[key] = value;
+      });
 
       try {
-        const res = await fetch("/agendar", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const response = await fetch('/agendar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
-        const result = await res.json();
-        msgDiv.textContent = result.msg;
-        msgDiv.style.color = result.msg.includes("❌") ? "red" : "green";
+
+        const result = await response.json();
+
+        if (response.ok) {
+          successMsg.style.display = 'block';
+          form.reset();
+        } else {
+          errorMsg.textContent = result.msg || 'Ocorreu um erro';
+          errorMsg.style.display = 'block';
+        }
       } catch (err) {
-        msgDiv.textContent = "Erro ao enviar agendamento!";
-        msgDiv.style.color = "red";
+        console.error(err);
+        errorMsg.textContent = 'Ocorreu um erro';
+        errorMsg.style.display = 'block';
       }
     });
   </script>
