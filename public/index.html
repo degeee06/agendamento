@@ -4,111 +4,80 @@
 <meta charset="UTF-8">
 <title>Agendamento</title>
 <style>
-body { font-family: Arial; max-width: 500px; margin: 50px auto; padding: 20px; background: #f7f7f7; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-h2 { text-align: center; margin-bottom: 20px; }
-input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; box-sizing:border-box; }
-button { background: #4CAF50; color: white; border: none; cursor: pointer; transition: 0.2s; }
-button:hover { background: #45a049; }
-.success, .error { text-align: center; margin-top: 15px; font-weight: bold; }
-.success { color: green; }
-.error { color: red; }
+body{font-family:Arial; max-width:500px; margin:50px auto; padding:20px; background:#f7f7f7; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+h2{text-align:center;margin-bottom:20px;}
+input,button{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc; font-size:16px; box-sizing:border-box;}
+button{background:#4CAF50;color:white;border:none; cursor:pointer; transition:0.2s;}
+button:hover{background:#45a049;}
+.success,.error{text-align:center;margin-top:15px;font-weight:bold;}
+.success{color:green;}
+.error{color:red;}
 </style>
 </head>
 <body>
-
-<h2>Login</h2>
-<form id="loginForm">
-  <input type="email" name="email" placeholder="Email" required>
-  <input type="password" name="senha" placeholder="Senha" required>
-  <button type="submit">Entrar</button>
-</form>
-<div class="error" id="loginMsg" style="display:none;"></div>
-
-<div id="agendamentoContainer" style="display:none;">
 <h2>Formulário de Agendamento</h2>
-<form id="agendamentoForm">
-  <input type="text" name="Nome" placeholder="Nome" required>
-  <input type="email" name="Email" placeholder="Email" required>
-  <input type="text" name="Telefone" placeholder="Telefone" required>
-  <input type="date" name="Data" placeholder="Data do Agendamento" required>
-  <input type="time" name="Horario" placeholder="Horário" required>
-  <button type="submit">Agendar</button>
+
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="senha" placeholder="Senha">
+<button id="loginBtn">Login</button>
+
+<form id="agendamentoForm" style="display:none;">
+<input type="text" name="Nome" placeholder="Nome" required>
+<input type="email" name="Email" placeholder="Email" required>
+<input type="text" name="Telefone" placeholder="Telefone" required>
+<input type="date" name="Data" placeholder="Data do Agendamento" required>
+<input type="time" name="Horario" placeholder="Horário" required>
+<button type="submit">Agendar</button>
 </form>
 
 <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
 <div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/supabase.min.js"></script>
-<script>
-const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-const loginForm = document.getElementById("loginForm");
-const loginMsg = document.getElementById("loginMsg");
-const agendamentoContainer = document.getElementById("agendamentoContainer");
+const SUPABASE_URL = "COLE_AQUI_SEU_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "COLE_AQUI_SUA_SUPABASE_ANON_KEY";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const agendamentoForm = document.getElementById("agendamentoForm");
-const successMsg = document.getElementById("successMsg");
-const errorMsg = document.getElementById("errorMsg");
+let userToken = null;
+const form = document.getElementById('agendamentoForm');
+const loginBtn = document.getElementById('loginBtn');
+const successMsg = document.getElementById('successMsg');
+const errorMsg = document.getElementById('errorMsg');
 
-let token = null;
-let clienteId = null;
+const pathParts = window.location.pathname.split('/');
+const cliente = pathParts[1] || '';
 
-// ------------------------
-// Login
-// ------------------------
-loginForm.addEventListener("submit", async(e)=>{
-  e.preventDefault();
-  loginMsg.style.display = 'none';
+loginBtn.addEventListener('click', async () => {
+  errorMsg.style.display='none';
+  const email = document.getElementById('email').value;
+  const senha = document.getElementById('senha').value;
 
-  const email = loginForm.email.value;
-  const senha = loginForm.senha.value;
-
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    if(error) throw error;
-
-    token = data.session.access_token;
-    localStorage.setItem("token", token);
-
-    // Pega info do cliente logado
-    const res = await fetch("/minhas-info", { headers: { "Authorization": "Bearer " + token } });
-    const info = await res.json();
-    if(res.ok){
-      clienteId = info.cliente.id;
-      agendamentoContainer.style.display = "block";
-      loginForm.style.display = "none";
-    } else {
-      throw new Error(info.msg || "Erro ao carregar info");
-    }
-  } catch(err){
-    console.error(err);
-    loginMsg.textContent = err.message || "Erro no login";
-    loginMsg.style.display = "block";
-  }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
+  userToken = data.session.access_token;
+  loginBtn.style.display = 'none';
+  document.getElementById('email').style.display = 'none';
+  document.getElementById('senha').style.display = 'none';
+  form.style.display = 'block';
 });
 
-// ------------------------
-// Agendamento
-// ------------------------
-agendamentoForm.addEventListener("submit", async(e)=>{
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   successMsg.style.display='none';
   errorMsg.style.display='none';
 
-  const formData = new FormData(agendamentoForm);
-  const data = {};
-  formData.forEach((v,k)=>data[k]=v);
+  const formData = new FormData(form);
+  const dataToSend = {};
+  formData.forEach((v,k)=>dataToSend[k]=v);
 
   try {
-    // Verifica se horário ocupado
-    const check = await fetch(`/disponiveis/${clienteId}/${data.Data}`, {
-      headers: { "Authorization": "Bearer " + token }
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
+      headers: { "Authorization": `Bearer ${userToken}` }
     });
     const result = await check.json();
-    if(result.ocupados.includes(data.Horario)){
+    if(result.ocupados.includes(dataToSend.Horario)){
       errorMsg.textContent='Horário já ocupado';
       errorMsg.style.display='block';
       return;
@@ -116,26 +85,16 @@ agendamentoForm.addEventListener("submit", async(e)=>{
   } catch(err){ console.error(err); }
 
   try {
-    const res = await fetch(`/agendar/${clienteId}`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', "Authorization":"Bearer "+token },
-      body: JSON.stringify(data)
+    const response = await fetch(`/agendar/${cliente}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+      body: JSON.stringify(dataToSend)
     });
-    const result = await res.json();
-    if(res.ok){ 
-      successMsg.style.display='block'; 
-      agendamentoForm.reset(); 
-    } else { 
-      errorMsg.textContent=result.msg || 'Erro'; 
-      errorMsg.style.display='block'; 
-    }
-  } catch(err){
-    console.error(err);
-    errorMsg.textContent='Erro';
-    errorMsg.style.display='block';
-  }
+    const result = await response.json();
+    if(response.ok){ successMsg.style.display='block'; form.reset(); }
+    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+  } catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
 });
 </script>
 </body>
 </html>
-
