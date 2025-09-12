@@ -20,6 +20,7 @@ const planilhasClientes = {
   cliente1: process.env.ID_PLANILHA_CLIENTE1,
   cliente2: process.env.ID_PLANILHA_CLIENTE2
 };
+
 const clientesValidos = Object.keys(planilhasClientes);
 
 // Google Service Account
@@ -103,15 +104,13 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    const registro = { cliente, nome: Nome, email: Email, telefone: Telefone, data: Data, horario: Horario, confirmado: false };
+    const registro = { cliente, nome: Nome, email: Email, telefone: Telefone, data: Data, horario: Horario };
 
-    // Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(registro));
     await sheet.addRow(registro);
 
-    // Supabase
     const { error } = await supabase.from("agendamentos").insert([registro]);
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
@@ -144,53 +143,4 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/confirmar/:id", authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Atualiza Supabase
-    const { error } = await supabase
-      .from("agendamentos")
-      .update({ confirmado: true })
-      .eq("id", id)
-      .eq("cliente", req.clienteId);
-    if(error) return res.status(500).json({ msg: "Erro ao confirmar no Supabase" });
-
-    // Atualiza Google Sheets
-    const doc = await accessSpreadsheet(req.clienteId);
-    const sheet = doc.sheetsByIndex[0];
-    await sheet.loadHeaderRow();
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id === id);
-    if (row) {
-      row.confirmado = true;
-      await row.save();
-    }
-
-    res.json({ msg: "✅ Presença confirmada!" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-// ---------------- Lista agendamentos do usuário ----------------
-app.get("/meus-agendamentos", authMiddleware, async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("id, nome, email, telefone, data, horario, confirmado")
-      .eq("cliente", req.clienteId);
-
-    if (error) return res.status(500).json({ msg: "Erro ao buscar agendamentos" });
-
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
