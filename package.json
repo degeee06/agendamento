@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Bot de agendamento usando Google Sheets",
   "main": "server.js",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
