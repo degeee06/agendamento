@@ -39,13 +39,13 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   const headersToAdd = newKeys.filter((key) => !currentHeaders.includes(key));
 
   if (headersToAdd.length > 0) {
-    const updatedHeaders = [...currentHeaders, ...headersToAdd];
-    // Ordena alfabeticamente
-    updatedHeaders.sort((a, b) => a.localeCompare(b));
+    const updatedHeaders = [...currentHeaders, ...headersToAdd]; 
+    // Aqui NÃO ordenamos, apenas adicionamos novos no final
     await sheet.setHeaderRow(updatedHeaders);
-    console.log("Cabeçalhos atualizados e ordenados:", updatedHeaders);
+    console.log("Cabeçalhos atualizados na ordem de registro:", updatedHeaders);
   }
 }
+
 
 // Endpoint de teste (opcional)
 app.get("/planilha", async (req, res) => {
@@ -78,3 +78,4 @@ app.post("/agendar", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
