@@ -1,161 +1,72 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Agendamento</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 500px;
-      margin: 50px auto;
-      padding: 20px;
-      background-color: #f7f7f7;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    input, button, select {
-      width: 100%;
-      padding: 12px;
-      margin: 10px 0;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      font-size: 16px;
-      box-sizing: border-box;
-    }
-    button {
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-    }
-    button:hover {
-      background-color: #45a049;
-    }
-    .success, .error {
-      text-align: center;
-      margin-top: 15px;
-      font-weight: bold;
-    }
-    .success { color: green; }
-    .error { color: red; }
-    @media (max-width: 550px) {
-      body {
-        margin: 20px;
-        padding: 15px;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Agendamento</title>
+<style>
+body{font-family:Arial; max-width:500px; margin:50px auto; padding:20px; background:#f7f7f7; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+h2{text-align:center;margin-bottom:20px;}
+input,button{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc; font-size:16px; box-sizing:border-box;}
+button{background:#4CAF50;color:white;border:none; cursor:pointer; transition:0.2s;}
+button:hover{background:#45a049;}
+.success,.error{text-align:center;margin-top:15px;font-weight:bold;}
+.success{color:green;}
+.error{color:red;}
+</style>
 </head>
 <body>
-  <h2>Formulário de Agendamento</h2>
-  
-  <form id="agendamentoForm">
-    <input type="text" name="Nome" placeholder="Nome" required>
-    <input type="email" name="Email" placeholder="Email" required>
-    <input type="text" name="Telefone" placeholder="Telefone" required>
-    
-    <input type="text" id="dataInput" name="Data" placeholder="Data do Agendamento" required>
-    
-    <select id="horaSelect" name="Horario" required>
-      <option value="">Selecione a data primeiro</option>
-    </select>
+<h2>Formulário de Agendamento</h2>
+<form id="agendamentoForm">
+<input type="text" name="Nome" placeholder="Nome" required>
+<input type="email" name="Email" placeholder="Email" required>
+<input type="text" name="Telefone" placeholder="Telefone" required>
+<input type="date" name="Data" placeholder="Data do Agendamento" required>
+<input type="time" name="Horario" placeholder="Horário" required>
+<button type="submit">Agendar</button>
+</form>
 
-    <button type="submit" id="submitBtn">Agendar</button>
-  </form>
+<div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
+<div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
 
-  <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado com sucesso!</div>
-  <div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro ao agendar.</div>
+<script>
+const form = document.getElementById('agendamentoForm');
+const successMsg = document.getElementById('successMsg');
+const errorMsg = document.getElementById('errorMsg');
 
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script>
-    const form = document.getElementById('agendamentoForm');
-    const successMsg = document.getElementById('successMsg');
-    const errorMsg = document.getElementById('errorMsg');
-    const submitBtn = document.getElementById('submitBtn');
-    const dataInput = document.getElementById('dataInput');
-    const horaSelect = document.getElementById('horaSelect');
+const pathParts = window.location.pathname.split('/');
+const cliente = pathParts[1] || '';
 
-    // Cliente pela URL: ex: /cliente1
-    const pathParts = window.location.pathname.split('/');
-    const cliente = pathParts[1] || 'cliente1';
+form.addEventListener('submit',async(e)=>{
+e.preventDefault();
+successMsg.style.display='none';
+errorMsg.style.display='none';
 
-    // Flatpickr no campo data
-    flatpickr("#dataInput", {
-      dateFormat: "Y-m-d",
-      minDate: "today",
-      onChange: async (selectedDates, dateStr) => {
-        if (!dateStr) return;
+const formData = new FormData(form);
+const data={};
+formData.forEach((v,k)=>data[k]=v);
 
-        try {
-          const response = await fetch(`/horarios/${cliente}/${dateStr}`);
-          const result = await response.json();
+// Verifica se horário já está ocupado antes de enviar
+try{
+  const check = await fetch(`/disponiveis/${cliente}/${data.Data}`);
+  const result = await check.json();
+  if(result.ocupados.includes(data.Horario)){
+    errorMsg.textContent='Horário já ocupado';
+    errorMsg.style.display='block';
+    return;
+  }
+}catch(err){console.error(err);}
 
-          horaSelect.innerHTML = "";
-          if (result.disponiveis && result.disponiveis.length > 0) {
-            result.disponiveis.forEach(hora => {
-              const opt = document.createElement("option");
-              opt.value = hora;
-              opt.textContent = hora;
-              horaSelect.appendChild(opt);
-            });
-          } else {
-            const opt = document.createElement("option");
-            opt.value = "";
-            opt.textContent = "Nenhum horário disponível";
-            horaSelect.appendChild(opt);
-          }
-        } catch (err) {
-          console.error("Erro ao buscar horários:", err);
-        }
-      }
-    });
-
-    // Enviar agendamento
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      successMsg.style.display = 'none';
-      errorMsg.style.display = 'none';
-      submitBtn.disabled = true;
-      submitBtn.textContent = "Agendando...";
-
-      const formData = new FormData(form);
-      const data = {};
-      formData.forEach((value, key) => {
-        data[key] = value;
-      });
-
-      try {
-        const response = await fetch(`/agendar/${cliente}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          successMsg.style.display = 'block';
-          form.reset();
-          horaSelect.innerHTML = "<option value=''>Selecione a data primeiro</option>";
-        } else {
-          errorMsg.textContent = result.msg || 'Ocorreu um erro';
-          errorMsg.style.display = 'block';
-        }
-      } catch (err) {
-        console.error(err);
-        errorMsg.textContent = 'Ocorreu um erro';
-        errorMsg.style.display = 'block';
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Agendar";
-      }
-    });
-  </script>
+try{
+  const response = await fetch(`/agendar/${cliente}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(data)
+  });
+  const result = await response.json();
+  if(response.ok){ successMsg.style.display='block'; form.reset(); }
+  else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+}catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
+});
+</script>
 </body>
 </html>
