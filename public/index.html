@@ -82,6 +82,8 @@ loginBtn.addEventListener('click', async () => {
   document.getElementById('senha').style.display = 'none';
   form.style.display = 'block';
   table.style.display = 'table';
+  console.log(data);
+  const data = await res.json();
   carregarAgendamentos();
 });
 
@@ -162,4 +164,5 @@ async function carregarAgendamentos() {
 </script>
 </body>
 </html>
+
 
