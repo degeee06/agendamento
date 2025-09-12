@@ -4,7 +4,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
-const app = express();
 
 // habilita JSON corretamente
 app.use(express.json());
@@ -192,6 +191,7 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
 
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
