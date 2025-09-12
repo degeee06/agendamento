@@ -1,6 +1,6 @@
-import express from "express";
-import bodyParser from "body-parser";
-import { GoogleSpreadsheet } from "google-spreadsheet";
+const express = require("express");
+const bodyParser = require("body-parser");
+const { GoogleSpreadsheet } = require("google-spreadsheet");
 
 const app = express();
 app.use(bodyParser.json());
@@ -58,3 +58,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`🚀 Servidor rodando na porta ${PORT}`)
 );
+
