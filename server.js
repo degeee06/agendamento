@@ -120,11 +120,11 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .insert([
         {
           cliente,
-          nome: Nome,
-          email: Email,
-          telefone: Telefone,
-          data: Data,
-          horario: Horario,
+          nome: nome,
+          email: email,
+          telefone: telefone,
+          data: data,
+          horario: horario,
           status: "pendente",
           confirmado: false,
         },
@@ -194,3 +194,4 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
