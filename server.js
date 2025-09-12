@@ -3,6 +3,7 @@ import bodyParser from "body-parser";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
 
 // Config
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -91,3 +92,4 @@ app.post("/agendar/:cliente", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
+
