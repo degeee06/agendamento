@@ -27,11 +27,6 @@ app.use(express.static(path.join(process.cwd(), "public")));
 async function accessSpreadsheet() {
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
-  return doc;
-}
-async function accessSpreadsheet() {
-  await doc.useServiceAccountAuth(creds);
-  await doc.loadInfo();
   const sheet = doc.sheetsByIndex[0]; // primeira aba
 
   // Cabeçalho automático se estiver vazio
