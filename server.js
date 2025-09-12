@@ -83,6 +83,30 @@ async function horarioDisponivel(cliente, data, horario) {
   return agendamentos.length === 0;
 }
 
+// Confirmar agendamento
+app.post("/confirmar/:id", authMiddleware, async (req, res) => {
+  try {
+    const agendamentoId = req.params.id;
+
+    // Atualiza apenas se o agendamento pertence ao cliente do usuário
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ confirmado: true })
+      .eq("id", agendamentoId)
+      .eq("cliente", req.clienteId)
+      .select();
+
+    if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
+    if (!data.length) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    res.json({ msg: "✅ Agendamento confirmado" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
 
@@ -144,3 +168,4 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
