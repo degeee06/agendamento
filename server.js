@@ -144,37 +144,28 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- Lista agendamentos do usuário ----------------
+// Rota para listar agendamentos do usuário
 app.get("/meus-agendamentos", authMiddleware, async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("email", req.user.email)
-      .eq("cliente", req.clienteId);
-
-    if (error) return res.status(500).json({ msg: "Erro Supabase" });
-
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
+  const { data, error } = await supabase
+    .from("agendamentos")
+    .select("*")
+    .eq("cliente", req.clienteId);
+  if(error) return res.status(500).json({ msg: "Erro ao buscar agendamentos" });
+  res.json(data);
 });
 
-// ---------------- Confirmar presença ----------------
+// Rota para confirmar agendamento
 app.post("/confirmar/:id", authMiddleware, async (req, res) => {
-  try {
-    const id = req.params.id;
+  const { id } = req.params;
+  const { error } = await supabase
+    .from("agendamentos")
+    .update({ confirmado: true })
+    .eq("id", id)
+    .eq("cliente", req.clienteId);
+  if(error) return res.status(500).json({ msg: "Erro ao confirmar" });
+  res.json({ msg: "Confirmado" });
+});
 
-    // Atualiza Supabase
-    const { error } = await supabase
-      .from("agendamentos")
-      .update({ confirmado: true })
-      .eq("id", id)
-      .eq("cliente", req.clienteId);
-
-    if (error) return res.status(500).json({ msg: "Erro ao confirmar no Supabase" });
 
     // Atualiza Google Sheets
     const doc = await accessSpreadsheet(req.clienteId);
@@ -195,3 +186,4 @@ app.post("/confirmar/:id", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
