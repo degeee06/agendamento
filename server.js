@@ -2,9 +2,16 @@ import express from "express";
 import bodyParser from "body-parser";
 import path from "path";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import { createClient } from "@supabase/supabase-js";
 
-// Conta de serviço do Google
+// Conta de serviço Google
 const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
+
+// Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
 
 let creds;
 try {
@@ -18,13 +25,11 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(process.cwd(), "public")));
 
-// Estrutura de clientes + planilhas
 const clientes = {
   "cliente1": "11Hrgpo21LxBLn6Esoiwz0gDk5j_HAxBuLARfo59s-RA",
   "cliente2": "ID_DA_PLANILHA_CLIENTE2"
 };
 
-// Função para acessar qualquer planilha
 async function accessSpreadsheet(sheetId) {
   const doc = new GoogleSpreadsheet(sheetId);
   await doc.useServiceAccountAuth(creds);
@@ -32,12 +37,9 @@ async function accessSpreadsheet(sheetId) {
   return doc;
 }
 
-// Garantir headers dinâmicos (Nome, Email, Telefone, Data, Horário)
 async function ensureDynamicHeaders(sheet, newKeys) {
   await sheet.loadHeaderRow().catch(async () => {
-    // Planilha vazia, define primeira linha como cabeçalhos
     await sheet.setHeaderRow(newKeys);
-    console.log("Cabeçalhos criados na primeira linha:", newKeys);
   });
 
   const currentHeaders = sheet.headerValues || [];
@@ -46,20 +48,17 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   if (headersToAdd.length > 0) {
     const updatedHeaders = [...currentHeaders, ...headersToAdd];
     await sheet.setHeaderRow(updatedHeaders);
-    console.log("Cabeçalhos atualizados:", updatedHeaders);
   }
 }
 
-
-// Rota para servir o formulário do cliente
+// Rota formulário
 app.get("/:cliente", (req, res) => {
   const cliente = req.params.cliente;
   if (!clientes[cliente]) return res.status(404).send("Cliente não encontrado");
-
   res.sendFile(path.join(process.cwd(), "public", "index.html"));
 });
 
-// Endpoint para receber agendamento
+// Agendar
 app.post("/agendar/:cliente", async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -68,18 +67,36 @@ app.post("/agendar/:cliente", async (req, res) => {
 
     const data = req.body;
 
-    // Garante que os campos principais existam mesmo se não vierem
     const defaultKeys = ["Nome", "Email", "Telefone", "Data", "Horario"];
     defaultKeys.forEach(k => { if (!data[k]) data[k] = ""; });
 
+    // 1) Salvar no Google Sheets
     const doc = await accessSpreadsheet(sheetId);
     const sheet = doc.sheetsByIndex[0];
 
     const keys = Object.keys(data);
     await ensureDynamicHeaders(sheet, keys);
-
     await sheet.addRow(data);
+
+    // 2) Salvar no Supabase
+    const { error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente,
+        nome: data.Nome,
+        email: data.Email,
+        telefone: data.Telefone,
+        data: data.Data,
+        horario: data.Horario,
+        status: "pendente"
+      }]);
+
+    if (error) {
+      console.error("Erro ao salvar no Supabase:", error);
+    }
+
     res.json({ msg: "✅ Agendamento realizado com sucesso!" });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "❌ Erro ao realizar agendamento" });
@@ -88,5 +105,3 @@ app.post("/agendar/:cliente", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
