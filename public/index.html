@@ -17,19 +17,17 @@ button:hover{background:#45a049;}
 <body>
 <h2>Formulário de Agendamento</h2>
 
-<!-- Login -->
 <input type="email" id="email" placeholder="Email">
 <input type="password" id="senha" placeholder="Senha">
 <button id="loginBtn">Login</button>
 
-<!-- Formulário de agendamento -->
 <form id="agendamentoForm" style="display:none;">
- <input type="text" name="Nome" placeholder="Nome" required>
- <input type="email" name="Email" placeholder="Email" required>
- <input type="text" name="Telefone" placeholder="Telefone" required>
- <input type="date" name="Data" placeholder="Data do Agendamento" required>
- <input type="time" name="Horario" placeholder="Horario" required> <!-- note "Horario" sem acento -->
-  <button type="submit">Agendar</button>
+<input type="text" name="Nome" placeholder="Nome" required>
+<input type="email" name="Email" placeholder="Email" required>
+<input type="text" name="Telefone" placeholder="Telefone" required>
+<input type="date" name="Data" placeholder="Data do Agendamento" required>
+<input type="time" name="Horario" placeholder="Horario" required>
+<button type="submit">Agendar</button>
 </form>
 
 <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
@@ -40,8 +38,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let userToken = null;
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
@@ -49,72 +47,10 @@ const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
 
 const pathParts = window.location.pathname.split('/');
-const cliente = pathParts[1] || ''; // pega o "cliente" da URL (ex: /cliente1)
+const cliente = pathParts[1] || '';
 
-loginBtn.addEventListener('click', async () => {
+loginBtn.addEventListener('click', async ()=>{
   errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
-
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ 
-    errorMsg.textContent = error.message; 
-    errorMsg.style.display='block'; 
-    return; 
-  }
-
-  userToken = data.session.access_token;
-  loginBtn.style.display = 'none';
-  document.getElementById('email').style.display = 'none';
-  document.getElementById('senha').style.display = 'none';
-  form.style.display = 'block';
-});
-
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  successMsg.style.display='none';
-  errorMsg.style.display='none';
-
-  const formData = new FormData(form);
-  const dataToSend = {};
-  formData.forEach((v,k)=>dataToSend[k]=v);
-
-  // 1. Verificar se horário está disponível
-  try {
-    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.data}`, {
-      headers: { "Authorization": `Bearer ${userToken}` }
-    });
-    const result = await check.json();
-    if(result.ocupados.includes(dataToSend.horario)){
-      errorMsg.textContent='Horário já ocupado';
-      errorMsg.style.display='block';
-      return;
-    }
-  } catch(err){ console.error(err); }
-
-  // 2. Enviar agendamento
-  try {
-    const response = await fetch(`/agendar/${cliente}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
-      body: JSON.stringify(dataToSend)
-    });
-    const result = await response.json();
-    if(response.ok){ 
-      successMsg.style.display='block'; 
-      form.reset(); 
-    }
-    else { 
-      errorMsg.textContent=result.msg || 'Erro'; 
-      errorMsg.style.display='block'; 
-    }
-  } catch(err){ 
-    console.error(err); 
-    errorMsg.textContent='Erro'; 
-    errorMsg.style.display='block'; 
-  }
-});
-</script>
-</body>
-</html>
-
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha
