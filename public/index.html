@@ -61,25 +61,34 @@ async function listarAgendamentos(){
     const container = document.getElementById("meusAgendamentos");
     container.innerHTML = "";
     if(agendamentos.length === 0){ container.textContent="Nenhum agendamento."; return; }
-    agendamentos.forEach(a=>{
-      const div=document.createElement("div");
-      div.style.marginBottom="10px";
-      div.style.border="1px solid #ccc";
-      div.style.padding="8px";
-      div.style.borderRadius="6px";
-      div.innerHTML=`<strong>${a.data} ${a.horario}</strong> - ${a.nome} - Status: ${a.status}
-        ${!a.confirmado?'<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>':''}`;
-      container.appendChild(div);
-      const btn = div.querySelector("button");
-      if(btn){
-        btn.addEventListener("click", async ()=>{
-          try{
-            const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST",headers:{"Authorization":`Bearer ${userToken}`}});
-            if(res.ok){ listarAgendamentos(); }
-          }catch(e){ console.error(e); }
+    agendamentos.forEach(a => {
+  const div = document.createElement("div");
+  div.style.marginBottom = "10px";
+  div.style.border = "1px solid #ccc";
+  div.style.padding = "8px";
+  div.style.borderRadius = "6px";
+
+  div.innerHTML = `
+    <strong>${a.data} ${a.horario}</strong> - ${a.nome} - Status: ${a.status}
+    ${!a.confirmado ? '<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>' : ''}
+  `;
+  
+  container.appendChild(div);
+
+  // Adiciona evento no botão de confirmar
+  const btn = div.querySelector("button");
+  if(btn){
+    btn.addEventListener("click", async () => {
+      try{
+        const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${userToken}` }
         });
-      }
+        if(res.ok){ listarAgendamentos(); }
+      } catch(e) { console.error(e); }
     });
+  }
+});
   }catch(e){ console.error(e); }
 }
 
@@ -131,4 +140,5 @@ form.addEventListener('submit', async (e) => {
 </script>
 </body>
 </html>
+
 
