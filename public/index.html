@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Agendamento</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -13,10 +14,7 @@
       border-radius: 10px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
+    h2 { text-align: center; margin-bottom: 20px; }
     input, button {
       width: 100%;
       padding: 12px;
@@ -33,9 +31,7 @@
       cursor: pointer;
       transition: background-color 0.2s ease;
     }
-    button:hover {
-      background-color: #45a049;
-    }
+    button:hover { background-color: #45a049; }
     .success, .error {
       text-align: center;
       margin-top: 15px;
@@ -43,12 +39,6 @@
     }
     .success { color: green; }
     .error { color: red; }
-    @media (max-width: 550px) {
-      body {
-        margin: 20px;
-        padding: 15px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -58,27 +48,43 @@
     <input type="text" name="Nome" placeholder="Nome" required>
     <input type="email" name="Email" placeholder="Email" required>
     <input type="text" name="Telefone" placeholder="Telefone" required>
-    <input type="date" name="Data" placeholder="Data do Agendamento" required>
-    <input type="time" name="Horario" placeholder="Horário" required>
-    <button type="submit">Agendar</button>
+    <input type="text" id="dataInput" name="Data" placeholder="Selecione a data" required>
+    <input type="text" id="horaInput" name="Horario" placeholder="Selecione o horário" required>
+    <button type="submit" id="submitBtn">Agendar</button>
   </form>
 
   <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado com sucesso!</div>
   <div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro ao agendar.</div>
 
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script>
     const form = document.getElementById('agendamentoForm');
     const successMsg = document.getElementById('successMsg');
     const errorMsg = document.getElementById('errorMsg');
+    const submitBtn = document.getElementById('submitBtn');
 
-    // Pega o cliente da URL: ex: /cliente1
+    // Pega o cliente da URL
     const pathParts = window.location.pathname.split('/');
     const cliente = pathParts[1] || '';
+
+    // Configura flatpickr
+    flatpickr("#dataInput", {
+      dateFormat: "Y-m-d",
+      minDate: "today"
+    });
+    flatpickr("#horaInput", {
+      enableTime: true,
+      noCalendar: true,
+      dateFormat: "H:i",
+      time_24hr: true
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       successMsg.style.display = 'none';
       errorMsg.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Agendando...";
 
       const formData = new FormData(form);
       const data = {};
@@ -106,6 +112,9 @@
         console.error(err);
         errorMsg.textContent = 'Ocorreu um erro';
         errorMsg.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Agendar";
       }
     });
   </script>
