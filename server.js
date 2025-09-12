@@ -118,5 +118,19 @@ app.get("/disponiveis/:cliente/:data", async(req,res)=>{
     res.status(500).json({msg:"Erro interno"});
   }
 });
+// Lista de clientes válidos
+const clientesValidos = ["cliente1", "cliente2"];
+
+// Rota dinâmica para servir o formulário
+app.get("/:cliente", (req, res) => {
+  const cliente = req.params.cliente;
+
+  if (!clientesValidos.includes(cliente)) {
+    return res.status(404).send("Cliente não encontrado");
+  }
+
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
