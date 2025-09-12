@@ -173,7 +173,24 @@ app.post("/confirmar/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+// ---------------- Lista agendamentos do usuário ----------------
+app.get("/meus-agendamentos", authMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .select("id, nome, email, telefone, data, horario, confirmado")
+      .eq("cliente", req.clienteId);
+
+    if (error) return res.status(500).json({ msg: "Erro ao buscar agendamentos" });
+
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
