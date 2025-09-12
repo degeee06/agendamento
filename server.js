@@ -1,130 +1,56 @@
 import express from "express";
 import bodyParser from "body-parser";
-import path from "path";
-import { fileURLToPath } from "url";
-import { GoogleSpreadsheet } from "google-spreadsheet";
+import bcrypt from "bcrypt";
 import { createClient } from "@supabase/supabase-js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 3000;
+const app = express();
+app.use(bodyParser.json());
 
-// ----------------- SUPABASE -----------------
-const supabaseAdmin = createClient(
+const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Google Service Account
-let creds;
-try {
-  creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-} catch (e) {
-  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
-  process.exit(1);
-}
+// Login
+app.post("/login", async (req, res) => {
+  const { email, senha } = req.body;
+  if (!email || !senha) return res.status(400).json({ msg: "Email e senha são obrigatórios" });
 
-// Map de clientes -> planilhas
-const planilhasClientes = {
-  cliente1: process.env.ID_PLANILHA_CLIENTE1,
-  cliente2: process.env.ID_PLANILHA_CLIENTE2,
-};
-const clientesValidos = Object.keys(planilhasClientes);
+  const { data: user } = await supabase
+    .from("usuarios")
+    .select("id, cliente_id, senha_hash")
+    .eq("email", email)
+    .single();
 
-const app = express();
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, "public")));
+  if (!user) return res.status(400).json({ msg: "Usuário não encontrado" });
 
-// ----------------- GOOGLE SHEETS -----------------
-async function accessSpreadsheet(cliente) {
-  const SPREADSHEET_ID = planilhasClientes[cliente];
-  const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
-  await doc.useServiceAccountAuth(creds);
-  await doc.loadInfo();
-  return doc;
-}
+  const match = await bcrypt.compare(senha, user.senha_hash);
+  if (!match) return res.status(400).json({ msg: "Senha incorreta" });
 
-async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => {
-    await sheet.setHeaderRow(newKeys);
-  });
+  // Aqui podemos gerar um token JWT simples para proteger rotas
+  const token = Buffer.from(JSON.stringify({ userId: user.id, clienteId: user.cliente_id })).toString("base64");
+  res.json({ msg: "Login OK", token });
+});
 
-  const currentHeaders = sheet.headerValues || [];
-  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
-  if (headersToAdd.length > 0) {
-    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
-  }
-}
-
-// ----------------- VERIFICAÇÃO DE HORÁRIO -----------------
-async function horarioDisponivel(cliente, data, horario) {
-  const { data: agendamentos, error } = await supabaseAdmin
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", cliente)
-    .eq("data", data)
-    .eq("horario", horario);
-
-  if (error) throw error;
-  return agendamentos.length === 0;
-}
-
-// ----------------- MIDDLEWARE DE AUTENTICAÇÃO -----------------
+// Middleware para rotas protegidas
 async function authMiddleware(req, res, next) {
+  const token = req.headers["authorization"]?.split(" ")[1];
+  if (!token) return res.status(401).json({ msg: "Não autorizado" });
+
   try {
-    const token = req.headers["authorization"]?.replace("Bearer ", "");
-    if (!token) return res.status(401).json({ msg: "Token obrigatório" });
-
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
-
-    req.user = data.user;
+    const payload = JSON.parse(Buffer.from(token, "base64").toString("utf8"));
+    req.user = payload;
     next();
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
+  } catch {
+    return res.status(401).json({ msg: "Token inválido" });
   }
 }
 
-// ----------------- ROTAS -----------------
-
-// Serve index.html protegido
-app.get("/cliente/:cliente", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+// Exemplo: rota protegida
+app.get("/minhas-info", authMiddleware, async (req, res) => {
+  const clienteId = req.user.clienteId;
+  const { data: cliente } = await supabase.from("clientes").select("*").eq("id", clienteId).single();
+  res.json({ cliente });
 });
 
-// Agendar horário
-app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.user.user_metadata.clienteId !== cliente) {
-      return res.status(403).json({ msg: "Cliente inválido para este usuário" });
-    }
-
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario) {
-      return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
-    }
-
-    const livre = await horarioDisponivel(cliente, Data, Horario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
-
-    const registro = { cliente, nome: Nome, email: Email, telefone: Telefone, data: Data, horario: Horario };
-
-    // Google Sheets
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(registro));
-    await sheet.addRow(registro);
-
-    // Supabase
-    const { error } = await supabaseAdmin.from("agendamentos").insert([registro]);
-    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
-
-    res.json({ msg: "✅ Agendamento realizado com sucesso" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "❌ Erro interno" });
-  }
-});
-
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+app.listen(3000, () => console.log("Servidor rodando na porta 3000"));
