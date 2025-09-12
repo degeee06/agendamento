@@ -1,35 +1,23 @@
 import express from "express";
-import bodyParser from "body-parser";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
 
-const app = express();
-
-// habilita JSON corretamente
-app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Config
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Clientes e IDs das planilhas
 const planilhasClientes = {
   cliente1: process.env.ID_PLANILHA_CLIENTE1,
-  cliente2: process.env.ID_PLANILHA_CLIENTE2,
+  cliente2: process.env.ID_PLANILHA_CLIENTE2
 };
-
 const clientesValidos = Object.keys(planilhasClientes);
 
-// Google Service Account
 let creds;
 try {
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -38,10 +26,11 @@ try {
   process.exit(1);
 }
 
-// arquivos estáticos
+const app = express();
+app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ---------------- Middleware Auth ----------------
+// -------- Middleware Auth --------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -55,10 +44,9 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ---------------- Google Sheets ----------------
+// -------- Google Sheets --------
 async function accessSpreadsheet(cliente) {
-  const SPREADSHEET_ID = planilhasClientes[cliente];
-  const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
+  const doc = new GoogleSpreadsheet(planilhasClientes[cliente]);
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
   return doc;
@@ -70,13 +58,13 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   });
 
   const currentHeaders = sheet.headerValues || [];
-  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+  const headersToAdd = newKeys.filter(k => !currentHeaders.includes(k));
   if (headersToAdd.length > 0) {
     await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
   }
 }
 
-// ---------------- Disponibilidade ----------------
+// -------- Disponibilidade --------
 async function horarioDisponivel(cliente, data, horario) {
   const { data: agendamentos, error } = await supabase
     .from("agendamentos")
@@ -84,57 +72,52 @@ async function horarioDisponivel(cliente, data, horario) {
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario);
-
   if (error) throw error;
   return agendamentos.length === 0;
 }
 
-// ---------------- Rotas ----------------
+// -------- Rotas --------
 app.get("/", (req, res) => res.send("Servidor rodando"));
 
 app.get("/:cliente", (req, res) => {
   const cliente = req.params.cliente;
-  if (!clientesValidos.includes(cliente))
-    return res.status(404).send("Cliente não encontrado");
+  if (!clientesValidos.includes(cliente)) return res.status(404).send("Cliente não encontrado");
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Endpoint para agendar (protegido)
+// -------- Agendar --------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente)
-      return res.status(403).json({ msg: "Acesso negado" });
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario) {
+    const { Nome, Email, Telefone, Data, Horario } = req.body || {};
+
+    if (![Nome, Email, Telefone, Data, Horario].every(v => typeof v === 'string' && v.trim() !== '')) {
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
     }
 
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    // 🔹 insere no Supabase
+    // Insere no Supabase
     const { data, error } = await supabase
       .from("agendamentos")
-      .insert([
-        {
-          cliente,
-          nome: nome,
-          email: email,
-          telefone: telefone,
-          data: data,
-          horario: horario,
-          status: "pendente",
-          confirmado: false,
-        },
-      ])
+      .insert([{
+        cliente,
+        nome: Nome,
+        email: Email,
+        telefone: Telefone,
+        data: Data,
+        horario: Horario,
+        status: "pendente",
+        confirmado: false
+      }])
       .select()
       .single();
-
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    // 🔹 grava no Google Sheets
+    // Insere no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
@@ -147,51 +130,65 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// Confirmar agendamento (protegido)
-app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
-  try {
+// -------- Confirmar --------
+app.post("/confirmar/:cliente/:id", authMiddleware, async (req,res)=>{
+  try{
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) {
-      return res.status(403).json({ msg: "Acesso negado" });
-    }
-
     const { id } = req.params;
+    if(req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    // 1. Atualiza no Supabase
+    // Atualiza no Supabase
     const { data, error } = await supabase
       .from("agendamentos")
-      .update({ status: "confirmado", confirmado: true })
+      .update({ status:"confirmado", confirmado:true })
       .eq("id", id)
       .eq("cliente", cliente)
       .select()
       .single();
+    if(error) return res.status(500).json({ msg:"Erro ao confirmar agendamento" });
+    if(!data) return res.status(404).json({ msg:"Agendamento não encontrado" });
 
-    if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
-    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    // 2. Atualiza no Google Sheets
+    // Atualiza no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
 
     const rows = await sheet.getRows();
-    const row = rows.find((r) => r.get("id") === data.id);
-
-    if (row) {
-      row.set("status", "confirmado");
-      row.set("confirmado", true);
+    const row = rows.find(r => r.get("id") === data.id);
+    if(row){
+      row.set("status","confirmado");
+      row.set("confirmado",true);
       await row.save();
     } else {
-      // fallback: cria nova linha se não achar
       await sheet.addRow(data);
     }
 
-    res.json({ msg: "✅ Agendamento confirmado", agendamento: data });
-  } catch (err) {
+    res.json({ msg:"✅ Agendamento confirmado", agendamento:data });
+  }catch(err){
     console.error(err);
-    res.status(500).json({ msg: "❌ Erro interno" });
+    res.status(500).json({ msg:"❌ Erro interno" });
   }
 });
 
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+// -------- Disponíveis --------
+app.get("/disponiveis/:cliente/:data", authMiddleware, async(req,res)=>{
+  try{
+    const cliente = req.params.cliente;
+    if(req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("horario")
+      .eq("cliente",cliente)
+      .eq("data",req.params.data);
+    if(error) return res.status(500).json({ msg:"Erro Supabase" });
+
+    const ocupados = agendamentos.map(a=>a.horario);
+    res.json({ ocupados });
+  }catch(err){
+    console.error(err);
+    res.status(500).json({ msg:"Erro interno" });
+  }
+});
+
+app.listen(PORT, ()=>console.log(`Servidor rodando na porta ${PORT}`));
