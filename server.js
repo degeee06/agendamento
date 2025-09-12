@@ -144,35 +144,24 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   }
 });
 
-// Rota para listar agendamentos do usuário
-app.get("/meus-agendamentos", authMiddleware, async (req, res) => {
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", req.clienteId);
-  if(error) return res.status(500).json({ msg: "Erro ao buscar agendamentos" });
-  res.json(data);
-});
-
-// Rota para confirmar agendamento
 app.post("/confirmar/:id", authMiddleware, async (req, res) => {
-  const { id } = req.params;
-  const { error } = await supabase
-    .from("agendamentos")
-    .update({ confirmado: true })
-    .eq("id", id)
-    .eq("cliente", req.clienteId);
-  if(error) return res.status(500).json({ msg: "Erro ao confirmar" });
-  res.json({ msg: "Confirmado" });
-});
+  try {
+    const { id } = req.params;
 
+    // Atualiza Supabase
+    const { error } = await supabase
+      .from("agendamentos")
+      .update({ confirmado: true })
+      .eq("id", id)
+      .eq("cliente", req.clienteId);
+    if(error) return res.status(500).json({ msg: "Erro ao confirmar no Supabase" });
 
     // Atualiza Google Sheets
     const doc = await accessSpreadsheet(req.clienteId);
     const sheet = doc.sheetsByIndex[0];
     await sheet.loadHeaderRow();
     const rows = await sheet.getRows();
-    const row = rows.find(r => r.id === id || r.email === req.user.email && r.data === req.body.Data && r.horario === req.body.Horario);
+    const row = rows.find(r => r.id === id);
     if (row) {
       row.confirmado = true;
       await row.save();
@@ -186,4 +175,5 @@ app.post("/confirmar/:id", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
