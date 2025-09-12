@@ -1,13 +1,12 @@
 import express from "express";
 import bodyParser from "body-parser";
-import path from "path";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
-// Variáveis do Render
+// Pega variáveis de ambiente do Render
 const SPREADSHEET_ID = process.env.ID_DA_PLANILHA;
 const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
 
-// Parse JSON da conta de serviço
+// Converte a string JSON da variável de ambiente em objeto
 let creds;
 try {
   creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT);
@@ -18,22 +17,26 @@ try {
 
 const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
 const app = express();
-
 app.use(bodyParser.json());
-
-// Servir arquivos estáticos da pasta public
-app.use(express.static(path.join(process.cwd(), "public")));
 
 async function accessSpreadsheet() {
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
-  return doc;
+  const sheet = doc.sheetsByIndex[0]; // pega a primeira aba
+
+  // Se a primeira linha (header) estiver vazia, define os cabeçalhos
+  if (!sheet.headerValues || sheet.headerValues.length === 0) {
+    const defaultHeaders = ["nome", "email", "data", "hora"];
+    await sheet.setHeaderRow(defaultHeaders);
+    console.log("Cabeçalho criado automaticamente:", defaultHeaders);
+  }
+
+  return sheet;
 }
 
-// Endpoint de teste (opcional)
-app.get("/planilha", async (req, res) => {
+app.get("/", async (req, res) => {
   try {
-    const doc = await accessSpreadsheet();
+    const sheet = await accessSpreadsheet();
     res.send(`Planilha: ${doc.title}`);
   } catch (err) {
     console.error(err);
@@ -41,16 +44,14 @@ app.get("/planilha", async (req, res) => {
   }
 });
 
-// Endpoint para receber agendamentos do formulário
 app.post("/agendar", async (req, res) => {
   try {
-    const doc = await accessSpreadsheet();
-    const sheet = doc.sheetsByIndex[0]; // primeira aba
+    const sheet = await accessSpreadsheet();
     await sheet.addRow(req.body);
-    res.json({ msg: "✅ Agendamento realizado com sucesso!" });
+    res.json({ msg: "✅ Agendamento adicionado!" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: "❌ Erro ao realizar agendamento" });
+    res.status(500).json({ msg: "❌ Erro ao adicionar agendamento!" });
   }
 });
 
