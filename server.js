@@ -100,7 +100,15 @@ app.post("/agendar/:cliente", async (req, res) => {
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    const registro = { cliente, nome, email, telefone, data, horario };
+    const registro = {
+    cliente,
+    nome: Nome,
+    email: Email,
+    telefone: Telefone,
+    data: Data,
+    horario: Horario
+  };
+
 
     // Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
@@ -149,6 +157,7 @@ app.get("/disponiveis/:cliente/:data", async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
