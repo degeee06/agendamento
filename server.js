@@ -11,8 +11,9 @@ const PORT = process.env.PORT || 3000;
 // Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
 
 const app = express();
 app.use(bodyParser.json());
@@ -71,3 +72,4 @@ app.get("/agendamentos/:cliente", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
+
