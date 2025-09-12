@@ -4,27 +4,30 @@
 <meta charset="UTF-8">
 <title>Agendamento</title>
 <style>
-body{font-family:Arial; max-width:500px; margin:50px auto; padding:20px; background:#f7f7f7; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+body{font-family:Arial; max-width:600px; margin:50px auto; padding:20px; background:#f7f7f7; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.15);}
 h2{text-align:center;margin-bottom:20px;}
-input,button{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc; font-size:16px; box-sizing:border-box;}
+input,button,select{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc; font-size:16px; box-sizing:border-box;}
 button{background:#4CAF50;color:white;border:none; cursor:pointer; transition:0.2s;}
 button:hover{background:#45a049;}
 .success,.error{text-align:center;margin-top:15px;font-weight:bold;}
 .success{color:green;}
 .error{color:red;}
-table{width:100%; border-collapse:collapse;margin-top:20px;}
-th,td{padding:8px;text-align:left;border-bottom:1px solid #ddd;}
-.confirm-btn{background:#2196F3;}
+table{width:100%; border-collapse:collapse; margin-top:20px;}
+th,td{border:1px solid #ccc; padding:8px; text-align:center;}
+th{background:#eee;}
+.confirm-btn{background:#2196F3; margin:0; padding:6px 10px; font-size:14px;}
 .confirm-btn:hover{background:#1976D2;}
 </style>
 </head>
 <body>
-<h2>Formulário de Agendamento</h2>
+<h2>Agendamento</h2>
 
+<!-- Login -->
 <input type="email" id="email" placeholder="Email">
 <input type="password" id="senha" placeholder="Senha">
 <button id="loginBtn">Login</button>
 
+<!-- Formulário de agendamento -->
 <form id="agendamentoForm" style="display:none;">
 <input type="text" name="Nome" placeholder="Nome" required>
 <input type="email" name="Email" placeholder="Email" required>
@@ -37,18 +40,15 @@ th,td{padding:8px;text-align:left;border-bottom:1px solid #ddd;}
 <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
 <div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
 
+<!-- Lista de agendamentos -->
 <h2>Meus Agendamentos</h2>
-<table id="agendamentosTable">
-  <thead>
-    <tr>
-      <th>Nome</th>
-      <th>Data</th>
-      <th>Horário</th>
-      <th>Confirmado</th>
-      <th>Ação</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
+<table id="meusAgendamentos" style="display:none;">
+<thead>
+<tr>
+<th>Data</th><th>Horário</th><th>Nome</th><th>Email</th><th>Telefone</th><th>Confirmado</th><th>Ações</th>
+</tr>
+</thead>
+<tbody></tbody>
 </table>
 
 <script type="module">
@@ -63,7 +63,8 @@ const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
-const agTableBody = document.querySelector("#agendamentosTable tbody");
+const table = document.getElementById('meusAgendamentos');
+const tbody = table.querySelector('tbody');
 
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
@@ -80,7 +81,7 @@ loginBtn.addEventListener('click', async () => {
   document.getElementById('email').style.display = 'none';
   document.getElementById('senha').style.display = 'none';
   form.style.display = 'block';
-
+  table.style.display = 'table';
   carregarAgendamentos();
 });
 
@@ -118,37 +119,44 @@ form.addEventListener('submit', async (e) => {
 });
 
 async function carregarAgendamentos() {
+  tbody.innerHTML = '';
   try {
-    const res = await fetch("/meus-agendamentos", {
-      headers: { "Authorization": `Bearer ${userToken}` }
-    });
+    const res = await fetch('/meus-agendamentos', { headers: { "Authorization": `Bearer ${userToken}` } });
     const data = await res.json();
-    agTableBody.innerHTML = "";
-
     data.forEach(a => {
-      const tr = document.createElement("tr");
+      const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${a.nome}</td>
         <td>${a.data}</td>
         <td>${a.horario}</td>
-        <td>${a.confirmado ? "✅" : "❌"}</td>
-        <td>${a.confirmado ? "" : `<button class="confirm-btn" onclick="confirmar('${a.id}')">Confirmar</button>`}</td>
+        <td>${a.nome}</td>
+        <td>${a.email}</td>
+        <td>${a.telefone}</td>
+        <td>${a.confirmado ? '✅' : '❌'}</td>
+        <td>${!a.confirmado ? `<button class="confirm-btn" data-id="${a.id}">Confirmar</button>` : ''}</td>
       `;
-      agTableBody.appendChild(tr);
+      tbody.appendChild(tr);
+    });
+
+    // Adiciona evento nos botões de confirmar
+    tbody.querySelectorAll('.confirm-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const row = btn.closest('tr');
+        try {
+          const response = await fetch(`/confirmar/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json', "Authorization": `Bearer ${userToken}` },
+            body: JSON.stringify({ Data: row.children[0].textContent, Horario: row.children[1].textContent })
+          });
+          const result = await response.json();
+          if(response.ok){
+            row.children[5].textContent = '✅';
+            btn.remove();
+          } else { alert(result.msg || 'Erro'); }
+        } catch(err){ console.error(err); alert('Erro'); }
+      });
     });
   } catch(err){ console.error(err); }
-}
-
-async function confirmar(id) {
-  try {
-    const res = await fetch(`/confirmar/${id}`, {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + userToken }
-    });
-    const result = await res.json();
-    alert(result.msg);
-    carregarAgendamentos();
-  } catch(err){ console.error(err); alert("Erro ao confirmar"); }
 }
 </script>
 </body>
