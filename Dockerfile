@@ -1,7 +1,7 @@
-# Use Node 20
-FROM node:20-alpine
+# Use Node 20 com Debian (mais compatível com OpenSSL)
+FROM node:20-bullseye
 
-# Cria diretório de trabalho
+# Diretório de trabalho no container
 WORKDIR /app
 
 # Copia package.json e package-lock.json
@@ -10,11 +10,11 @@ COPY package*.json ./
 # Instala dependências
 RUN npm install
 
-# Copia todo o projeto
+# Copia todo o restante da aplicação
 COPY . .
 
-# Expõe porta (igual no server.js)
-EXPOSE 3000
+# Porta que o Render vai expor (use a mesma do seu server.js)
+EXPOSE 10000
 
-# Comando para iniciar
+# Comando para iniciar o server
 CMD ["node", "server.js"]
