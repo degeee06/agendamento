@@ -1,0 +1,23 @@
+<form id="agendamentoForm">
+  Nome: <input type="text" name="nome" required><br>
+  Email: <input type="email" name="email" required><br>
+  Data: <input type="date" name="data" required><br>
+  Hora: <input type="time" name="hora" required><br>
+  <button type="submit">Agendar</button>
+</form>
+<div id="resposta"></div>
+
+<script>
+document.getElementById('agendamentoForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const data = Object.fromEntries(formData.entries());
+  const resp = await fetch('/agendar', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  const json = await resp.json();
+  document.getElementById('resposta').innerText = json.msg;
+}
+</script>
