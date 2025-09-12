@@ -7,8 +7,6 @@
 </head>
 <body>
   <h1>Agendamento</h1>
-
-  <!-- LOGIN -->
   <div id="loginDiv">
     <h2>Login</h2>
     <input type="email" id="email" placeholder="Email"><br>
@@ -18,7 +16,6 @@
     <p id="loginMsg"></p>
   </div>
 
-  <!-- FORMULÁRIO DE AGENDAMENTO -->
   <div id="agendaDiv" style="display:none">
     <h2>Agendar horário</h2>
     <input type="text" id="nome" placeholder="Nome"><br>
@@ -30,45 +27,35 @@
     <p id="agendaMsg"></p>
   </div>
 
+  <!-- SCRIPT NO FINAL DO BODY -->
   <script>
-    // ------------------- SUPABASE -------------------
-    const supabaseUrl = "https://otyxjcxxqwjotnuyrvmc.supabase.co"; // substitua
-    const supabaseKey = "SUA_ANON_KEY"; // substitua
+    // Inicializa supabase primeiro
+    const supabaseUrl = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
+    const supabaseKey = "SUA_ANON_KEY";
     const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-    // ------------------- CLIENTE -------------------
-    const clienteId = window.location.pathname.split("/")[1]; // "/cliente1" -> "cliente1"
+    const clienteId = window.location.pathname.split("/")[1];
 
-    // ------------------- LOGIN COM MAGIC LINK -------------------
-    async function processMagicLink() {
+    // Processa magic link
+    window.addEventListener('load', async () => {
       const hash = window.location.hash;
       if (hash.includes("access_token")) {
         const params = new URLSearchParams(hash.slice(1));
         const access_token = params.get("access_token");
-        if (access_token) {
-          await supabase.auth.setSession({ access_token });
-          document.getElementById("loginDiv").style.display = "none";
-          document.getElementById("agendaDiv").style.display = "block";
-          window.location.hash = ""; // limpa o hash
-        }
+        await supabase.auth.setSession({ access_token });
+        document.getElementById("loginDiv").style.display = "none";
+        document.getElementById("agendaDiv").style.display = "block";
+        window.location.hash = "";
       }
-    }
+    });
 
-    window.addEventListener('load', processMagicLink);
-
-    // ------------------- FUNÇÕES DE LOGIN -------------------
+    // Login
     async function login() {
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
-
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       console.log("Login data:", data, "Error:", error);
-
-      if (error) {
-        document.getElementById("loginMsg").innerText = error.message;
-        return;
-      }
-
+      if (error) { document.getElementById("loginMsg").innerText = error.message; return; }
       if (data.session) {
         document.getElementById("loginDiv").style.display = "none";
         document.getElementById("agendaDiv").style.display = "block";
@@ -80,23 +67,14 @@
     async function loginMagic() {
       const email = document.getElementById("email").value;
       const { data, error } = await supabase.auth.signInWithOtp({ email });
-
-      if (error) {
-        document.getElementById("loginMsg").innerText = error.message;
-        return;
-      }
-
+      if (error) { document.getElementById("loginMsg").innerText = error.message; return; }
       document.getElementById("loginMsg").innerText = "✅ Confira seu e-mail para entrar!";
     }
 
-    // ------------------- FUNÇÃO AGENDAR -------------------
     async function agendar() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token) {
-        document.getElementById("agendaMsg").innerText = "❌ Usuário não autenticado";
-        return;
-      }
+      if (!token) { document.getElementById("agendaMsg").innerText = "❌ Usuário não autenticado"; return; }
 
       const registro = {
         Nome: document.getElementById("nome").value,
@@ -108,10 +86,7 @@
 
       const res = await fetch(`/agendar/${clienteId}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + token
-        },
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
         body: JSON.stringify(registro)
       });
 
@@ -119,7 +94,7 @@
       document.getElementById("agendaMsg").innerText = data.msg;
     }
 
-    // ------------------- EVENTOS -------------------
+    // Event listeners
     document.getElementById("btnLogin").addEventListener("click", login);
     document.getElementById("btnMagic").addEventListener("click", loginMagic);
     document.getElementById("btnAgendar").addEventListener("click", agendar);
