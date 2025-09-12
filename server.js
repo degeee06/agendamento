@@ -5,21 +5,19 @@ import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
 
-// Config
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 // ----------------- SUPABASE -----------------
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // usado no backend
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // Google Service Account
-const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
 let creds;
 try {
-  creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT);
+  creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
 } catch (e) {
   console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
   process.exit(1);
@@ -48,14 +46,12 @@ async function accessSpreadsheet(cliente) {
 async function ensureDynamicHeaders(sheet, newKeys) {
   await sheet.loadHeaderRow().catch(async () => {
     await sheet.setHeaderRow(newKeys);
-    console.log("Cabeçalhos criados:", newKeys);
   });
 
   const currentHeaders = sheet.headerValues || [];
   const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
   if (headersToAdd.length > 0) {
     await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
-    console.log("Cabeçalhos atualizados:", [...currentHeaders, ...headersToAdd]);
   }
 }
 
@@ -91,12 +87,8 @@ async function authMiddleware(req, res, next) {
 
 // ----------------- ROTAS -----------------
 
-// Serve index.html para o cliente (somente usuário autorizado)
-app.get("/cliente/:cliente", authMiddleware, (req, res) => {
-  const cliente = req.params.cliente;
-  if (req.user.user_metadata.clienteId !== cliente) {
-    return res.status(403).send("Você não tem permissão para este cliente");
-  }
+// Serve index.html protegido
+app.get("/cliente/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
@@ -126,39 +118,12 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     // Supabase
     const { error } = await supabaseAdmin.from("agendamentos").insert([registro]);
-    if (error) {
-      console.error("Erro Supabase:", error);
-      return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
-    }
+    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
     res.json({ msg: "✅ Agendamento realizado com sucesso" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "❌ Erro interno" });
-  }
-});
-
-// Checar horários ocupados
-app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
-  try {
-    const { cliente, data } = req.params;
-    if (req.user.user_metadata.clienteId !== cliente) {
-      return res.status(403).json({ msg: "Cliente inválido para este usuário" });
-    }
-
-    const { data: agendamentos, error } = await supabaseAdmin
-      .from("agendamentos")
-      .select("horario")
-      .eq("cliente", cliente)
-      .eq("data", data);
-
-    if (error) return res.status(500).json({ msg: "Erro Supabase" });
-
-    const ocupados = agendamentos.map((a) => a.horario);
-    res.json({ ocupados });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
