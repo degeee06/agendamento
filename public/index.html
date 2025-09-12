@@ -12,6 +12,10 @@ button:hover{background:#45a049;}
 .success,.error{text-align:center;margin-top:15px;font-weight:bold;}
 .success{color:green;}
 .error{color:red;}
+table{width:100%; border-collapse:collapse;margin-top:20px;}
+th,td{padding:8px;text-align:left;border-bottom:1px solid #ddd;}
+.confirm-btn{background:#2196F3;}
+.confirm-btn:hover{background:#1976D2;}
 </style>
 </head>
 <body>
@@ -33,6 +37,20 @@ button:hover{background:#45a049;}
 <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
 <div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
 
+<h2>Meus Agendamentos</h2>
+<table id="agendamentosTable">
+  <thead>
+    <tr>
+      <th>Nome</th>
+      <th>Data</th>
+      <th>Horário</th>
+      <th>Confirmado</th>
+      <th>Ação</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -45,6 +63,7 @@ const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
+const agTableBody = document.querySelector("#agendamentosTable tbody");
 
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
@@ -61,6 +80,8 @@ loginBtn.addEventListener('click', async () => {
   document.getElementById('email').style.display = 'none';
   document.getElementById('senha').style.display = 'none';
   form.style.display = 'block';
+
+  carregarAgendamentos();
 });
 
 form.addEventListener('submit', async (e) => {
@@ -91,11 +112,44 @@ form.addEventListener('submit', async (e) => {
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
-    if(response.ok){ successMsg.style.display='block'; form.reset(); }
+    if(response.ok){ successMsg.style.display='block'; form.reset(); carregarAgendamentos(); }
     else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
   } catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
 });
+
+async function carregarAgendamentos() {
+  try {
+    const res = await fetch("/meus-agendamentos", {
+      headers: { "Authorization": `Bearer ${userToken}` }
+    });
+    const data = await res.json();
+    agTableBody.innerHTML = "";
+
+    data.forEach(a => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${a.nome}</td>
+        <td>${a.data}</td>
+        <td>${a.horario}</td>
+        <td>${a.confirmado ? "✅" : "❌"}</td>
+        <td>${a.confirmado ? "" : `<button class="confirm-btn" onclick="confirmar('${a.id}')">Confirmar</button>`}</td>
+      `;
+      agTableBody.appendChild(tr);
+    });
+  } catch(err){ console.error(err); }
+}
+
+async function confirmar(id) {
+  try {
+    const res = await fetch(`/confirmar/${id}`, {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + userToken }
+    });
+    const result = await res.json();
+    alert(result.msg);
+    carregarAgendamentos();
+  } catch(err){ console.error(err); alert("Erro ao confirmar"); }
+}
 </script>
 </body>
 </html>
-
