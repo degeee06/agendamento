@@ -50,6 +50,39 @@ async function ensureDynamicHeaders(sheet, newKeys) {
     await sheet.setHeaderRow(updatedHeaders);
   }
 }
+// Horários de trabalho fixos (exemplo: 9h às 18h, a cada 1h)
+const horariosPadrao = [
+  "09:00", "10:00", "11:00", "12:00",
+  "13:00", "14:00", "15:00", "16:00",
+  "17:00", "18:00"
+];
+
+// Endpoint para buscar horários disponíveis
+app.get("/horarios/:cliente/:data", async (req, res) => {
+  try {
+    const { cliente, data } = req.params;
+
+    // Buscar agendamentos no Supabase
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("horario")
+      .eq("cliente", cliente)
+      .eq("data", data);
+
+    if (error) {
+      console.error(error);
+      return res.status(500).json({ msg: "Erro ao consultar horários" });
+    }
+
+    const ocupados = agendamentos.map(a => a.horario.slice(0,5)); // "HH:MM"
+    const disponiveis = horariosPadrao.filter(h => !ocupados.includes(h));
+
+    res.json({ disponiveis });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
 
 // Rota formulário
 app.get("/:cliente", (req, res) => {
@@ -105,3 +138,4 @@ app.post("/agendar/:cliente", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
