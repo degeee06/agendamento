@@ -3,10 +3,8 @@ import bodyParser from "body-parser";
 import path from "path";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
-// Variável da conta de serviço
 const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
 
-// Parse JSON da conta de serviço
 let creds;
 try {
   creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT);
@@ -19,7 +17,12 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(process.cwd(), "public")));
 
-// Função para acessar qualquer planilha pelo ID
+// Estrutura de clientes + planilhas
+const clientes = {
+  "cliente1": "ID_DA_PLANILHA_CLIENTE1",
+  "cliente2": "ID_DA_PLANILHA_CLIENTE2"
+};
+
 async function accessSpreadsheet(sheetId) {
   const doc = new GoogleSpreadsheet(sheetId);
   await doc.useServiceAccountAuth(creds);
@@ -27,7 +30,6 @@ async function accessSpreadsheet(sheetId) {
   return doc;
 }
 
-// Função para garantir headers dinâmicos e manter ordem de registro
 async function ensureDynamicHeaders(sheet, newKeys) {
   await sheet.loadHeaderRow();
   const currentHeaders = sheet.headerValues || [];
@@ -40,30 +42,26 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
-// Endpoint de teste para verificar título da planilha
-app.get("/planilha/:sheetId", async (req, res) => {
-  try {
-    const doc = await accessSpreadsheet(req.params.sheetId);
-    res.send(`Planilha: ${doc.title}`);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Erro ao acessar a planilha");
-  }
+// Rota para o formulário do cliente
+app.get("/:cliente", (req, res) => {
+  const cliente = req.params.cliente;
+  if (!clientes[cliente]) return res.status(404).send("Cliente não encontrado");
+
+  // Serve o HTML do formulário normalmente
+  res.sendFile(path.join(process.cwd(), "public", "formulario.html"));
 });
 
-// Endpoint para receber agendamentos
-app.post("/agendar", async (req, res) => {
+// Endpoint para receber agendamento
+app.post("/agendar/:cliente", async (req, res) => {
   try {
-    const { sheetId, ...data } = req.body;
+    const cliente = req.params.cliente;
+    const sheetId = clientes[cliente];
+    if (!sheetId) return res.status(404).json({ msg: "Cliente não encontrado" });
 
-    if (!sheetId) {
-      return res.status(400).json({ msg: "❌ sheetId é obrigatório" });
-    }
-
+    const data = req.body;
     const doc = await accessSpreadsheet(sheetId);
-    const sheet = doc.sheetsByIndex[0]; // primeira aba
+    const sheet = doc.sheetsByIndex[0];
 
-    // Garantir headers dinâmicos
     const keys = Object.keys(data);
     await ensureDynamicHeaders(sheet, keys);
 
