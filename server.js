@@ -93,35 +93,52 @@ app.get("/:cliente", (req, res) => {
 });
 
 // Endpoint para agendar (protegido)
+// Endpoint para agendar (protegido)
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario) return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+    if (!Nome || !Email || !Telefone || !Data || !Horario) {
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+    }
 
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    const registro = { cliente, nome: Nome, email: Email, telefone: Telefone, data: Data, horario: Horario };
+    // 🔹 insere no Supabase e pega o UUID
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente,
+        nome: Nome,
+        email: Email,
+        telefone: Telefone,
+        data: Data,
+        horario: Horario,
+        status: "pendente",
+        confirmado: false
+      }])
+      .select()
+      .single();
 
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(registro));
-    await sheet.addRow(registro);
-
-    const { error } = await supabase.from("agendamentos").insert([registro]);
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    res.json({ msg: "✅ Agendamento realizado com sucesso" });
+    // 🔹 grava no Google Sheets (com UUID)
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(data));
+    await sheet.addRow(data);
+
+    res.json({ msg: "✅ Agendamento realizado com sucesso", agendamento: data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "❌ Erro interno" });
   }
 });
 
-// Confirmar agendamento (protegido)
+
 // Confirmar agendamento (protegido)
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
@@ -144,27 +161,20 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
     if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // 2. Atualiza no Google Sheets
+    // 2. Atualiza no Google Sheets pelo UUID
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
 
-    // tenta localizar a linha correspondente
-    await sheet.loadCells(); // garante acesso
     const rows = await sheet.getRows();
-    const row = rows.find(
-      (r) =>
-        r.get("email") === data.email &&
-        r.get("data") === data.data &&
-        r.get("horario") === data.horario
-    );
+    const row = rows.find((r) => r.get("id") === data.id);
 
     if (row) {
       row.set("status", "confirmado");
       row.set("confirmado", true);
       await row.save();
     } else {
-      // fallback: se não achar, cria nova linha com os dados atualizados
+      // fallback: cria nova linha se não achar
       await sheet.addRow(data);
     }
 
@@ -176,5 +186,7 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
 });
 
 
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
