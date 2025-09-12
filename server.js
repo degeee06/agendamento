@@ -15,15 +15,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Clientes e IDs das planilhas deles
-const planilhasClientes = {
-  cliente1: process.env.ID_PLANILHA_CLIENTE1,
-  cliente2: process.env.ID_PLANILHA_CLIENTE2
-};
-
-// Lista de clientes válidos
-const clientesValidos = Object.keys(planilhasClientes);
-
 // Google Service Account
 const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
 let creds;
@@ -32,6 +23,29 @@ try {
 } catch (e) {
   console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
   process.exit(1);
+}
+
+// Map de clientes para planilhas
+const planilhasClientes = {
+  cliente1: process.env.ID_PLANILHA_CLIENTE1,
+  cliente2: process.env.ID_PLANILHA_CLIENTE2,
+};
+
+// Middleware para verificar token Supabase
+async function authMiddleware(req, res, next) {
+  try {
+    const token = req.headers["authorization"]?.replace("Bearer ", "");
+    if (!token) return res.status(401).json({ msg: "Token obrigatório" });
+
+    const { data: user, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ msg: "Token inválido" });
+
+    req.user = user;
+    next();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
 }
 
 const app = express();
@@ -71,24 +85,24 @@ async function horarioDisponivel(cliente, data, horario) {
     .eq("horario", horario);
 
   if (error) throw error;
-  return agendamentos.length === 0; // true se livre
+  return agendamentos.length === 0;
 }
 
-// Rota dinâmica para servir index.html
-app.get("/:cliente", (req, res) => {
+// Rota protegida para servir index.html do cliente
+app.get("/cliente/:cliente", authMiddleware, (req, res) => {
   const cliente = req.params.cliente;
-  if (!clientesValidos.includes(cliente)) {
-    return res.status(404).send("Cliente não encontrado");
+  if (req.user.user_metadata.clienteId !== cliente) {
+    return res.status(403).send("Você não tem permissão para este cliente");
   }
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // Endpoint para agendar
-app.post("/agendar/:cliente", async (req, res) => {
+app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (!clientesValidos.includes(cliente)) {
-      return res.status(400).json({ msg: "Cliente inválido" });
+    if (req.user.user_metadata.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Cliente inválido para este usuário" });
     }
 
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -96,19 +110,10 @@ app.post("/agendar/:cliente", async (req, res) => {
       return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
     }
 
-    // Verifica disponibilidade
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    const registro = {
-    cliente,
-    nome: Nome,
-    email: Email,
-    telefone: Telefone,
-    data: Data,
-    horario: Horario
-  };
-
+    const registro = { cliente, nome: Nome, email: Email, telefone: Telefone, data: Data, horario: Horario };
 
     // Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
@@ -117,9 +122,7 @@ app.post("/agendar/:cliente", async (req, res) => {
     await sheet.addRow(registro);
 
     // Salva no Supabase
-    const { error } = await supabase
-      .from("agendamentos")
-      .insert([registro]);
+    const { error } = await supabase.from("agendamentos").insert([registro]);
     if (error) {
       console.error("Erro Supabase:", error);
       return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
@@ -133,11 +136,11 @@ app.post("/agendar/:cliente", async (req, res) => {
 });
 
 // Endpoint para checar horários ocupados
-app.get("/disponiveis/:cliente/:data", async (req, res) => {
+app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   try {
     const { cliente, data } = req.params;
-    if (!clientesValidos.includes(cliente)) {
-      return res.status(400).json({ msg: "Cliente inválido" });
+    if (req.user.user_metadata.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Cliente inválido para este usuário" });
     }
 
     const { data: agendamentos, error } = await supabase
@@ -148,7 +151,7 @@ app.get("/disponiveis/:cliente/:data", async (req, res) => {
 
     if (error) return res.status(500).json({ msg: "Erro Supabase" });
 
-    const ocupados = agendamentos.map(a => a.horario);
+    const ocupados = agendamentos.map((a) => a.horario);
     res.json({ ocupados });
   } catch (err) {
     console.error(err);
@@ -157,7 +160,3 @@ app.get("/disponiveis/:cliente/:data", async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
