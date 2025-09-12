@@ -34,16 +34,22 @@ async function accessSpreadsheet(sheetId) {
 
 // Garantir headers dinâmicos (Nome, Email, Telefone, Data, Horário)
 async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow();
+  await sheet.loadHeaderRow().catch(async () => {
+    // Planilha vazia, define primeira linha como cabeçalhos
+    await sheet.setHeaderRow(newKeys);
+    console.log("Cabeçalhos criados na primeira linha:", newKeys);
+  });
+
   const currentHeaders = sheet.headerValues || [];
   const headersToAdd = newKeys.filter((key) => !currentHeaders.includes(key));
 
   if (headersToAdd.length > 0) {
     const updatedHeaders = [...currentHeaders, ...headersToAdd];
     await sheet.setHeaderRow(updatedHeaders);
-    console.log("Cabeçalhos atualizados na ordem de registro:", updatedHeaders);
+    console.log("Cabeçalhos atualizados:", updatedHeaders);
   }
 }
+
 
 // Rota para servir o formulário do cliente
 app.get("/:cliente", (req, res) => {
@@ -82,4 +88,5 @@ app.post("/agendar/:cliente", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
