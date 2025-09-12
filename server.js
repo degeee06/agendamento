@@ -76,6 +76,103 @@ async function horarioDisponivel(cliente, data, horario) {
   return agendamentos.length === 0;
 }
 
+// Rota para listar agendamentos de um cliente
+app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if(req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente);
+
+    if(error) return res.status(500).json({ msg: "Erro Supabase" });
+
+    res.json({ agendamentos: data });
+  } catch(err){
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+
+
+// Função para buscar agendamentos do usuário logado
+async function listarAgendamentos() {
+  if(!userToken) return;
+
+  try {
+    const res = await fetch(`/meus-agendamentos/${cliente}`, {
+      headers: { "Authorization": `Bearer ${userToken}` }
+    });
+    const { agendamentos } = await res.json();
+
+    const container = document.getElementById("meusAgendamentos");
+    container.innerHTML = "";
+
+    if(agendamentos.length === 0){
+      container.textContent = "Nenhum agendamento.";
+      return;
+    }
+
+    agendamentos.forEach(a => {
+      const div = document.createElement("div");
+      div.style.marginBottom = "10px";
+      div.style.border = "1px solid #ccc";
+      div.style.padding = "8px";
+      div.style.borderRadius = "6px";
+
+      div.innerHTML = `
+        <strong>${a.data} ${a.horario}</strong> - ${a.nome} - Status: ${a.status}
+        ${!a.confirmado ? '<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>' : ''}
+      `;
+
+      container.appendChild(div);
+
+      // botão de confirmar
+      const btn = div.querySelector("button");
+      if(btn){
+        btn.addEventListener("click", async () => {
+          try {
+            const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${userToken}` }
+            });
+            const result = await res.json();
+            if(res.ok){
+              alert("Agendamento confirmado!");
+              listarAgendamentos(); // atualizar lista
+            } else {
+              alert(result.msg || "Erro ao confirmar");
+            }
+          } catch(err){
+            console.error(err);
+            alert("Erro ao confirmar");
+          }
+        });
+      }
+    });
+
+  } catch(err){
+    console.error(err);
+  }
+}
+
+// Atualiza lista após login e agendamento
+loginBtn.addEventListener('click', async () => {
+  // ... código de login existente ...
+  listarAgendamentos();
+});
+
+form.addEventListener('submit', async (e) => {
+  // ... código de agendamento existente ...
+  if(response.ok){
+    listarAgendamentos();
+  }
+});
+
+
 // -------- Rotas --------
 app.get("/", (req, res) => res.send("Servidor rodando"));
 
@@ -192,3 +289,4 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async(req,res)=>{
 });
 
 app.listen(PORT, ()=>console.log(`Servidor rodando na porta ${PORT}`));
+
