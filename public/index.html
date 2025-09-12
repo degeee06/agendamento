@@ -14,8 +14,11 @@
       border-radius: 10px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    h2 { text-align: center; margin-bottom: 20px; }
-    input, button {
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    input, button, select {
       width: 100%;
       padding: 12px;
       margin: 10px 0;
@@ -31,7 +34,9 @@
       cursor: pointer;
       transition: background-color 0.2s ease;
     }
-    button:hover { background-color: #45a049; }
+    button:hover {
+      background-color: #45a049;
+    }
     .success, .error {
       text-align: center;
       margin-top: 15px;
@@ -39,6 +44,12 @@
     }
     .success { color: green; }
     .error { color: red; }
+    @media (max-width: 550px) {
+      body {
+        margin: 20px;
+        padding: 15px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -48,8 +59,13 @@
     <input type="text" name="Nome" placeholder="Nome" required>
     <input type="email" name="Email" placeholder="Email" required>
     <input type="text" name="Telefone" placeholder="Telefone" required>
-    <input type="text" id="dataInput" name="Data" placeholder="Selecione a data" required>
-    <input type="text" id="horaInput" name="Horario" placeholder="Selecione o horário" required>
+    
+    <input type="text" id="dataInput" name="Data" placeholder="Data do Agendamento" required>
+    
+    <select id="horaSelect" name="Horario" required>
+      <option value="">Selecione a data primeiro</option>
+    </select>
+
     <button type="submit" id="submitBtn">Agendar</button>
   </form>
 
@@ -62,23 +78,45 @@
     const successMsg = document.getElementById('successMsg');
     const errorMsg = document.getElementById('errorMsg');
     const submitBtn = document.getElementById('submitBtn');
+    const dataInput = document.getElementById('dataInput');
+    const horaSelect = document.getElementById('horaSelect');
 
-    // Pega o cliente da URL
+    // Cliente pela URL: ex: /cliente1
     const pathParts = window.location.pathname.split('/');
-    const cliente = pathParts[1] || '';
+    const cliente = pathParts[1] || 'cliente1';
 
-    // Configura flatpickr
+    // Flatpickr no campo data
     flatpickr("#dataInput", {
       dateFormat: "Y-m-d",
-      minDate: "today"
-    });
-    flatpickr("#horaInput", {
-      enableTime: true,
-      noCalendar: true,
-      dateFormat: "H:i",
-      time_24hr: true
+      minDate: "today",
+      onChange: async (selectedDates, dateStr) => {
+        if (!dateStr) return;
+
+        try {
+          const response = await fetch(`/horarios/${cliente}/${dateStr}`);
+          const result = await response.json();
+
+          horaSelect.innerHTML = "";
+          if (result.disponiveis && result.disponiveis.length > 0) {
+            result.disponiveis.forEach(hora => {
+              const opt = document.createElement("option");
+              opt.value = hora;
+              opt.textContent = hora;
+              horaSelect.appendChild(opt);
+            });
+          } else {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "Nenhum horário disponível";
+            horaSelect.appendChild(opt);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar horários:", err);
+        }
+      }
     });
 
+    // Enviar agendamento
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       successMsg.style.display = 'none';
@@ -104,6 +142,7 @@
         if (response.ok) {
           successMsg.style.display = 'block';
           form.reset();
+          horaSelect.innerHTML = "<option value=''>Selecione a data primeiro</option>";
         } else {
           errorMsg.textContent = result.msg || 'Ocorreu um erro';
           errorMsg.style.display = 'block';
