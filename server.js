@@ -3,6 +3,7 @@ import bodyParser from "body-parser";
 import path from "path";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
+// Conta de serviço do Google
 const GOOGLE_SERVICE_ACCOUNT = process.env.GOOGLE_SERVICE_ACCOUNT;
 
 let creds;
@@ -19,10 +20,11 @@ app.use(express.static(path.join(process.cwd(), "public")));
 
 // Estrutura de clientes + planilhas
 const clientes = {
-  "cliente1": "11Hrgpo21LxBLn6Esoiwz0gDk5j_HAxBuLARfo59s-RA",
+  "cliente1": "ID_DA_PLANILHA_CLIENTE1",
   "cliente2": "ID_DA_PLANILHA_CLIENTE2"
 };
 
+// Função para acessar qualquer planilha
 async function accessSpreadsheet(sheetId) {
   const doc = new GoogleSpreadsheet(sheetId);
   await doc.useServiceAccountAuth(creds);
@@ -30,6 +32,7 @@ async function accessSpreadsheet(sheetId) {
   return doc;
 }
 
+// Garantir headers dinâmicos (Nome, Email, Telefone, Data, Horário)
 async function ensureDynamicHeaders(sheet, newKeys) {
   await sheet.loadHeaderRow();
   const currentHeaders = sheet.headerValues || [];
@@ -42,13 +45,12 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
-// Rota para o formulário do cliente
+// Rota para servir o formulário do cliente
 app.get("/:cliente", (req, res) => {
   const cliente = req.params.cliente;
   if (!clientes[cliente]) return res.status(404).send("Cliente não encontrado");
 
-  // Serve o HTML do formulário normalmente
-  res.sendFile(path.join(process.cwd(), "public", "index.html"));
+  res.sendFile(path.join(process.cwd(), "public", "formulario.html"));
 });
 
 // Endpoint para receber agendamento
@@ -59,6 +61,11 @@ app.post("/agendar/:cliente", async (req, res) => {
     if (!sheetId) return res.status(404).json({ msg: "Cliente não encontrado" });
 
     const data = req.body;
+
+    // Garante que os campos principais existam mesmo se não vierem
+    const defaultKeys = ["Nome", "Email", "Telefone", "Data", "Horario"];
+    defaultKeys.forEach(k => { if (!data[k]) data[k] = ""; });
+
     const doc = await accessSpreadsheet(sheetId);
     const sheet = doc.sheetsByIndex[0];
 
@@ -75,5 +82,3 @@ app.post("/agendar/:cliente", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
