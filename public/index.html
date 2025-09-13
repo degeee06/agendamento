@@ -13,7 +13,10 @@ button:hover{background:#45a049;}
 .success{color:green;}
 .error{color:red;}
 .agendamento{margin-bottom:10px;border:1px solid #ccc;padding:8px;border-radius:6px;}
-.agendamento button{margin-left:10px;background:#2196F3;}
+.agendamento strong{display:block;}
+.filter-row{display:flex;gap:10px;flex-wrap:wrap;}
+.filter-row input, .filter-row select{flex:1;}
+.filter-row button{flex:none;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -34,68 +37,82 @@ button:hover{background:#45a049;}
 </form>
 
 <h3>Meus Agendamentos</h3>
-<div>
-  <input type="text" id="searchInput" placeholder="Buscar por nome ou email">
+
+<div class="filter-row" style="margin-bottom:10px;">
+  <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email">
   <select id="statusFilter">
-    <option value="">Todos</option>
+    <option value="">Todos os status</option>
     <option value="pendente">Pendente</option>
     <option value="confirmado">Confirmado</option>
   </select>
   <button id="exportCSVBtn">Exportar CSV</button>
   <button id="exportPDFBtn">Exportar PDF</button>
 </div>
+
 <div id="meusAgendamentos"></div>
+
+<div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
+<div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
 let agendamentosCache = [];
 
+const form = document.getElementById('agendamentoForm');
+const loginBtn = document.getElementById('loginBtn');
+const successMsg = document.getElementById('successMsg');
+const errorMsg = document.getElementById('errorMsg');
 const meusAgendamentos = document.getElementById('meusAgendamentos');
-const searchInput = document.getElementById('searchInput');
-const statusFilter = document.getElementById('statusFilter');
-const exportCSVBtn = document.getElementById('exportCSVBtn');
-const exportPDFBtn = document.getElementById('exportPDFBtn');
+
+const searchInput = document.getElementById("searchInput");
+const statusFilter = document.getElementById("statusFilter");
+const exportCSVBtn = document.getElementById("exportCSVBtn");
+const exportPDFBtn = document.getElementById("exportPDFBtn");
+
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-// renderiza os agendamentos
+// Renderiza agendamentos com filtros
 function renderAgendamentos() {
+  const filtroNome = searchInput.value.toLowerCase();
+  const filtroStatus = statusFilter.value;
+
   const filtrados = agendamentosCache
-    .filter(a => {
-      const nomeEmail = (a.nome + a.email).toLowerCase();
-      const statusMatch = statusFilter.value ? a.status === statusFilter.value : true;
-      return nomeEmail.includes(searchInput.value.toLowerCase()) && statusMatch;
-    })
-    .sort((a,b)=>new Date(a.data)-new Date(b.data));
+    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) && (filtroStatus ? a.status === filtroStatus : true))
+    .sort((a,b)=>new Date(a.data)-new Date(b.data)); // ordena do dia 1 ao último
 
   meusAgendamentos.innerHTML = "";
-  if(filtrados.length===0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
+  if(filtrados.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
 
   filtrados.forEach(a=>{
-    const div=document.createElement("div");
+    const div = document.createElement("div");
     div.className="agendamento";
-    div.innerHTML=`<strong>${a.data} ${a.horario}</strong> - ${a.nome} - ${a.status}
-      ${!a.confirmado?`<button data-id="${a.id}">Confirmar</button>`:""}`;
+    div.innerHTML=`<strong>${a.data} ${a.horario}</strong>${a.nome} - ${a.email} - Status: ${a.status}
+      ${!a.confirmado?'<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>':''}`;
     meusAgendamentos.appendChild(div);
 
-    const btn=div.querySelector("button");
+    const btn = div.querySelector("button");
     if(btn){
       btn.addEventListener("click", async ()=>{
         try{
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`, {method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{
+            method:"POST",
+            headers:{"Authorization":`Bearer ${userToken}`}
+          });
           if(res.ok){ listarAgendamentos(); }
-        }catch(e){ console.error(e); }
+        } catch(e){ console.error(e); }
       });
     }
   });
 }
 
-// Listar agendamentos do backend
+// Lista agendamentos do backend
 async function listarAgendamentos(){
   if(!userToken) return;
   try {
@@ -108,25 +125,78 @@ async function listarAgendamentos(){
   } catch(e){ console.error(e); }
 }
 
-// Exportar CSV
+// Login
+loginBtn.addEventListener('click', async () => {
+  errorMsg.style.display='none';
+  const email = document.getElementById('email').value;
+  const senha = document.getElementById('senha').value;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
+  userToken = data.session.access_token;
+  loginBtn.style.display = 'none';
+  document.getElementById('email').style.display = 'none';
+  document.getElementById('senha').style.display = 'none';
+  form.style.display = 'block';
+  listarAgendamentos();
+});
+
+// Submit do agendamento
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
+
+  const formData = new FormData(form);
+  const dataToSend = {};
+  formData.forEach((v,k)=>dataToSend[k]=v);
+
+  try {
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
+      headers: { "Authorization": `Bearer ${userToken}` }
+    });
+    const result = await check.json();
+    if(result.ocupados.includes(dataToSend.Horario)){
+      errorMsg.textContent='Horário já ocupado';
+      errorMsg.style.display='block';
+      return;
+    }
+  } catch(err){ console.error(err); }
+
+  try {
+    const response = await fetch(`/agendar/${cliente}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+      body: JSON.stringify(dataToSend)
+    });
+    const result = await response.json();
+    if(response.ok){ successMsg.style.display='block'; form.reset(); listarAgendamentos(); }
+    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+  } catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
+});
+
+// Re-render quando filtros mudarem
+searchInput.addEventListener("input", renderAgendamentos);
+statusFilter.addEventListener("change", renderAgendamentos);
+
+// Export CSV
 exportCSVBtn.addEventListener("click", ()=>{
   if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
-  const sorted=[...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
+  const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
   let csv="Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
   sorted.forEach(a=>{ csv+=`${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`; });
-  const blob=new Blob([csv],{type:"text/csv"});
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement("a");
-  link.href=url;
-  link.download="agendamentos.csv";
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "agendamentos.csv";
   link.click();
   URL.revokeObjectURL(url);
 });
 
-// Exportar PDF
+// Export PDF
 exportPDFBtn.addEventListener("click", ()=>{
   if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
-  const sorted=[...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
+  const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
   import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js").then(({ jsPDF })=>{
     const doc = new jsPDF.jsPDF();
     doc.setFontSize(12);
@@ -141,9 +211,5 @@ exportPDFBtn.addEventListener("click", ()=>{
   });
 });
 </script>
-
 </body>
 </html>
-
-
-
