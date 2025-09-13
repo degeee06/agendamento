@@ -237,6 +237,35 @@ function showToast(message, type = "success") {
   activeToasts.push(toast);
   feather.replace();
 
+  // --- Scroll com drag no mouse ---
+const scrollContainer = document.getElementById('meusAgendamentos');
+let isDown = false;
+let startY;
+let scrollTop;
+
+scrollContainer.addEventListener('mousedown', (e) => {
+  isDown = true;
+  startY = e.pageY - scrollContainer.offsetTop;
+  scrollTop = scrollContainer.scrollTop;
+});
+
+scrollContainer.addEventListener('mouseleave', () => {
+  isDown = false;
+});
+
+scrollContainer.addEventListener('mouseup', () => {
+  isDown = false;
+});
+
+scrollContainer.addEventListener('mousemove', (e) => {
+  if(!isDown) return;
+  e.preventDefault();
+  const y = e.pageY - scrollContainer.offsetTop;
+  const walk = (y - startY) * 1; // 1 = velocidade do scroll
+  scrollContainer.scrollTop = scrollTop - walk;
+});
+
+
   // Entrada animada
   requestAnimationFrame(() => {
     toast.classList.remove("opacity-0", "translate-x-5");
@@ -450,6 +479,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
