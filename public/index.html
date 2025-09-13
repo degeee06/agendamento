@@ -11,9 +11,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
     .glass-card {
-        background: rgba(0, 0, 50, 0.3); /* azul escuro translúcido */
+        background: rgba(0, 0, 50, 0.4); /* azul escuro translúcido */
         backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: linear-gradient(135deg, rgba(0,0,50,0.3), rgba(0,0,70,0.3));
+
+        border: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(12px);
     }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
@@ -368,6 +371,7 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
 
