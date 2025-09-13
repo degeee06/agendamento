@@ -97,25 +97,9 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Agendar
+
+   // Agendar
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente)
-      return res.status(403).json({ msg: "Acesso negado" });
-
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
-
-    // Normaliza para HH:mm
-    const horarioNormalizado = Horario.slice(0, 5);
-
-    const livre = await horarioDisponivel(cliente, Data, horarioNormalizado);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
-
-    // Salva no Supabase
-   app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente)
@@ -134,18 +118,16 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     // Salva no Supabase
     const { data: agendamento, error } = await supabase
       .from("agendamentos")
-      .insert([
-        {
-          cliente,
-          nome: Nome,
-          email: Email,
-          telefone: Telefone,
-          data: Data,
-          horario: horarioNormalizado,
-          status: "pendente",
-          confirmado: false,
-        },
-      ])
+      .insert([{
+        cliente,
+        nome: Nome,
+        email: Email,
+        telefone: Telefone,
+        data: Data,
+        horario: horarioNormalizado,
+        status: "pendente",
+        confirmado: false,
+      }])
       .select()
       .single();
 
@@ -293,6 +275,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
