@@ -437,8 +437,8 @@ form.addEventListener('submit', async (e)=>{
     });
     const result = await check.json();
 
-    if(result.ocupados.includes(dataToSend.Horario)){
-  showToast("Horário não disponível", "warning"); // ✅ nova mensagem
+    if(result.ocupados.includes(dataToSend.Horario.slice(0,5))){
+  showToast("Horário não disponível", "warning");
   return;
 }
 
@@ -518,6 +518,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
