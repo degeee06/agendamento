@@ -197,20 +197,25 @@ exportCSVBtn.addEventListener("click", ()=>{
 exportPDFBtn.addEventListener("click", ()=>{
   if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
   const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
-  import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js").then(({ jsPDF })=>{
-    const doc = new jsPDF.jsPDF();
-    doc.setFontSize(12);
-    doc.text("Agendamentos",10,10);
-    let y=20;
-    sorted.forEach(a=>{
-      doc.text(`${a.data} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`,10,y);
-      y+=10;
-      if(y>280){ doc.addPage(); y=10; }
-    });
-    doc.save("agendamentos.pdf");
+  
+  // Usa diretamente a variável global do script UMD
+  const doc = new window.jspdf.jsPDF();
+  doc.setFontSize(12);
+  doc.text("Agendamentos", 10, 10);
+  let y = 20;
+  sorted.forEach(a=>{
+    doc.text(`${a.data} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
+    y += 10;
+    if(y > 280){ 
+      doc.addPage(); 
+      y = 10; 
+    }
   });
+  doc.save("agendamentos.pdf");
+});
 });
 </script>
 </body>
 </html>
+
 
