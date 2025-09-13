@@ -287,7 +287,12 @@ loginBtn.addEventListener('click', async () => {
 // Submit agendamento
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
-  successMsg.style.display='none';
+  // Após exibir o sucesso
+successMsg.style.display = 'block';
+setTimeout(() => {
+    successMsg.style.display = 'none';
+}, 3000); // 3000ms = 3 segundos
+
   errorMsg.style.display='none';
 
   const formData = new FormData(form);
@@ -371,6 +376,7 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
 
