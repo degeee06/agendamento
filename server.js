@@ -71,22 +71,16 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 }
 
 // ---------------- Disponibilidade ----------------
-async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
+async function horarioDisponivel(cliente, data, horario) {
   const { data: agendamentos, error } = await supabase
     .from("agendamentos")
     .select("*")
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .neq("status", "cancelado"); // ignora cancelados
+    .neq("status", "cancelado"); // <- ignora cancelados
 
   if (error) throw error;
-
-  // se for reagendar o próprio agendamento, libera
-  if (ignoreId) {
-    return agendamentos.every(a => a.id === ignoreId);
-  }
-
   return agendamentos.length === 0;
 }
 
@@ -204,7 +198,7 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
 });
 
 
-// Cancelar agendamento
+// Cancelar
 app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -226,7 +220,6 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
-
     const rows = await sheet.getRows();
     const row = rows.find((r) => r.id === data.id);
     if (row) {
@@ -243,6 +236,7 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "❌ Erro interno" });
   }
 });
+
 
 
 
@@ -268,6 +262,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
