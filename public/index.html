@@ -284,28 +284,95 @@ scrollContainer.addEventListener('mousemove', (e) => {
 
 
 
-function renderAgendamentos() {
-  const filtroNome = searchInput.value.toLowerCase();
-  const filtroStatus = statusFilter.value;
+function renderAgendamentos(lista) {
+  const container = document.getElementById("agendamentos");
+  container.innerHTML = "";
 
-  // Filtra e ordena
-  const filtrados = agendamentosCache
-    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                 (filtroStatus ? a.status === filtroStatus : true))
-    .filter(a => {
-      const dia = new Date(`${a.data}T${a.horario}`).getDay();
-      return dia === diaSelecionado;
-    })
-    .sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
+  lista.forEach(a => {
+    const div = document.createElement("div");
+    div.className = `p-4 rounded shadow mb-3 ${
+      a.status === "reagendado" ? "bg-gray-200 opacity-70" : "bg-white"
+    }`;
 
-  if (filtrados.length === 0) {
-    meusAgendamentos.innerHTML = `
-      <div class='text-center py-8 text-gray-300'>
-        Nenhum agendamento.
+    div.innerHTML = `
+      <h3 class="text-lg font-semibold ${a.status === "reagendado" ? "line-through text-gray-600" : ""}">
+        ${a.nome || "Cliente"} - ${a.data} ${a.horario}
+      </h3>
+      <p>Status: <span class="font-bold">${a.status}</span></p>
+      <div class="mt-2 space-x-2">
+        ${
+          a.status === "pendente" && !a.confirmado
+            ? `<button data-id="${a.id}" class="px-3 py-1 bg-green-600 rounded text-white confirmarBtn">Confirmar</button>`
+            : ""
+        }
+        ${
+          a.status === "pendente"
+            ? `<button data-id="${a.id}" class="px-3 py-1 bg-yellow-600 rounded text-white reagendarBtn">Reagendar</button>`
+            : ""
+        }
       </div>
     `;
-    return;
-  }
+
+    container.appendChild(div);
+  });
+
+  // Handler Confirmar
+  document.querySelectorAll(".confirmarBtn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      try {
+        const res = await fetch(`/confirmar/${cliente}/${id}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${userToken}` }
+        });
+        const result = await res.json();
+        if (res.ok) {
+          showToast("✅ Agendamento confirmado!", "success");
+          listarAgendamentos();
+        } else {
+          showToast(result.msg || "Erro ao confirmar", "error");
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Erro ao confirmar", "error");
+      }
+    });
+  });
+
+  // Handler Reagendar
+  document.querySelectorAll(".reagendarBtn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const novaData = prompt("Informe a nova data (AAAA-MM-DD):");
+      const novoHorario = prompt("Informe o novo horário (HH:MM):");
+
+      if (!novaData || !novoHorario) return;
+
+      try {
+        const res = await fetch(`/reagendar/${cliente}/${id}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userToken}`
+          },
+          body: JSON.stringify({ novaData, novoHorario })
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+          showToast("✅ Reagendamento feito!", "success");
+          listarAgendamentos();
+        } else {
+          showToast(result.msg || "Erro ao reagendar", "error");
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Erro ao reagendar", "error");
+      }
+    });
+  });
+}
+
 
   // Renderiza todos os itens normalmente
   meusAgendamentos.innerHTML = ""; // limpa o container
@@ -479,6 +546,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
