@@ -168,8 +168,6 @@
     </div>
 
 </div>
-<!-- Container para toasts -->
-<div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -197,44 +195,24 @@ const cliente = pathParts[1] || '';
 function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
 // ---------------- TOASTS MODERNOS ----------------
-let activeToasts = [];
-
-function showToast(message, type = "success") {
-  const container = document.getElementById("toast-container");
-
-  // Se já tem 3, remove o mais antigo
-  if (activeToasts.length >= 3) {
-    const oldest = activeToasts.shift();
-    oldest.remove();
-  }
-
-  // Cria toast
+function showToast(type, message){
+  const colors = {
+    success: "bg-green-600",
+    error: "bg-red-600",
+    info: "bg-blue-600",
+    warning: "bg-yellow-600"
+  };
   const toast = document.createElement("div");
-  toast.className = `p-4 rounded-lg shadow-md text-white font-medium 
-    ${type === "success" ? "bg-green-500" : "bg-red-500"} 
-    opacity-0 translate-x-5 transition duration-500`;
+  toast.className = `${colors[type]||colors.info} fixed top-6 right-6 px-6 py-3 rounded-lg shadow-lg text-white flex items-center gap-2 animate-fade-in z-50`;
+  toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i><span>${message}</span>`;
+  document.body.appendChild(toast);
+  feather.replace();
 
-  toast.textContent = message;
-
-  container.appendChild(toast);
-  activeToasts.push(toast);
-
-  // Animação de entrada
-  requestAnimationFrame(() => {
-    toast.classList.remove("opacity-0", "translate-x-5");
-    toast.classList.add("opacity-100", "translate-x-0");
-  });
-
-  // Remove após 3s
-  setTimeout(() => {
-    toast.classList.add("opacity-0", "translate-x-5");
-    setTimeout(() => {
-      toast.remove();
-      activeToasts = activeToasts.filter(t => t !== toast);
-    }, 500);
-  }, 3000);
+  setTimeout(()=>{
+    toast.classList.add("opacity-0","translate-x-5","transition","duration-500");
+    setTimeout(()=>toast.remove(),500);
+  },3000);
 }
-
 
 // ---------------- VIRTUALIZAÇÃO ----------------
 function renderAgendamentos(){
@@ -290,7 +268,7 @@ function renderAgendamentos(){
       btn.addEventListener("click", async ()=>{
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); showToast("Agendamento confirmado!", "success"); }
+          if(res.ok){ listarAgendamentos(); showToast("success","Agendamento confirmado!"); }
         } catch(e){ console.error(e); showToast("error","Erro ao confirmar"); }
       });
     }
@@ -431,9 +409,6 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
-
-
-
 
 
 
