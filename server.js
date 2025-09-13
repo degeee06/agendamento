@@ -115,6 +115,23 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     // Salva no Supabase
+   app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente)
+      return res.status(403).json({ msg: "Acesso negado" });
+
+    const { Nome, Email, Telefone, Data, Horario } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario)
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+
+    // Normaliza horário para HH:mm
+    const horarioNormalizado = Horario.slice(0, 5);
+
+    const livre = await horarioDisponivel(cliente, Data, horarioNormalizado);
+    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
+    // Salva no Supabase
     const { data: agendamento, error } = await supabase
       .from("agendamentos")
       .insert([
@@ -134,7 +151,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    // Google Sheets
+    // Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(agendamento));
@@ -146,6 +163,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "❌ Erro interno" });
   }
 });
+
 
 
 app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
@@ -275,6 +293,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
