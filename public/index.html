@@ -293,7 +293,9 @@ setTimeout(() => {
     successMsg.style.display = 'none';
 }, 3000); // 3000ms = 3 segundos
 
-  errorMsg.style.display='none';
+
+errorMsg.style.display = 'block';
+setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
 
   const formData = new FormData(form);
   const dataToSend = {};
@@ -376,6 +378,7 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
 
