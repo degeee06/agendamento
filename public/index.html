@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <meta charset="UTF-8">
 <title>Agendamento</title>
 <style>
-body{font-family:Arial; max-width:600px; margin:50px auto; padding:20px; background:#f7f7f7; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+body{font-family:Arial; max-width:700px; margin:50px auto; padding:20px; background:#f7f7f7; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.15);}
 h2{text-align:center;margin-bottom:20px;}
 input,button,select{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc; font-size:16px; box-sizing:border-box;}
 button{background:#4CAF50;color:white;border:none; cursor:pointer; transition:0.2s;}
@@ -14,10 +13,9 @@ button:hover{background:#45a049;}
 .success{color:green;}
 .error{color:red;}
 .agendamento{margin-bottom:10px;border:1px solid #ccc;padding:8px;border-radius:6px;}
-.agendamento strong{display:block;}
-.filter-row{display:flex;gap:10px;flex-wrap:wrap;}
-.filter-row input, .filter-row select{flex:1;}
+.agendamento button{margin-left:10px;background:#2196F3;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <h2>Formulário de Agendamento</h2>
@@ -36,17 +34,15 @@ button:hover{background:#45a049;}
 </form>
 
 <h3>Meus Agendamentos</h3>
-
-<div class="filter-row" style="margin-bottom:10px;">
-  <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email">
+<div>
+  <input type="text" id="searchInput" placeholder="Buscar por nome ou email">
   <select id="statusFilter">
-    <option value="">Todos os status</option>
+    <option value="">Todos</option>
     <option value="pendente">Pendente</option>
     <option value="confirmado">Confirmado</option>
   </select>
-  <button id="exportBtn">Exportar CSV</button>
+  <button id="exportBtn">Exportar CSV & PDF</button>
 </div>
-
 <div id="meusAgendamentos"></div>
 
 <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
@@ -56,22 +52,23 @@ button:hover{background:#45a049;}
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY"; // substitua pelo seu
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
+let agendamentosCache = [];
+
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
+const meusAgendamentos = document.getElementById('meusAgendamentos');
+const searchInput = document.getElementById('searchInput');
+const statusFilter = document.getElementById('statusFilter');
+const exportBtn = document.getElementById('exportBtn');
+
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
-
-const searchInput = document.getElementById("searchInput");
-const statusFilter = document.getElementById("statusFilter");
-const exportBtn = document.getElementById("exportBtn");
-
-let agendamentosCache = [];
 
 async function listarAgendamentos(){
   if(!userToken) return;
@@ -81,46 +78,35 @@ async function listarAgendamentos(){
     });
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
+
     renderAgendamentos();
   } catch(e){ console.error(e); }
 }
-const filtrados = agendamentosCache
-  .filter(a => {
-    const nomeEmail = (a.nome + a.email).toLowerCase();
-    const statusMatch = statusFilter.value ? a.status === statusFilter.value : true;
-    return nomeEmail.includes(searchInput.value.toLowerCase()) && statusMatch;
-  })
-  .sort((a,b) => new Date(a.data) - new Date(b.data)); // ordena do dia mais próximo
 
 function renderAgendamentos(){
-  const container = document.getElementById("meusAgendamentos");
-  container.innerHTML = "";
+  const filtrados = agendamentosCache
+    .filter(a=>{
+      const nomeEmail = (a.nome + a.email).toLowerCase();
+      const statusMatch = statusFilter.value ? a.status === statusFilter.value : true;
+      return nomeEmail.includes(searchInput.value.toLowerCase()) && statusMatch;
+    })
+    .sort((a,b) => new Date(a.data) - new Date(b.data)); // ordena do dia mais próximo
 
-  const filtroNome = searchInput.value.toLowerCase();
-  const filtroStatus = statusFilter.value;
-
-  const filtrados = agendamentosCache.filter(a=>{
-    const nomeEmail = (a.nome + a.email).toLowerCase();
-    const statusMatch = filtroStatus ? a.status === filtroStatus : true;
-    return nomeEmail.includes(filtroNome) && statusMatch;
-  });
-
-  if(filtrados.length === 0){ container.textContent="Nenhum agendamento."; return; }
+  meusAgendamentos.innerHTML = "";
+  if(filtrados.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
 
   filtrados.forEach(a=>{
-    const div=document.createElement("div");
-    div.className="agendamento";
-    div.innerHTML=`<strong>${a.data} ${a.horario}</strong>${a.nome} - ${a.email} - Status: ${a.status}
-      ${!a.confirmado?'<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>':''}`;
-    container.appendChild(div);
+    const div = document.createElement("div");
+    div.className = "agendamento";
+    div.innerHTML = `<strong>${a.data} ${a.horario}</strong> - ${a.nome} - ${a.status}
+      ${!a.confirmado?`<button data-id="${a.id}">Confirmar</button>`:""}`;
+    meusAgendamentos.appendChild(div);
+
     const btn = div.querySelector("button");
     if(btn){
       btn.addEventListener("click", async ()=>{
         try{
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{
-            method:"POST",
-            headers:{"Authorization":`Bearer ${userToken}`}
-          });
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`, { method:"POST", headers:{"Authorization":`Bearer ${userToken}`} });
           if(res.ok){ listarAgendamentos(); }
         } catch(e){ console.error(e); }
       });
@@ -128,43 +114,7 @@ function renderAgendamentos(){
   });
 }
 
-// Export CSV
-exportBtn.addEventListener("click", ()=>{
-  if(agendamentosCache.length === 0) return alert("Nenhum agendamento para exportar.");
-
-  // --- Ordena pelo mais próximo
-  const sorted = [...agendamentosCache].sort((a,b)=> new Date(a.data) - new Date(b.data));
-
-  // --- CSV
-  let csv = "Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
-  sorted.forEach(a=>{
-    csv += `${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`;
-  });
-  const blob = new Blob([csv], {type:"text/csv"});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "agendamentos.csv";
-  link.click();
-  URL.revokeObjectURL(url);
-
-  // --- PDF
-  import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js").then(({ jsPDF })=>{
-    const doc = new jsPDF.jsPDF();
-    doc.setFontSize(12);
-    doc.text("Agendamentos", 10, 10);
-    let y = 20;
-    sorted.forEach(a=>{
-      doc.text(`${a.data} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
-      y += 10;
-      if(y>280){ doc.addPage(); y=10; }
-    });
-    doc.save("agendamentos.pdf");
-  });
-});
-
-
-loginBtn.addEventListener('click', async () => {
+loginBtn.addEventListener('click', async ()=>{
   errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
@@ -178,7 +128,7 @@ loginBtn.addEventListener('click', async () => {
   listarAgendamentos();
 });
 
-form.addEventListener('submit', async (e) => {
+form.addEventListener('submit', async (e)=>{
   e.preventDefault();
   successMsg.style.display='none';
   errorMsg.style.display='none';
@@ -187,9 +137,7 @@ form.addEventListener('submit', async (e) => {
   formData.forEach((v,k)=>dataToSend[k]=v);
 
   try {
-    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
-      headers: { "Authorization": `Bearer ${userToken}` }
-    });
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { headers: { "Authorization": `Bearer ${userToken}` } });
     const result = await check.json();
     if(result.ocupados.includes(dataToSend.Horario)){
       errorMsg.textContent='Horário já ocupado';
@@ -200,8 +148,8 @@ form.addEventListener('submit', async (e) => {
 
   try {
     const response = await fetch(`/agendar/${cliente}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+      method:'POST',
+      headers:{'Content-Type':'application/json', "Authorization":`Bearer ${userToken}`},
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
@@ -210,11 +158,41 @@ form.addEventListener('submit', async (e) => {
   } catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
 });
 
-// Re-render quando filtros mudarem
 searchInput.addEventListener("input", renderAgendamentos);
 statusFilter.addEventListener("change", renderAgendamentos);
+
+exportBtn.addEventListener("click", ()=>{
+  if(agendamentosCache.length === 0) return alert("Nenhum agendamento para exportar.");
+
+  const sorted = [...agendamentosCache].sort((a,b)=> new Date(a.data) - new Date(b.data));
+
+  // CSV
+  let csv = "Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
+  sorted.forEach(a=>{
+    csv += `${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`;
+  });
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "agendamentos.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+
+  // PDF
+  import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js").then(({ jsPDF })=>{
+    const doc = new jsPDF.jsPDF();
+    doc.setFontSize(12);
+    doc.text("Agendamentos", 10, 10);
+    let y = 20;
+    sorted.forEach(a=>{
+      doc.text(`${a.data} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
+      y += 10;
+      if(y>280){ doc.addPage(); y=10; }
+    });
+    doc.save("agendamentos.pdf");
+  });
+});
 </script>
 </body>
 </html>
-
-
