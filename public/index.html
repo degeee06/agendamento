@@ -248,6 +248,7 @@ function showToast(message, type = "success") {
 
 
 // ---------------- VIRTUALIZAÇÃO ----------------
+// ---------------- VIRTUALIZAÇÃO ----------------
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
@@ -298,11 +299,17 @@ function renderAgendamentos(){
 
     const btn = div.querySelector("button");
     if(btn){
-      btn.addEventListener("click", async ()=>{
+      btn.addEventListener("click", async ()=> {
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); showToast("success","Agendamento confirmado!"); }
-        } catch(e){ console.error(e); showToast("error","Erro ao confirmar"); }
+          if(res.ok){ 
+            listarAgendamentos(); 
+            showToast("Agendamento confirmado!", "success"); 
+          }
+        } catch(e){ 
+          console.error(e); 
+          showToast("Erro ao confirmar", "error"); 
+        }
       });
     }
   }
@@ -312,7 +319,19 @@ function renderAgendamentos(){
   meusAgendamentos.appendChild(spacerBottom);
 }
 
+// Atualização do scroll para impedir que a página role junto
+meusAgendamentos.addEventListener("wheel", (e) => {
+  const delta = e.deltaY;
+  const atTop = meusAgendamentos.scrollTop === 0 && delta < 0;
+  const atBottom = meusAgendamentos.scrollTop + meusAgendamentos.clientHeight >= meusAgendamentos.scrollHeight && delta > 0;
+
+  if(atTop || atBottom){
+    e.preventDefault(); // impede a propagação para a página
+  }
+}, { passive: false });
+
 meusAgendamentos.addEventListener("scroll", renderAgendamentos);
+
 
 // Mostrar tabs quando logar
 async function listarAgendamentos(){
@@ -444,6 +463,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
