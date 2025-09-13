@@ -10,6 +10,13 @@
 <script src="https://unpkg.com/feather-icons"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.3s ease forwards; }
+</style>
+
     .glass-card {
         background: linear-gradient(135deg, rgba(30,40,60,0.3), rgba(50,60,80,0.3));
         border: 1px solid rgba(255,255,255,0.1);
@@ -86,8 +93,9 @@
                     </div>
                     <div>
                         <label for="Horario" class="block mb-1 text-sm font-medium">Horário</label>
-                        <input type="time" name="Horario" placeholder="Horário" required 
-                               class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                        <input type="time" name="Horario" required
+                          class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+
                     </div>
                 </div>
             </div>
@@ -197,6 +205,8 @@ function showToast(msg, type="success") {
   document.body.appendChild(toast);
   setTimeout(() => { toast.remove(); }, 3000);
 }
+
+
 
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
@@ -383,6 +393,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 </div>
 </body>
 </html>
+
 
 
 
