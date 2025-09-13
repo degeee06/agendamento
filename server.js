@@ -83,14 +83,6 @@ async function horarioDisponivel(cliente, data, horario) {
   if (error) throw error;
   return agendamentos.length === 0;
 }
-const { data: agendamentos, error } = await supabase
-  .from("agendamentos")
-  .select("horario")
-  .eq("cliente", cliente)
-  .eq("data", req.params.data)
-  .neq("status", "cancelado"); // ✅ Ignora agendamentos cancelados
-
-
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
