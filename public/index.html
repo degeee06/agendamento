@@ -431,20 +431,29 @@ form.addEventListener('submit', async (e)=>{
   const dataToSend = {};
   formData.forEach((v,k)=>dataToSend[k]=v);
 
+  // Função para padronizar horário como HH:mm
+  function formatHora(h) {
+    return h.length >= 5 ? h.slice(0,5) : h;
+  }
+
   try{
     const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { 
       headers: { "Authorization": `Bearer ${userToken}` } 
     });
     const result = await check.json();
 
-    if(result.ocupados.includes(dataToSend.Horario.slice(0,5))){
-  showToast("Horário não disponível", "warning");
-  return;
-}
+    // Verifica se o horário já está ocupado por pendente ou confirmado
+    const horarioSelecionado = formatHora(dataToSend.Horario);
+    const horariosOcupados = result.ocupados.map(h => formatHora(h));
+
+    if(horariosOcupados.includes(horarioSelecionado)){
+      showToast("Horário não disponível", "warning");
+      return;
+    }
 
   } catch(err){ 
     console.error(err); 
-    showToast("error","Erro ao verificar horários");
+    showToast("Erro ao verificar horários", "error");
     return;
   }
 
@@ -457,12 +466,19 @@ form.addEventListener('submit', async (e)=>{
     const result = await response.json();
 
     if(response.ok){ 
-  showToast("Agendado com sucesso!", "success");  // ✅ nova mensagem
-  form.reset(); 
-  listarAgendamentos(); 
-} else { 
-  showToast("Horário ocupado", "error");
-}
+      showToast("Agendado com sucesso!", "success");  
+      form.reset(); 
+      listarAgendamentos(); 
+    } else { 
+      showToast(result.message || "Horário ocupado", "error");
+    }
+
+  } catch(err){ 
+    console.error(err); 
+    showToast("Erro ao enviar agendamento", "error");
+  }
+});
+
 
   } catch(err){ 
     console.error(err); 
@@ -518,6 +534,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
