@@ -7,7 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
-const doc = new window.jspdf.jsPDF();
+
 
 // Supabase
 const supabase = createClient(
@@ -216,5 +216,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
