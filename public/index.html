@@ -247,32 +247,8 @@ function showToast(message, type = "success") {
 }
 
 
-// ---------------- VIRTUALIZAÇÃO ----------------
-// ---------------- VIRTUALIZAÇÃO ----------------
-function renderAgendamentos(){
-  const filtroNome = searchInput.value.toLowerCase();
-  const filtroStatus = statusFilter.value;
 
-  const filtrados = agendamentosCache
-    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                 (filtroStatus ? a.status === filtroStatus : true))
-    .filter(a => {
-      const dia = new Date(`${a.data}T${a.horario}`).getDay();
-      return dia === diaSelecionado;
-    })
-    .sort((a,b) => {
-      const dateA = new Date(`${a.data}T${a.horario}`);
-      const dateB = new Date(`${b.data}T${b.horario}`);
-      return dateA - dateB;
-    });
-
-  meusAgendamentos.innerHTML = "";
-  if(filtrados.length === 0){ 
-    meusAgendamentos.textContent="Nenhum agendamento."; 
-    return; 
-  }
-
- // ---------------- VIRTUALIZAÇÃO CORRIGIDA ----------------
+// ---------------- VIRTUALIZAÇÃO CORRIGIDA ----------------
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
@@ -343,7 +319,6 @@ function renderAgendamentos(){
 
 // Event listener do scroll continua igual
 meusAgendamentos.addEventListener("scroll", renderAgendamentos);
-
 
 
 // Mostrar tabs quando logar
@@ -476,6 +451,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
