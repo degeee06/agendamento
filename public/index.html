@@ -22,8 +22,6 @@
 <body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans">
 <div class="container mx-auto px-4 py-12 max-w-4xl">
 
-<body class="min-h-screen bg-gradient-to-br from-blue-800 to-blue-900 text-white font-sans">
-<div class="container mx-auto px-4 py-12 max-w-4xl">
 
     <!-- Header -->
     <header class="text-center mb-12" data-aos="fade-down">
@@ -157,17 +155,7 @@
         </div>
     </div>
 
-    <!-- Messages -->
-    <div id="successMsg" style="display:none;" class="fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
-        <i data-feather="check-circle" class="w-5 h-5"></i>
-        <span>Agendamento realizado com sucesso!</span>
-    </div>
-    <div id="errorMsg" style="display:none;" class="fixed top-6 right-6 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
-        <i data-feather="alert-circle" class="w-5 h-5"></i>
-        <span id="errorText">Ocorreu um erro</span>
-    </div>
 
-</div>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -391,18 +379,12 @@ exportPDFBtn.addEventListener("click", ()=>{
   doc.save("agendamentos.pdf");
 });
 
-// Init
-AOS.init();
-feather.replace();
 </script>
-
-
-// Init
-AOS.init();
-feather.replace();
-</script>
+</div>
 </body>
 </html>
+
+
 
 
 
