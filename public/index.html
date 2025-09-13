@@ -11,19 +11,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
     .glass-card {
-    background: linear-gradient(135deg, rgba(30,40,60,0.3), rgba(50,60,80,0.3));
-    border: 1px solid rgba(255,255,255,0.1);
-    backdrop-filter: blur(12px);
-    border-radius: 1rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-}
-
+        background: linear-gradient(135deg, rgba(30,40,60,0.3), rgba(50,60,80,0.3));
+        border: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(12px);
+    }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans flex items-center justify-center">
-  <div class="container mx-auto px-4 max-w-md">
+<body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans">
+<div class="container mx-auto px-4 py-12 max-w-4xl">
+
+<body class="min-h-screen bg-gradient-to-br from-blue-800 to-blue-900 text-white font-sans">
+<div class="container mx-auto px-4 py-12 max-w-4xl">
+
     <!-- Header -->
     <header class="text-center mb-12" data-aos="fade-down">
         <h1 class="text-4xl font-bold mb-2">Agendamento Moderno</h1>
@@ -53,15 +54,6 @@
             </button>
         </div>
     </div>
-</body>
-
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    feather.replace();
-    AOS.init();
-  });
-</script>
-
 
     <!-- Appointment Form (Hidden Initially) -->
     <form id="agendamentoForm" style="display:none;" class="glass-card rounded-xl p-8 mb-8 shadow-xl hover:scale-105 transition-transform" data-aos="fade-up">
@@ -147,7 +139,6 @@
         </div>
     </div>
 
-
     <!-- Tabs Dias da Semana -->
     <div id="diasTabs" style="display:none;" class="flex gap-2 mb-6" data-aos="fade-up">
       <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-purple-600">Segunda</button>
@@ -166,7 +157,17 @@
         </div>
     </div>
 
+    <!-- Messages -->
+    <div id="successMsg" style="display:none;" class="fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <i data-feather="check-circle" class="w-5 h-5"></i>
+        <span>Agendamento realizado com sucesso!</span>
+    </div>
+    <div id="errorMsg" style="display:none;" class="fixed top-6 right-6 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <i data-feather="alert-circle" class="w-5 h-5"></i>
+        <span id="errorText">Ocorreu um erro</span>
+    </div>
 
+</div>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -182,6 +183,8 @@ let diaSelecionado = 1; // segunda por padrão
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const loginSection = document.getElementById('loginSection');
+const successMsg = document.getElementById('successMsg');
+const errorMsg = document.getElementById('errorMsg');
 const meusAgendamentos = document.getElementById('meusAgendamentos');
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
@@ -191,25 +194,7 @@ const exportPDFBtn = document.getElementById("exportPDFBtn");
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-function formatData(data){ 
-  const [y,m,d] = data.split("-"); 
-  return `${d}/${m}/${y}`; 
-}
-feather.replace();
-// Função de toasts
-function showToast(msg, type="success") {
-  const toast = document.createElement("div");
-  toast.className = `fixed top-6 right-6 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 text-white z-50 ${
-    type==="success" ? "bg-green-500" : "bg-red-500"
-  } animate-fade-in`;
-  toast.innerHTML = `
-    <span>${msg}</span>
-  `;
-  document.body.appendChild(toast);
-  setTimeout(() => { toast.remove(); }, 3000);
-}
-
-
+function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
@@ -252,8 +237,8 @@ function renderAgendamentos(){
       btn.addEventListener("click", async ()=>{
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); showToast("Agendamento confirmado!", "success"); }
-        } catch(e){ console.error(e); showToast("Erro ao confirmar agendamento", "error"); }
+          if(res.ok){ listarAgendamentos(); }
+        } catch(e){ console.error(e); }
       });
     }
   });
@@ -282,52 +267,51 @@ async function listarAgendamentos(){
     const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
     if (btnHoje) btnHoje.click();
 
-  } catch(e){ console.error(e); showToast("Erro ao listar agendamentos", "error"); }
+  } catch(e){ console.error(e); }
 }
+
 
 // Login
 loginBtn.addEventListener('click', async () => {
+  errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
-
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    if (error) { showToast(error.message, 'error'); return; }
-    userToken = data.session.access_token;
-    loginSection.style.display = 'none';
-    form.style.display = 'block';
-    listarAgendamentos();
-  } catch (err) {
-    console.error(err);
-    showToast('Erro ao realizar login', 'error');
-  }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
+  userToken = data.session.access_token;
+  loginSection.style.display = 'none';
+  form.style.display = 'block';
+  listarAgendamentos();
 });
 
-// Agendamento
-form.addEventListener('submit', async (e) => {
+form.addEventListener('submit', async (e)=>{
   e.preventDefault();
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
 
   const formData = new FormData(form);
   const dataToSend = {};
-  formData.forEach((v, k) => dataToSend[k] = v);
+  formData.forEach((v,k)=>dataToSend[k]=v);
 
-  try {
+  try{
     const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { 
       headers: { "Authorization": `Bearer ${userToken}` } 
     });
     const result = await check.json();
 
-    if (result.ocupados.includes(dataToSend.Horario)) {
-      showToast('Horário já ocupado', 'error'); 
-      return;
+    if(result.ocupados.includes(dataToSend.Horario)){
+      errorMsg.textContent='Horário já ocupado';
+      errorMsg.style.display='block';
+      return; // <-- importante: para aqui, não mostra sucesso
     }
-  } catch (err) { 
+  } catch(err){ 
     console.error(err); 
-    showToast('Erro ao verificar horários', 'error'); 
+    errorMsg.textContent='Erro ao verificar horários';
+    errorMsg.style.display='block';
     return;
   }
 
-  try {
+  try{
     const response = await fetch(`/agendar/${cliente}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
@@ -335,18 +319,25 @@ form.addEventListener('submit', async (e) => {
     });
     const result = await response.json();
 
-    if (response.ok) { 
-      showToast('Agendamento realizado com sucesso!', 'success'); 
-      form.reset(); 
-      listarAgendamentos(); 
-    } else { 
-      showToast(result.msg || 'Erro ao agendar', 'error'); 
-    }
-  } catch (err) { 
+    if(response.ok){ 
+  successMsg.style.display = 'block';
+  setTimeout(() => {
+    successMsg.style.display = 'none';
+  }, 3000); // 3000ms = 3 segundos
+  form.reset(); 
+  listarAgendamentos(); 
+} else { 
+    errorMsg.textContent = result.msg || 'Erro ao agendar'; 
+    errorMsg.style.display = 'block';
+  setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
+}
+  } catch(err){ 
     console.error(err); 
-    showToast('Erro ao enviar agendamento', 'error'); 
+    errorMsg.textContent='Erro ao enviar agendamento';
+    errorMsg.style.display='block'; 
   }
 });
+
 
 // Filtros
 searchInput.addEventListener("input", renderAgendamentos);
@@ -357,13 +348,18 @@ function initTabsDias() {
   const tabs = document.querySelectorAll(".tab-dia");
   tabs.forEach(btn => {
     btn.addEventListener("click", () => {
+      // remover destaque das outras abas
       tabs.forEach(b => b.classList.remove("bg-purple-600","active"));
       tabs.forEach(b => b.classList.add("bg-white/10"));
 
+      // destacar a aba clicada
       btn.classList.remove("bg-white/10");
       btn.classList.add("bg-purple-600","active");
 
+      // atualizar dia selecionado
       diaSelecionado = parseInt(btn.dataset.dia);
+
+      // renderizar novamente
       renderAgendamentos();
     });
   });
@@ -392,19 +388,12 @@ exportPDFBtn.addEventListener("click", ()=>{
   doc.save("agendamentos.pdf");
 });
 
+// Init
+AOS.init();
+feather.replace();
 </script>
-</div>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
 
 
 
