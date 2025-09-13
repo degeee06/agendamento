@@ -18,17 +18,15 @@
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* Altura fixa e scroll real para a lista de agendamentos */
     #meusAgendamentos {
-      max-height: 500px; /* ajusta para o que quiser */
+      max-height: 500px;
       overflow-y: auto;
     }
 </style>
-
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans">
-<div class="container mx-auto px-4 py-12 max-w-4xl">
 
+<div class="container mx-auto px-4 py-12 max-w-4xl">
 
     <!-- Header -->
     <header class="text-center mb-12" data-aos="fade-down">
@@ -119,17 +117,17 @@
                 </div>
             </div>
             <div class="w-full md:w-64 relative">
-  <label for="statusFilter" class="sr-only">Status</label>
-  <select id="statusFilter" 
-          class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-purple-300">
-      <option value="" class="text-black">Todos os status</option>
-      <option value="pendente" class="text-black">Pendente</option>
-      <option value="confirmado" class="text-black">Confirmado</option>
-  </select>
-  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-      <i data-feather="filter" class="w-5 h-5 text-gray-300"></i>
-  </div>
-</div>
+                <label for="statusFilter" class="sr-only">Status</label>
+                <select id="statusFilter" 
+                        class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-purple-300">
+                    <option value="" class="text-black">Todos os status</option>
+                    <option value="pendente" class="text-black">Pendente</option>
+                    <option value="confirmado" class="text-black">Confirmado</option>
+                </select>
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <i data-feather="filter" class="w-5 h-5 text-gray-300"></i>
+                </div>
+            </div>
 
             <div class="flex gap-2">
                 <button id="exportCSVBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center gap-2">
@@ -162,27 +160,12 @@
         </div>
     </div>
 
-    <!-- Messages -->
-    <div id="successMsg" style="display:none;" class="fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
-        <i data-feather="check-circle" class="w-5 h-5"></i>
-        <span>Agendamento realizado com sucesso!</span>
-    </div>
-    <div id="errorMsg" style="display:none;" class="fixed top-6 right-6 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
-        <i data-feather="alert-circle" class="w-5 h-5"></i>
-        <span id="errorText">Ocorreu um erro</span>
-    </div>
-
-</div>
-
-</div> <!-- Fim do container principal -->
+</div> <!-- Fim container -->
 
 <!-- Container para toasts -->
 <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
-</body>
-</html>
-
-
+<!-- SCRIPTS -->
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -192,7 +175,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
 let agendamentosCache = [];
-let diaSelecionado = 1; // segunda por padrão
+let diaSelecionado = 1;
 
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
@@ -208,9 +191,6 @@ const cliente = pathParts[1] || '';
 
 function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
-// ---------------- TOASTS MODERNOS ----------------
-let activeToasts = [];
-
 function showToast(message, type = "success") {
   const colors = {
     success: "bg-green-600",
@@ -218,194 +198,27 @@ function showToast(message, type = "success") {
     info: "bg-blue-600",
     warning: "bg-yellow-600"
   };
-
   const container = document.getElementById("toast-container");
-
-  // Limita a 3 toasts ativos
-  if (activeToasts.length >= 3) {
-    const oldest = activeToasts.shift();
-    oldest.remove();
-  }
-
   const toast = document.createElement("div");
   toast.className = `p-4 rounded-lg shadow-md text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-500 flex items-center gap-2`;
-  toast.innerHTML = `<i data-feather="${type === "success" ? "check-circle" : type === "error" ? "alert-circle" : "info"}" class="w-5 h-5"></i> <span>${message}</span>`;
-
+  toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
   container.appendChild(toast);
-  activeToasts.push(toast);
   feather.replace();
-
-  // --- Scroll com drag no mouse ---
-const scrollContainer = document.getElementById('meusAgendamentos');
-let isDown = false;
-let startY;
-let scrollTop;
-
-scrollContainer.addEventListener('mousedown', (e) => {
-  isDown = true;
-  startY = e.pageY - scrollContainer.offsetTop;
-  scrollTop = scrollContainer.scrollTop;
-});
-
-scrollContainer.addEventListener('mouseleave', () => {
-  isDown = false;
-});
-
-scrollContainer.addEventListener('mouseup', () => {
-  isDown = false;
-});
-
-scrollContainer.addEventListener('mousemove', (e) => {
-  if(!isDown) return;
-  e.preventDefault();
-  const y = e.pageY - scrollContainer.offsetTop;
-  const walk = (y - startY) * 1; // 1 = velocidade do scroll
-  scrollContainer.scrollTop = scrollTop - walk;
-});
-
-
-  // Entrada animada
-  requestAnimationFrame(() => {
-    toast.classList.remove("opacity-0", "translate-x-5");
-    toast.classList.add("opacity-100", "translate-x-0");
-  });
-
-  // Sai após 3s
-  setTimeout(() => {
-    toast.classList.add("opacity-0", "translate-x-5");
-    setTimeout(() => {
-      toast.remove();
-      activeToasts = activeToasts.filter(t => t !== toast);
-    }, 500);
-  }, 3000);
+  requestAnimationFrame(()=>{toast.classList.remove("opacity-0","translate-x-5"); toast.classList.add("opacity-100","translate-x-0");});
+  setTimeout(()=>{ toast.classList.add("opacity-0","translate-x-5"); setTimeout(()=>toast.remove(),500); },3000);
 }
 
-
-
-function renderAgendamentos() {
-  const filtroNome = searchInput.value.toLowerCase();
-  const filtroStatus = statusFilter.value;
-
-  // Filtra e ordena
-  const filtrados = agendamentosCache
-    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                 (filtroStatus ? a.status === filtroStatus : true))
-    .filter(a => {
-      const dia = new Date(`${a.data}T${a.horario}`).getDay();
-      return dia === diaSelecionado;
-    })
-    .sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
-
-  if (filtrados.length === 0) {
-    meusAgendamentos.innerHTML = `
-      <div class='text-center py-8 text-gray-300'>
-        Nenhum agendamento.
-      </div>
-    `;
-    return;
-  }
-
-  // Renderiza todos os itens normalmente
-  meusAgendamentos.innerHTML = ""; // limpa o container
-  filtrados.forEach(a => {
-    const div = document.createElement("div");
-    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
-    div.innerHTML = `
-  <strong>${formatData(a.data)} ${a.horario}</strong>
-  <div><strong>Nome:</strong> ${a.nome}</div>
-  <div><strong>Email:</strong> ${a.email}</div>
-  <div><strong>Telefone:</strong> ${a.telefone}</div>
-  <div><strong>Status:</strong> ${a.status}</div>
-  <div class="mt-2 flex gap-2">
-    ${!a.confirmado && a.status !== "cancelado" ? `<button data-action="confirmar" data-id="${a.id}" class="px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>` : ""}
-    ${a.status !== "cancelado" ? `<button data-action="cancelar" data-id="${a.id}" class="px-3 py-1 bg-red-600 rounded text-white">Cancelar</button>` : ""}
-  </div>
-`;
-    meusAgendamentos.appendChild(div);
-
-   // Botão confirmar
-const confirmBtn = div.querySelector('button[data-action="confirmar"]');
-if (confirmBtn) {
-  confirmBtn.addEventListener("click", async () => {
-    try {
-      const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${userToken}` }
-      });
-      if (res.ok) {
-        showToast("Agendamento confirmado!", "success");
-        listarAgendamentos();
-      } else {
-        showToast("Erro ao confirmar agendamento", "error");
-      }
-    } catch (e) {
-      console.error(e);
-      showToast("Erro de conexão", "error");
-    }
-  });
-}
-
-// Botão cancelar
-const cancelBtn = div.querySelector('button[data-action="cancelar"]');
-if (cancelBtn) {
-  cancelBtn.addEventListener("click", async () => {
-    try {
-      const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${userToken}` }
-      });
-      if (res.ok) {
-        showToast("Agendamento cancelado!", "success");
-        listarAgendamentos();
-      } else {
-        showToast("Erro ao cancelar agendamento", "error");
-      }
-    } catch (e) {
-      console.error(e);
-      showToast("Erro de conexão", "error");
-    }
-  });
-}
-
-
-
-// Mostrar tabs quando logar
-async function listarAgendamentos(){
-  if(!userToken) return;
-  try {
-    const res = await fetch(`/meus-agendamentos/${cliente}`, {
-      headers: {"Authorization":`Bearer ${userToken}`}
-    });
-    const { agendamentos } = await res.json();
-    agendamentosCache = agendamentos;
-
-    meusAgendamentos.style.display = 'block';
-    document.getElementById('filtersSection').style.display = 'block';
-    document.getElementById('diasTabs').style.display = 'flex';
-
-    initTabsDias();
-
-    let hoje = new Date().getDay(); 
-    if (hoje === 0) hoje = 1; 
-    const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-    if (btnHoje) btnHoje.click();
-
-  } catch(e){ console.error(e); showToast("error","Erro ao listar agendamentos"); }
-}
-
-
-// Login
+// --- Login ---
 loginBtn.addEventListener('click', async () => {
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ showToast("error",error.message); return; }
+  if(error){ showToast(error.message,"error"); return; }
   userToken = data.session.access_token;
   loginSection.style.display = 'none';
   form.style.display = 'block';
   listarAgendamentos();
 });
-
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
 
@@ -500,6 +313,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
