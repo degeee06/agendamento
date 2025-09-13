@@ -378,39 +378,64 @@ async function listarAgendamentos(){
   } catch(e){ console.error(e); showToast("error","Erro ao listar agendamentos"); }
 }
 
+
 // Login
 loginBtn.addEventListener('click', async () => {
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
-
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password: senha
-    });
-
-    if (error) {
-      showToast(error.message, "error");
-      return;
-    }
-
-    if (!data.session) {
-      showToast("Sessão não retornada pelo Supabase", "error");
-      return;
-    }
-
-    userToken = data.session.access_token;
-
-    loginSection.style.display = 'none';
-    form.style.display = 'block';
-    listarAgendamentos();
-
-  } catch (err) {
-    console.error("Erro no login:", err);
-    showToast("Erro inesperado no login", "error");
-  }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ showToast("error",error.message); return; }
+  userToken = data.session.access_token;
+  loginSection.style.display = 'none';
+  form.style.display = 'block';
+  listarAgendamentos();
 });
 
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+
+  const formData = new FormData(form);
+  const dataToSend = {};
+  formData.forEach((v,k)=>dataToSend[k]=v);
+
+  try{
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { 
+      headers: { "Authorization": `Bearer ${userToken}` } 
+    });
+    const result = await check.json();
+
+    if(result.ocupados.includes(dataToSend.Horario)){
+  showToast("Horário não disponível", "warning"); // ✅ nova mensagem
+  return;
+}
+
+  } catch(err){ 
+    console.error(err); 
+    showToast("error","Erro ao verificar horários");
+    return;
+  }
+
+  try{
+    const response = await fetch(`/agendar/${cliente}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+      body: JSON.stringify(dataToSend)
+    });
+    const result = await response.json();
+
+    if(response.ok){ 
+  showToast("Agendado com sucesso!", "success");  // ✅ nova mensagem
+  form.reset(); 
+  listarAgendamentos(); 
+} else { 
+  showToast("Horário ocupado", "error");
+}
+
+  } catch(err){ 
+    console.error(err); 
+    showToast("error","Erro ao enviar agendamento");
+  }
+});
 
 // Filtros
 searchInput.addEventListener("input", renderAgendamentos);
@@ -460,6 +485,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
