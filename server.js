@@ -74,15 +74,14 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 // ---------------- Disponibilidade ----------------
 async function horarioDisponivel(cliente, data, horario) {
   const { data: agendamentos, error } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", cliente)
-    .eq("data", data)
-    .eq("horario", horario)
-    .neq("status", "cancelado"); // <--- aqui
-  if (error) throw error;
-  return agendamentos.length === 0;
-}
+  .from("agendamentos")
+  .select("horario")
+  .eq("cliente", cliente)
+  .eq("data", req.params.data)
+  .neq("status", "cancelado"); // <--- ignora cancelados
+
+const ocupados = agendamentos.map(a => a.horario);
+res.json({ ocupados });
 
 
 // ---------------- Rotas ----------------
@@ -259,6 +258,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
