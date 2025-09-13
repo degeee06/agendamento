@@ -2,145 +2,161 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Agendamentos - Dashboard</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<title>Agendamento</title>
 <style>
-  body { background:#f7f7f7; }
-  .card { transition: transform 0.2s; }
-  .card:hover { transform: scale(1.02); }
+body{font-family:Arial; max-width:600px; margin:50px auto; padding:20px; background:#f7f7f7; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+h2{text-align:center;margin-bottom:20px;}
+input,button,select{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc; font-size:16px; box-sizing:border-box;}
+button{background:#4CAF50;color:white;border:none; cursor:pointer; transition:0.2s;}
+button:hover{background:#45a049;}
+.success,.error{text-align:center;margin-top:15px;font-weight:bold;}
+.success{color:green;}
+.error{color:red;}
+.agendamento{margin-bottom:10px;border:1px solid #ccc;padding:8px;border-radius:6px;}
+.agendamento strong{display:block;}
+.filter-row{display:flex;gap:10px;flex-wrap:wrap;}
+.filter-row input, .filter-row select{flex:1;}
 </style>
 </head>
-<body class="p-4 max-w-4xl mx-auto font-sans">
+<body>
+<h2>Formulário de Agendamento</h2>
 
-<h1 class="text-2xl font-bold mb-4 text-center">Dashboard de Agendamentos</h1>
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="senha" placeholder="Senha">
+<button id="loginBtn">Login</button>
 
-<div id="dashboard" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-  <!-- Cards de resumo -->
-  <div class="bg-white shadow p-4 rounded text-center">
-    <h3 class="font-semibold text-gray-700">Pendentes</h3>
-    <span id="totalPendentes" class="text-2xl font-bold">0</span>
-  </div>
-  <div class="bg-white shadow p-4 rounded text-center">
-    <h3 class="font-semibold text-gray-700">Confirmados</h3>
-    <span id="totalConfirmados" class="text-2xl font-bold">0</span>
-  </div>
-  <div class="bg-white shadow p-4 rounded text-center">
-    <h3 class="font-semibold text-gray-700">Todos</h3>
-    <span id="totalAgendamentos" class="text-2xl font-bold">0</span>
-  </div>
-</div>
-
-<!-- Login -->
-<div id="loginContainer" class="max-w-md mx-auto bg-white shadow p-6 rounded mb-6">
-  <h2 class="text-xl font-semibold mb-4 text-center">Login</h2>
-  <input type="email" id="email" placeholder="Email" class="w-full p-2 border rounded mb-2">
-  <input type="password" id="senha" placeholder="Senha" class="w-full p-2 border rounded mb-2">
-  <button id="loginBtn" class="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600">Login</button>
-  <p id="loginError" class="text-red-500 mt-2 hidden"></p>
-</div>
-
-<!-- Formulário de agendamento -->
-<form id="agendamentoForm" class="max-w-md mx-auto bg-white shadow p-6 rounded mb-6 hidden">
-  <h2 class="text-xl font-semibold mb-4 text-center">Novo Agendamento</h2>
-  <input type="text" name="Nome" placeholder="Nome" required class="w-full p-2 border rounded mb-2">
-  <input type="email" name="Email" placeholder="Email" required class="w-full p-2 border rounded mb-2">
-  <input type="text" name="Telefone" placeholder="Telefone" required class="w-full p-2 border rounded mb-2">
-  <input type="date" name="Data" placeholder="Data" required class="w-full p-2 border rounded mb-2">
-  <input type="time" name="Horario" placeholder="Horário" required class="w-full p-2 border rounded mb-2">
-  <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Agendar</button>
-  <p id="formMsg" class="mt-2 font-semibold hidden"></p>
+<form id="agendamentoForm" style="display:none;">
+<input type="text" name="Nome" placeholder="Nome" required>
+<input type="email" name="Email" placeholder="Email" required>
+<input type="text" name="Telefone" placeholder="Telefone" required>
+<input type="date" name="Data" placeholder="Data do Agendamento" required>
+<input type="time" name="Horario" placeholder="Horário" required>
+<button type="submit">Agendar</button>
 </form>
 
-<!-- Lista de agendamentos -->
-<h2 class="text-xl font-semibold mb-2">Meus Agendamentos</h2>
-<div id="meusAgendamentos" class="space-y-2"></div>
+<h3>Meus Agendamentos</h3>
+
+<div class="filter-row" style="margin-bottom:10px;">
+  <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email">
+  <select id="statusFilter">
+    <option value="">Todos os status</option>
+    <option value="pendente">Pendente</option>
+    <option value="confirmado">Confirmado</option>
+  </select>
+  <button id="exportBtn">Exportar CSV</button>
+</div>
+
+<div id="meusAgendamentos"></div>
+
+<div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
+<div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
-const loginContainer = document.getElementById("loginContainer");
-const loginBtn = document.getElementById("loginBtn");
-const loginError = document.getElementById("loginError");
-const form = document.getElementById("agendamentoForm");
-const formMsg = document.getElementById("formMsg");
-const meusAgendamentos = document.getElementById("meusAgendamentos");
-
+const form = document.getElementById('agendamentoForm');
+const loginBtn = document.getElementById('loginBtn');
+const successMsg = document.getElementById('successMsg');
+const errorMsg = document.getElementById('errorMsg');
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-async function listarAgendamentos() {
+const searchInput = document.getElementById("searchInput");
+const statusFilter = document.getElementById("statusFilter");
+const exportBtn = document.getElementById("exportBtn");
+
+let agendamentosCache = [];
+
+async function listarAgendamentos(){
   if(!userToken) return;
   try {
     const res = await fetch(`/meus-agendamentos/${cliente}`, {
       headers: { "Authorization": `Bearer ${userToken}` }
     });
     const { agendamentos } = await res.json();
-
-    // Atualiza dashboard
-    const pendentes = agendamentos.filter(a => !a.confirmado).length;
-    const confirmados = agendamentos.filter(a => a.confirmado).length;
-    document.getElementById("totalPendentes").textContent = pendentes;
-    document.getElementById("totalConfirmados").textContent = confirmados;
-    document.getElementById("totalAgendamentos").textContent = agendamentos.length;
-
-    meusAgendamentos.innerHTML = "";
-    if(agendamentos.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
-
-    agendamentos.forEach(a => {
-      const div = document.createElement("div");
-      div.className = "card bg-white p-4 rounded shadow flex justify-between items-center";
-      div.innerHTML = `
-        <div>
-          <strong>${a.data} ${a.horario}</strong> - ${a.nome}<br>Status: ${a.status}
-        </div>
-        ${!a.confirmado?'<button class="bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">Confirmar</button>':''}
-      `;
-      meusAgendamentos.appendChild(div);
-
-      const btn = div.querySelector("button");
-      if(btn){
-        btn.addEventListener("click", async () => {
-          try{
-            const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-              method: "POST",
-              headers: {"Authorization": `Bearer ${userToken}`}
-            });
-            if(res.ok){ listarAgendamentos(); }
-          } catch(e){ console.error(e); }
-        });
-      }
-    });
+    agendamentosCache = agendamentos;
+    renderAgendamentos();
   } catch(e){ console.error(e); }
 }
 
-loginBtn.addEventListener("click", async () => {
-  loginError.classList.add("hidden");
-  const email = document.getElementById("email").value;
-  const senha = document.getElementById("senha").value;
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    if(error) throw error;
-    userToken = data.session.access_token;
-    loginContainer.classList.add("hidden");
-    form.classList.remove("hidden");
-    listarAgendamentos();
-  } catch(err){
-    loginError.textContent = err.message;
-    loginError.classList.remove("hidden");
-  }
+function renderAgendamentos(){
+  const container = document.getElementById("meusAgendamentos");
+  container.innerHTML = "";
+
+  const filtroNome = searchInput.value.toLowerCase();
+  const filtroStatus = statusFilter.value;
+
+  const filtrados = agendamentosCache.filter(a=>{
+    const nomeEmail = (a.nome + a.email).toLowerCase();
+    const statusMatch = filtroStatus ? a.status === filtroStatus : true;
+    return nomeEmail.includes(filtroNome) && statusMatch;
+  });
+
+  if(filtrados.length === 0){ container.textContent="Nenhum agendamento."; return; }
+
+  filtrados.forEach(a=>{
+    const div=document.createElement("div");
+    div.className="agendamento";
+    div.innerHTML=`<strong>${a.data} ${a.horario}</strong>${a.nome} - ${a.email} - Status: ${a.status}
+      ${!a.confirmado?'<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>':''}`;
+    container.appendChild(div);
+    const btn = div.querySelector("button");
+    if(btn){
+      btn.addEventListener("click", async ()=>{
+        try{
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{
+            method:"POST",
+            headers:{"Authorization":`Bearer ${userToken}`}
+          });
+          if(res.ok){ listarAgendamentos(); }
+        } catch(e){ console.error(e); }
+      });
+    }
+  });
+}
+
+// Export CSV
+exportBtn.addEventListener("click", ()=>{
+  if(agendamentosCache.length === 0) return alert("Nenhum agendamento para exportar.");
+  let csv = "Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
+  agendamentosCache.forEach(a=>{
+    csv += `${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`;
+  });
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "agendamentos.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 });
 
-form.addEventListener("submit", async e => {
+loginBtn.addEventListener('click', async () => {
+  errorMsg.style.display='none';
+  const email = document.getElementById('email').value;
+  const senha = document.getElementById('senha').value;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
+  userToken = data.session.access_token;
+  loginBtn.style.display = 'none';
+  document.getElementById('email').style.display = 'none';
+  document.getElementById('senha').style.display = 'none';
+  form.style.display = 'block';
+  listarAgendamentos();
+});
+
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  formMsg.classList.add("hidden");
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
   const formData = new FormData(form);
   const dataToSend = {};
-  formData.forEach((v,k) => dataToSend[k]=v);
+  formData.forEach((v,k)=>dataToSend[k]=v);
 
   try {
     const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
@@ -148,9 +164,8 @@ form.addEventListener("submit", async e => {
     });
     const result = await check.json();
     if(result.ocupados.includes(dataToSend.Horario)){
-      formMsg.textContent = 'Horário já ocupado';
-      formMsg.className = "text-red-500 font-semibold mt-2";
-      formMsg.classList.remove("hidden");
+      errorMsg.textContent='Horário já ocupado';
+      errorMsg.style.display='block';
       return;
     }
   } catch(err){ console.error(err); }
@@ -162,20 +177,14 @@ form.addEventListener("submit", async e => {
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
-    if(response.ok){
-      formMsg.textContent = "✅ Agendamento realizado!";
-      formMsg.className = "text-green-500 font-semibold mt-2";
-      formMsg.classList.remove("hidden");
-      form.reset();
-      listarAgendamentos();
-    } else {
-      formMsg.textContent = result.msg || "Erro";
-      formMsg.className = "text-red-500 font-semibold mt-2";
-      formMsg.classList.remove("hidden");
-    }
-  } catch(err){ console.error(err); formMsg.textContent="Erro"; formMsg.className="text-red-500 font-semibold mt-2"; formMsg.classList.remove("hidden"); }
+    if(response.ok){ successMsg.style.display='block'; form.reset(); listarAgendamentos(); }
+    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+  } catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
 });
-</script>
 
+// Re-render quando filtros mudarem
+searchInput.addEventListener("input", renderAgendamentos);
+statusFilter.addEventListener("change", renderAgendamentos);
+</script>
 </body>
 </html>
