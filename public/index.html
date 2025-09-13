@@ -284,32 +284,32 @@ loginBtn.addEventListener('click', async () => {
   listarAgendamentos();
 });
 
-// Submit agendamento
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
-  // Após exibir o sucesso
-successMsg.style.display = 'block';
-setTimeout(() => {
-    successMsg.style.display = 'none';
-}, 3000); // 3000ms = 3 segundos
-
-
-errorMsg.style.display = 'block';
-setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
 
   const formData = new FormData(form);
   const dataToSend = {};
   formData.forEach((v,k)=>dataToSend[k]=v);
 
   try{
-    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { headers: { "Authorization": `Bearer ${userToken}` } });
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { 
+      headers: { "Authorization": `Bearer ${userToken}` } 
+    });
     const result = await check.json();
+
     if(result.ocupados.includes(dataToSend.Horario)){
       errorMsg.textContent='Horário já ocupado';
       errorMsg.style.display='block';
-      return;
+      return; // <-- importante: para aqui, não mostra sucesso
     }
-  } catch(err){ console.error(err); }
+  } catch(err){ 
+    console.error(err); 
+    errorMsg.textContent='Erro ao verificar horários';
+    errorMsg.style.display='block';
+    return;
+  }
 
   try{
     const response = await fetch(`/agendar/${cliente}`, {
@@ -318,10 +318,23 @@ setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
-    if(response.ok){ successMsg.style.display='block'; form.reset(); listarAgendamentos(); }
-    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
-  } catch(err){ console.error(err); errorMsg.style.display='block'; }
+
+    if(response.ok){ 
+      successMsg.style.display='block'; 
+      setTimeout(()=>{ successMsg.style.display='none'; }, 3000);
+      form.reset(); 
+      listarAgendamentos(); 
+    } else { 
+      errorMsg.textContent=result.msg || 'Erro ao agendar'; 
+      errorMsg.style.display='block'; 
+    }
+  } catch(err){ 
+    console.error(err); 
+    errorMsg.textContent='Erro ao enviar agendamento';
+    errorMsg.style.display='block'; 
+  }
 });
+
 
 // Filtros
 searchInput.addEventListener("input", renderAgendamentos);
@@ -378,6 +391,7 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
 
