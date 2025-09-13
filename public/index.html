@@ -192,7 +192,7 @@ function formatData(data){
   const [y,m,d] = data.split("-"); 
   return `${d}/${m}/${y}`; 
 }
-
+feather.replace();
 // Função de toasts
 function showToast(msg, type="success") {
   const toast = document.createElement("div");
@@ -393,6 +393,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 </div>
 </body>
 </html>
+
 
 
 
