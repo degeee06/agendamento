@@ -387,7 +387,7 @@ form.addEventListener('submit', async (e)=>{
   form.reset(); 
   listarAgendamentos(); 
 } else { 
-  showToast("Erro ao agendar", "error");
+  showToast("Horário Ocupado", "error");
 }
 
   } catch(err){ 
@@ -444,6 +444,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
