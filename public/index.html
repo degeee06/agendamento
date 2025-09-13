@@ -255,39 +255,19 @@ async function listarAgendamentos(){
     document.getElementById('filtersSection').style.display = 'block';
     document.getElementById('diasTabs').style.display = 'flex';
 
-    // inicializa as tabs só depois que elas aparecem
-    initTabsDias();
-    // Mostrar tabs quando logar
-async function listarAgendamentos(){
-  if(!userToken) return;
-  try {
-    const res = await fetch(`/meus-agendamentos/${cliente}`, {
-      headers: {"Authorization":`Bearer ${userToken}`}
-    });
-    const { agendamentos } = await res.json();
-    agendamentosCache = agendamentos;
-
-    meusAgendamentos.style.display = 'block';
-    document.getElementById('filtersSection').style.display = 'block';
-    document.getElementById('diasTabs').style.display = 'flex';
-
     // inicializa tabs
     initTabsDias();
 
-    // pegar o dia da semana atual
+    // abrir automaticamente a aba do dia atual
     let hoje = new Date().getDay(); 
-    if(hoje === 0) hoje = 1; // se domingo, abre segunda
-
-    // forçar clique na aba do dia atual
+    if (hoje === 0) hoje = 1; // se domingo, abre segunda
     const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-    if(btnHoje) btnHoje.click();
+    if (btnHoje) btnHoje.click();
 
   } catch(e){ console.error(e); }
 }
 
-    renderAgendamentos();
-  } catch(e){ console.error(e); }
-}
+
 // Login
 loginBtn.addEventListener('click', async () => {
   errorMsg.style.display='none';
@@ -388,5 +368,6 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
