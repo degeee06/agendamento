@@ -12,11 +12,16 @@ button:hover{background:#45a049;}
 .success,.error{text-align:center;margin-top:15px;font-weight:bold;}
 .success{color:green;}
 .error{color:red;}
-.agendamento{margin-bottom:10px;border:1px solid #ccc;padding:8px;border-radius:6px;}
-.agendamento strong{display:block;}
-.filter-row{display:flex;gap:10px;flex-wrap:wrap;}
+.agendamento{margin-bottom:10px;padding:12px;border-radius:6px;}
+.agendamento.pendente { background: #fff3cd; border:1px solid #ffeeba; }
+.agendamento.confirmado { background: #d4edda; border:1px solid #c3e6cb; }
+.agendamento strong{display:block; margin-bottom:5px;}
+.filter-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
 .filter-row input, .filter-row select{flex:1;}
 .filter-row button{flex:none;}
+.pagination button{margin:0 3px;padding:5px 10px; cursor:pointer;}
+.pagination button:hover{opacity:0.8;}
+.pagination button.current{font-weight:bold;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -38,7 +43,7 @@ button:hover{background:#45a049;}
 
 <h3>Meus Agendamentos</h3>
 
-<div class="filter-row" style="margin-bottom:10px;">
+<div class="filter-row">
   <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email">
   <select id="statusFilter">
     <option value="">Todos os status</option>
@@ -78,23 +83,39 @@ const exportPDFBtn = document.getElementById("exportPDFBtn");
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-// Renderiza agendamentos com filtros
+// Paginação
+let currentPage = 1;
+const perPage = 10;
+
+// Renderiza agendamentos com filtros e paginação
 function renderAgendamentos() {
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
 
   const filtrados = agendamentosCache
     .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) && (filtroStatus ? a.status === filtroStatus : true))
-    .sort((a,b)=>new Date(a.data)-new Date(b.data)); // ordena do dia 1 ao último
+    .sort((a,b)=>new Date(a.data)-new Date(b.data));
+
+  const totalPages = Math.ceil(filtrados.length / perPage);
+  const start = (currentPage - 1) * perPage;
+  const end = start + perPage;
+  const pageItems = filtrados.slice(start, end);
 
   meusAgendamentos.innerHTML = "";
-  if(filtrados.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
+  if(pageItems.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
 
-  filtrados.forEach(a=>{
+  pageItems.forEach(a=>{
+    const [yyyy, mm, dd] = a.data.split("-");
     const div = document.createElement("div");
-    div.className="agendamento";
-    div.innerHTML=`<strong>${a.data} ${a.horario}</strong>${a.nome} - ${a.email} - Status: ${a.status}
-      ${!a.confirmado?'<button style="margin-left:10px;" data-id="'+a.id+'">Confirmar</button>':''}`;
+    div.className = `agendamento ${a.status}`;
+    div.innerHTML = `
+      <strong>${dd}/${mm}/${yyyy} ${a.horario}</strong>
+      <div><strong>Nome:</strong> ${a.nome}</div>
+      <div><strong>Email:</strong> ${a.email}</div>
+      <div><strong>Telefone:</strong> ${a.telefone}</div>
+      <div><strong>Status:</strong> ${a.status}</div>
+      ${!a.confirmado?`<button data-id="${a.id}">Confirmar</button>`:""}
+    `;
     meusAgendamentos.appendChild(div);
 
     const btn = div.querySelector("button");
@@ -110,6 +131,20 @@ function renderAgendamentos() {
       });
     }
   });
+
+  // Paginação
+  const pagination = document.createElement("div");
+  pagination.className = "pagination";
+  pagination.style.textAlign = "center";
+  pagination.style.marginTop = "10px";
+  for(let i=1;i<=totalPages;i++){
+    const btn = document.createElement("button");
+    btn.textContent = i;
+    btn.className = i === currentPage ? "current" : "";
+    btn.addEventListener("click", ()=>{ currentPage = i; renderAgendamentos(); });
+    pagination.appendChild(btn);
+  }
+  meusAgendamentos.appendChild(pagination);
 }
 
 // Lista agendamentos do backend
@@ -197,14 +232,13 @@ exportCSVBtn.addEventListener("click", ()=>{
 exportPDFBtn.addEventListener("click", ()=>{
   if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
   const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
-  
-  // Usa diretamente a variável global do script UMD
   const doc = new window.jspdf.jsPDF();
   doc.setFontSize(12);
   doc.text("Agendamentos", 10, 10);
   let y = 20;
   sorted.forEach(a=>{
-    doc.text(`${a.data} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
+    const [yyyy, mm, dd] = a.data.split("-");
+    doc.text(`${dd}/${mm}/${yyyy} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
     y += 10;
     if(y > 280){ 
       doc.addPage(); 
@@ -216,8 +250,3 @@ exportPDFBtn.addEventListener("click", ()=>{
 </script>
 </body>
 </html>
-
-
-
-
-
