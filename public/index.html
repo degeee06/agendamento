@@ -323,32 +323,49 @@ function renderAgendamentos() {
 `;
     meusAgendamentos.appendChild(div);
 
-    // Botão confirmar
-    const buttons = div.querySelectorAll("button");
-buttons.forEach(btn => {
-  btn.addEventListener("click", async () => {
-    const id = btn.dataset.id;
-    const action = btn.dataset.action;
+   // Botão confirmar
+const confirmBtn = div.querySelector('button[data-action="confirmar"]');
+if (confirmBtn) {
+  confirmBtn.addEventListener("click", async () => {
     try {
-      const res = await fetch(`/${action}/${cliente}/${id}`, {
+      const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${userToken}` }
       });
       if (res.ok) {
-        showToast(`Agendamento ${action === "confirmar" ? "confirmado" : "cancelado"}!`, "success");
+        showToast("Agendamento confirmado!", "success");
         listarAgendamentos();
       } else {
-        showToast("Erro ao atualizar agendamento", "error");
+        showToast("Erro ao confirmar agendamento", "error");
       }
     } catch (e) {
       console.error(e);
       showToast("Erro de conexão", "error");
-        }
-      });
     }
   });
 }
 
+// Botão cancelar
+const cancelBtn = div.querySelector('button[data-action="cancelar"]');
+if (cancelBtn) {
+  cancelBtn.addEventListener("click", async () => {
+    try {
+      const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${userToken}` }
+      });
+      if (res.ok) {
+        showToast("Agendamento cancelado!", "success");
+        listarAgendamentos();
+      } else {
+        showToast("Erro ao cancelar agendamento", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Erro de conexão", "error");
+    }
+  });
+}
 
 
 
@@ -483,6 +500,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
