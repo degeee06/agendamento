@@ -183,8 +183,6 @@ let diaSelecionado = 1; // segunda por padrão
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const loginSection = document.getElementById('loginSection');
-const successMsg = document.getElementById('successMsg');
-const errorMsg = document.getElementById('errorMsg');
 const meusAgendamentos = document.getElementById('meusAgendamentos');
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
@@ -194,7 +192,23 @@ const exportPDFBtn = document.getElementById("exportPDFBtn");
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+function formatData(data){ 
+  const [y,m,d] = data.split("-"); 
+  return `${d}/${m}/${y}`; 
+}
+
+// Função de toasts
+function showToast(msg, type="success") {
+  const toast = document.createElement("div");
+  toast.className = `fixed top-6 right-6 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 text-white z-50 ${
+    type==="success" ? "bg-green-500" : "bg-red-500"
+  } animate-fade-in`;
+  toast.innerHTML = `
+    <span>${msg}</span>
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.remove(); }, 3000);
+}
 
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
@@ -237,8 +251,8 @@ function renderAgendamentos(){
       btn.addEventListener("click", async ()=>{
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); }
-        } catch(e){ console.error(e); }
+          if(res.ok){ listarAgendamentos(); showToast("Agendamento confirmado!", "success"); }
+        } catch(e){ console.error(e); showToast("Erro ao confirmar agendamento", "error"); }
       });
     }
   });
@@ -267,51 +281,52 @@ async function listarAgendamentos(){
     const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
     if (btnHoje) btnHoje.click();
 
-  } catch(e){ console.error(e); }
+  } catch(e){ console.error(e); showToast("Erro ao listar agendamentos", "error"); }
 }
-
 
 // Login
 loginBtn.addEventListener('click', async () => {
-  errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
-  userToken = data.session.access_token;
-  loginSection.style.display = 'none';
-  form.style.display = 'block';
-  listarAgendamentos();
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    if (error) { showToast(error.message, 'error'); return; }
+    userToken = data.session.access_token;
+    loginSection.style.display = 'none';
+    form.style.display = 'block';
+    listarAgendamentos();
+  } catch (err) {
+    console.error(err);
+    showToast('Erro ao realizar login', 'error');
+  }
 });
 
-form.addEventListener('submit', async (e)=>{
+// Agendamento
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  successMsg.style.display='none';
-  errorMsg.style.display='none';
 
   const formData = new FormData(form);
   const dataToSend = {};
-  formData.forEach((v,k)=>dataToSend[k]=v);
+  formData.forEach((v, k) => dataToSend[k] = v);
 
-  try{
+  try {
     const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { 
       headers: { "Authorization": `Bearer ${userToken}` } 
     });
     const result = await check.json();
 
-    if(result.ocupados.includes(dataToSend.Horario)){
-      errorMsg.textContent='Horário já ocupado';
-      errorMsg.style.display='block';
-      return; // <-- importante: para aqui, não mostra sucesso
+    if (result.ocupados.includes(dataToSend.Horario)) {
+      showToast('Horário já ocupado', 'error'); 
+      return;
     }
-  } catch(err){ 
+  } catch (err) { 
     console.error(err); 
-    errorMsg.textContent='Erro ao verificar horários';
-    errorMsg.style.display='block';
+    showToast('Erro ao verificar horários', 'error'); 
     return;
   }
 
-  try{
+  try {
     const response = await fetch(`/agendar/${cliente}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
@@ -319,25 +334,18 @@ form.addEventListener('submit', async (e)=>{
     });
     const result = await response.json();
 
-    if(response.ok){ 
-  successMsg.style.display = 'block';
-  setTimeout(() => {
-    successMsg.style.display = 'none';
-  }, 3000); // 3000ms = 3 segundos
-  form.reset(); 
-  listarAgendamentos(); 
-} else { 
-    errorMsg.textContent = result.msg || 'Erro ao agendar'; 
-    errorMsg.style.display = 'block';
-  setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
-}
-  } catch(err){ 
+    if (response.ok) { 
+      showToast('Agendamento realizado com sucesso!', 'success'); 
+      form.reset(); 
+      listarAgendamentos(); 
+    } else { 
+      showToast(result.msg || 'Erro ao agendar', 'error'); 
+    }
+  } catch (err) { 
     console.error(err); 
-    errorMsg.textContent='Erro ao enviar agendamento';
-    errorMsg.style.display='block'; 
+    showToast('Erro ao enviar agendamento', 'error'); 
   }
 });
-
 
 // Filtros
 searchInput.addEventListener("input", renderAgendamentos);
@@ -348,18 +356,13 @@ function initTabsDias() {
   const tabs = document.querySelectorAll(".tab-dia");
   tabs.forEach(btn => {
     btn.addEventListener("click", () => {
-      // remover destaque das outras abas
       tabs.forEach(b => b.classList.remove("bg-purple-600","active"));
       tabs.forEach(b => b.classList.add("bg-white/10"));
 
-      // destacar a aba clicada
       btn.classList.remove("bg-white/10");
       btn.classList.add("bg-purple-600","active");
 
-      // atualizar dia selecionado
       diaSelecionado = parseInt(btn.dataset.dia);
-
-      // renderizar novamente
       renderAgendamentos();
     });
   });
@@ -392,8 +395,15 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
+
+// Init
+AOS.init();
+feather.replace();
+</script>
 </body>
 </html>
+
 
 
 
