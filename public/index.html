@@ -17,8 +17,6 @@
     }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    .notification { position: fixed; top: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 500; z-index: 50; opacity: 0; transition: opacity 0.3s; }
-    .notification.show { opacity: 1; }
 </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-purple-700 to-blue-600 text-white font-sans">
@@ -54,7 +52,7 @@
         </div>
     </div>
 
-    <!-- Appointment Form -->
+    <!-- Appointment Form (Hidden Initially) -->
     <form id="agendamentoForm" style="display:none;" class="glass-card rounded-xl p-8 mb-8 shadow-xl hover:scale-105 transition-transform" data-aos="fade-up">
         <h2 class="text-2xl font-semibold mb-6 flex items-center gap-2">
             <i data-feather="calendar" class="w-5 h-5"></i>
@@ -139,11 +137,22 @@
     </div>
 
     <!-- Appointments List -->
-    <div id="meusAgendamentos" class="glass-card rounded-xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" style="display:none;" data-aos="fade-up"></div>
+    <div id="meusAgendamentos" class="glass-card rounded-xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" style="display:none;" data-aos="fade-up">
+        <div class="text-center py-8">
+            <i data-feather="calendar" class="w-12 h-12 mx-auto text-gray-300 mb-4"></i>
+            <p class="text-gray-300">Nenhum agendamento encontrado</p>
+        </div>
+    </div>
 
-    <!-- Notifications -->
-    <div id="successMsg" class="notification bg-green-500 text-white"><i data-feather="check-circle" class="w-5 h-5"></i><span>Agendamento realizado com sucesso!</span></div>
-    <div id="errorMsg" class="notification bg-red-500"><i data-feather="alert-circle" class="w-5 h-5"></i><span id="errorText">Ocorreu um erro</span></div>
+    <!-- Messages -->
+    <div id="successMsg" style="display:none;" class="fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <i data-feather="check-circle" class="w-5 h-5"></i>
+        <span>Agendamento realizado com sucesso!</span>
+    </div>
+    <div id="errorMsg" style="display:none;" class="fixed top-6 right-6 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <i data-feather="alert-circle" class="w-5 h-5"></i>
+        <span id="errorText">Ocorreu um erro</span>
+    </div>
 
 </div>
 
@@ -156,140 +165,152 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
 let agendamentosCache = [];
-
+const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const loginSection = document.getElementById('loginSection');
-const form = document.getElementById('agendamentoForm');
-const meusAgendamentos = document.getElementById('meusAgendamentos');
-const searchInput = document.getElementById('searchInput');
-const statusFilter = document.getElementById('statusFilter');
-const exportCSVBtn = document.getElementById('exportCSVBtn');
-const exportPDFBtn = document.getElementById('exportPDFBtn');
 const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
-const errorText = document.getElementById('errorText');
+const meusAgendamentos = document.getElementById('meusAgendamentos');
+const searchInput = document.getElementById("searchInput");
+const statusFilter = document.getElementById("statusFilter");
+const exportCSVBtn = document.getElementById("exportCSVBtn");
+const exportPDFBtn = document.getElementById("exportPDFBtn");
 
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-function showNotification(type, text){
-    const el = type==='success'?successMsg:errorMsg;
-    el.querySelector('span').textContent = text;
-    el.classList.add('show');
-    setTimeout(()=>el.classList.remove('show'),3000);
-}
-
-function formatData(data){ const [y,m,d]=data.split("-"); return `${d}/${m}/${y}`; }
+function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
 function renderAgendamentos(){
-    const filtroNome = searchInput.value.toLowerCase();
-    const filtroStatus = statusFilter.value;
-    const filtrados = agendamentosCache.filter(a=>((a.nome+a.email).toLowerCase().includes(filtroNome))&&(filtroStatus?a.status===filtroStatus:true))
-                                        .sort((a,b)=>new Date(a.data)-new Date(b.data));
-    meusAgendamentos.innerHTML='';
-    if(filtrados.length===0){ meusAgendamentos.innerHTML="<p class='text-center py-8'>Nenhum agendamento encontrado</p>"; return; }
-    filtrados.forEach(a=>{
-        const div=document.createElement('div');
-        div.className=`agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
-        div.innerHTML=`
-            <strong>${formatData(a.data)} ${a.horario}</strong>
-            <div><strong>Nome:</strong> ${a.nome}</div>
-            <div><strong>Email:</strong> ${a.email}</div>
-            <div><strong>Telefone:</strong> ${a.telefone}</div>
-            <div><strong>Status:</strong> ${a.status}</div>
-            ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>`:''}
-        `;
-        meusAgendamentos.appendChild(div);
-        const btn=div.querySelector('button');
-        if(btn){
-            btn.addEventListener('click', async ()=>{
-                try{
-                    const res=await fetch(`/confirmar/${cliente}/${a.id}`,{method:'POST',headers:{"Authorization":`Bearer ${userToken}`}});
-                    if(res.ok){ listarAgendamentos(); showNotification('success','Agendamento confirmado!'); }
-                }catch(e){ console.error(e); showNotification('error','Erro ao confirmar'); }
-            });
-        }
-    });
+  const filtroNome = searchInput.value.toLowerCase();
+  const filtroStatus = statusFilter.value;
+  const filtrados = agendamentosCache
+    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+                 (filtroStatus ? a.status === filtroStatus : true))
+    .sort((a,b)=>new Date(a.data)-new Date(b.data));
+
+  meusAgendamentos.innerHTML = "";
+  if(filtrados.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
+
+  filtrados.forEach(a=>{
+    const div = document.createElement("div");
+    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
+    div.innerHTML = `
+      <strong>${formatData(a.data)} ${a.horario}</strong>
+      <div><strong>Nome:</strong> ${a.nome}</div>
+      <div><strong>Email:</strong> ${a.email}</div>
+      <div><strong>Telefone:</strong> ${a.telefone}</div>
+      <div><strong>Status:</strong> ${a.status}</div>
+      ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>`:""}
+    `;
+    meusAgendamentos.appendChild(div);
+
+    const btn = div.querySelector("button");
+    if(btn){
+      btn.addEventListener("click", async ()=>{
+        try{
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
+          if(res.ok){ listarAgendamentos(); }
+        } catch(e){ console.error(e); }
+      });
+    }
+  });
 }
 
 async function listarAgendamentos(){
-    if(!userToken) return;
-    try{
-        const res = await fetch(`/meus-agendamentos/${cliente}`,{headers:{"Authorization":`Bearer ${userToken}`}});
-        const {agendamentos} = await res.json();
-        agendamentosCache = agendamentos;
-        meusAgendamentos.style.display='block';
-        document.getElementById('filtersSection').style.display='block';
-        renderAgendamentos();
-    }catch(e){ console.error(e); }
+  if(!userToken) return;
+  try {
+    const res = await fetch(`/meus-agendamentos/${cliente}`, { headers: {"Authorization":`Bearer ${userToken}`} });
+    const { agendamentos } = await res.json();
+    agendamentosCache = agendamentos;
+    meusAgendamentos.style.display = 'block';
+    document.getElementById('filtersSection').style.display = 'block';
+    renderAgendamentos();
+  } catch(e){ console.error(e); }
 }
 
-loginBtn.addEventListener('click', async ()=>{
-    const email=document.getElementById('email').value;
-    const senha=document.getElementById('senha').value;
-    const {data,error} = await supabase.auth.signInWithPassword({email,password:senha});
-    if(error){ showNotification('error',error.message); return; }
-    userToken = data.session.access_token;
-    loginSection.style.display='none';
-    form.style.display='block';
-    listarAgendamentos();
+// Login
+loginBtn.addEventListener('click', async () => {
+  errorMsg.style.display='none';
+  const email = document.getElementById('email').value;
+  const senha = document.getElementById('senha').value;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
+  userToken = data.session.access_token;
+  loginSection.style.display = 'none';
+  form.style.display = 'block';
+  listarAgendamentos();
 });
 
-form.addEventListener('submit', async e=>{
-    e.preventDefault();
-    const formData=new FormData(form);
-    const dataToSend={};
-    formData.forEach((v,k)=>dataToSend[k]=v);
-    try{
-        const check=await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`,{headers:{"Authorization":`Bearer ${userToken}`}});
-        const result=await check.json();
-        if(result.ocupados.includes(dataToSend.Horario)){ showNotification('error','Horário já ocupado'); return; }
-    }catch(e){ console.error(e); }
-    try{
-        const response=await fetch(`/agendar/${cliente}`,{
-            method:'POST',headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},body:JSON.stringify(dataToSend)
-        });
-        const result=await response.json();
-        if(response.ok){ form.reset(); listarAgendamentos(); showNotification('success','Agendamento realizado!'); }
-        else showNotification('error', result.msg || 'Erro');
-    }catch(e){ console.error(e); showNotification('error','Erro'); }
+// Submit agendamento
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
+
+  const formData = new FormData(form);
+  const dataToSend = {};
+  formData.forEach((v,k)=>dataToSend[k]=v);
+
+  try{
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { headers: { "Authorization": `Bearer ${userToken}` } });
+    const result = await check.json();
+    if(result.ocupados.includes(dataToSend.Horario)){
+      errorMsg.textContent='Horário já ocupado';
+      errorMsg.style.display='block';
+      return;
+    }
+  } catch(err){ console.error(err); }
+
+  try{
+    const response = await fetch(`/agendar/${cliente}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+      body: JSON.stringify(dataToSend)
+    });
+    const result = await response.json();
+    if(response.ok){ successMsg.style.display='block'; form.reset(); listarAgendamentos(); }
+    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+  } catch(err){ console.error(err); errorMsg.style.display='block'; }
 });
 
-searchInput.addEventListener('input', renderAgendamentos);
-statusFilter.addEventListener('change', renderAgendamentos);
+// Filtros
+searchInput.addEventListener("input", renderAgendamentos);
+statusFilter.addEventListener("change", renderAgendamentos);
 
 // Export CSV
-exportCSVBtn.addEventListener('click', ()=>{
-    if(agendamentosCache.length===0){ alert('Nenhum agendamento para exportar.'); return; }
-    const sorted=[...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
-    let csv="Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
-    sorted.forEach(a=>{ csv+=`${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`; });
-    const blob=new Blob([csv],{type:'text/csv'});
-    const url=URL.createObjectURL(blob);
-    const link=document.createElement('a');
-    link.href=url;
-    link.download='agendamentos.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+exportCSVBtn.addEventListener("click", ()=>{
+  if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
+  const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
+  let csv="Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
+  sorted.forEach(a=>{ csv+=`${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`; });
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "agendamentos.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 });
 
 // Export PDF
-exportPDFBtn.addEventListener('click', ()=>{
-    if(agendamentosCache.length===0){ alert('Nenhum agendamento para exportar.'); return; }
-    const sorted=[...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
-    const doc=new window.jspdf.jsPDF();
-    doc.setFontSize(12);
-    doc.text("Agendamentos",10,10);
-    let y=20;
-    sorted.forEach(a=>{
-        const [yyyy,mm,dd]=a.data.split("-");
-        doc.text(`${dd}/${mm}/${yyyy} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`,10,y);
-        y+=10; if(y>280){ doc.addPage(); y=10; }
-    });
-    doc.save("agendamentos.pdf");
+exportPDFBtn.addEventListener("click", ()=>{
+  if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
+  const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
+  const doc = new window.jspdf.jsPDF();
+  doc.setFontSize(12);
+  doc.text("Agendamentos", 10, 10);
+  let y = 20;
+  sorted.forEach(a=>{
+    const [yyyy, mm, dd] = a.data.split("-");
+    doc.text(`${dd}/${mm}/${yyyy} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
+    y += 10;
+    if(y > 280){ doc.addPage(); y = 10; }
+  });
+  doc.save("agendamentos.pdf");
 });
 
-AOS.init({ duration:800, easing:'ease-in-out', once:true });
+AOS.init({ duration: 800, easing: 'ease-in-out', once: true });
 feather.replace();
 </script>
 </body>
