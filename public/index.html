@@ -284,105 +284,73 @@ scrollContainer.addEventListener('mousemove', (e) => {
 
 
 
-function renderAgendamentos(agendamentos) {
-  const lista = document.getElementById("agendamentosLista");
-  lista.innerHTML = "";
+function renderAgendamentos() {
+  const filtroNome = searchInput.value.toLowerCase();
+  const filtroStatus = statusFilter.value;
 
-  if (!agendamentos || agendamentos.length === 0) {
-    lista.innerHTML = "<p>Nenhum agendamento encontrado.</p>";
+  // Filtra e ordena
+  const filtrados = agendamentosCache
+    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+                 (filtroStatus ? a.status === filtroStatus : true))
+    .filter(a => {
+      const dia = new Date(`${a.data}T${a.horario}`).getDay();
+      return dia === diaSelecionado;
+    })
+    .sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
+
+  if (filtrados.length === 0) {
+    meusAgendamentos.innerHTML = `
+      <div class='text-center py-8 text-gray-300'>
+        Nenhum agendamento.
+      </div>
+    `;
     return;
   }
 
-  agendamentos.forEach((a) => {
+  // Renderiza todos os itens normalmente
+  meusAgendamentos.innerHTML = ""; // limpa o container
+  filtrados.forEach(a => {
     const div = document.createElement("div");
-    div.className = "p-3 border rounded mb-2 bg-white shadow";
-
+    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
     div.innerHTML = `
-      <strong>${formatData(a.data)} ${a.horario}</strong>
-      <div><strong>Nome:</strong> ${a.nome}</div>
-      <div><strong>Email:</strong> ${a.email}</div>
-      <div><strong>Telefone:</strong> ${a.telefone}</div>
-      <div><strong>Status:</strong> ${a.status}</div>
-      <div class="flex gap-2 mt-2">
-        ${!a.confirmado ? `<button data-id="${a.id}" class="btn-confirmar px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>` : ""}
-        <button data-id="${a.id}" class="btn-cancelar px-3 py-1 bg-red-600 rounded text-white">Cancelar</button>
-      </div>
-    `;
+  <strong>${formatData(a.data)} ${a.horario}</strong>
+  <div><strong>Nome:</strong> ${a.nome}</div>
+  <div><strong>Email:</strong> ${a.email}</div>
+  <div><strong>Telefone:</strong> ${a.telefone}</div>
+  <div><strong>Status:</strong> ${a.status}</div>
+  <div class="mt-2 flex gap-2">
+    ${!a.confirmado && a.status !== "cancelado" ? `<button data-action="confirmar" data-id="${a.id}" class="px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>` : ""}
+    ${a.status !== "cancelado" ? `<button data-action="cancelar" data-id="${a.id}" class="px-3 py-1 bg-red-600 rounded text-white">Cancelar</button>` : ""}
+  </div>
+`;
+    meusAgendamentos.appendChild(div);
 
-    // ---- manter o Confirmar do jeito que já tinha ----
-    const btnConfirmar = div.querySelector(".btn-confirmar");
-    if (btnConfirmar) {
-      btnConfirmar.addEventListener("click", async () => {
-        try {
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${userToken}` }
-          });
-          if (res.ok) {
-            showToast("Agendamento confirmado!", "success");
-            listarAgendamentos();
-          } else {
-            showToast("Erro ao confirmar", "error");
-          }
-        } catch (e) {
-          console.error(e);
-          showToast("Erro ao confirmar", "error");
+    // Botão confirmar
+    const buttons = div.querySelectorAll("button");
+buttons.forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    try {
+      const res = await fetch(`/${action}/${cliente}/${id}`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${userToken}` }
+      });
+      if (res.ok) {
+        showToast(`Agendamento ${action === "confirmar" ? "confirmado" : "cancelado"}!`, "success");
+        listarAgendamentos();
+      } else {
+        showToast("Erro ao atualizar agendamento", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Erro de conexão", "error");
         }
       });
     }
-
-    // ---- novo botão Cancelar (não mexe no resto) ----
-    const btnCancelar = div.querySelector(".btn-cancelar");
-    if (btnCancelar) {
-      btnCancelar.addEventListener("click", async () => {
-        try {
-          const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${userToken}` }
-          });
-          if (res.ok) {
-            showToast("Agendamento cancelado!", "info");
-            listarAgendamentos();
-          } else {
-            showToast("Erro ao cancelar", "error");
-          }
-        } catch (e) {
-          console.error(e);
-          showToast("Erro ao cancelar", "error");
-        }
-      });
-    }
-
-    lista.appendChild(div);
   });
 }
 
-
-    // Botão cancelar
-    const btnCancelar = div.querySelector(".btn-cancelar");
-    if (btnCancelar) {
-      btnCancelar.addEventListener("click", async () => {
-        try {
-          const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${userToken}` }
-          });
-          if (res.ok) {
-            showToast("Agendamento cancelado!", "info");
-            listarAgendamentos();
-          } else {
-            showToast("Erro ao cancelar", "error");
-          }
-        } catch (e) {
-          console.error(e);
-          showToast("Erro ao cancelar", "error");
-        }
-      });
-    }
-
-    lista.appendChild(div);
-  });
-}
 
 
 
@@ -516,7 +484,6 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
-
 
 
 
