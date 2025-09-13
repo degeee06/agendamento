@@ -2,158 +2,165 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Agendamento</title>
-<style>
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  max-width: 800px;
-  margin: 50px auto;
-  padding: 20px;
-  background: #f4f6f8;
-}
-
-h2 {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #333;
-}
-
-input, button, select {
-  width: 100%;
-  padding: 12px;
-  margin: 8px 0;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  font-size: 16px;
-  box-sizing: border-box;
-}
-
-button {
-  background: #007bff;
-  color: white;
-  border: none;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-button:hover {
-  background: #0069d9;
-}
-
-.success, .error {
-  text-align: center;
-  margin-top: 15px;
-  font-weight: bold;
-}
-
-.success { color: #28a745; }
-.error { color: #dc3545; }
-
-.agendamento {
-  margin-bottom: 12px;
-  padding: 15px;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  transition: 0.2s;
-}
-
-.agendamento:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.agendamento strong {
-  display: block;
-  font-size: 16px;
-  margin-bottom: 6px;
-}
-
-.agendamento.pendente {
-  border-left: 6px solid #ffc107;
-}
-
-.agendamento.confirmado {
-  border-left: 6px solid #28a745;
-}
-
-.filter-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 15px;
-}
-
-.filter-row input, .filter-row select { flex: 1; }
-.filter-row button { flex: none; }
-
-#meusAgendamentos {
-  max-height: 500px;
-  overflow-y: auto;
-  padding-right: 5px;
-}
-
-.pagination {
-  text-align: center;
-  margin-top: 10px;
-}
-
-.pagination button {
-  margin: 0 3px;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
-
-.pagination button.current {
-  background: #007bff;
-  color: white;
-  font-weight: bold;
-  border-color: #007bff;
-}
-
-.pagination button:hover:not(.current) {
-  background: #e9ecef;
-}
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agendamento Moderno</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script src="https://unpkg.com/feather-icons"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+    .glass-card {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
 </head>
-<body>
+<body class="min-h-screen bg-gradient-to-br from-purple-700 to-blue-600 text-white font-sans">
+<div class="container mx-auto px-4 py-12 max-w-4xl">
 
-<h2>Formulário de Agendamento</h2>
+    <!-- Header -->
+    <header class="text-center mb-12" data-aos="fade-down">
+        <h1 class="text-4xl font-bold mb-2">Agendamento Moderno</h1>
+        <p class="text-lg opacity-80">Gerencie seus compromissos de forma simples e eficiente</p>
+    </header>
 
-<input type="email" id="email" placeholder="Email">
-<input type="password" id="senha" placeholder="Senha">
-<button id="loginBtn">Login</button>
+    <!-- Login Section -->
+    <div class="glass-card rounded-xl p-8 mb-8 shadow-xl" data-aos="fade-up">
+        <h2 class="text-2xl font-semibold mb-6 flex items-center gap-2">
+            <i data-feather="lock" class="w-5 h-5"></i>
+            Acesso ao Sistema
+        </h2>
+        <div class="space-y-4">
+            <div>
+                <label for="email" class="block mb-1 text-sm font-medium">Email</label>
+                <input type="email" id="email" placeholder="seu@email.com" 
+                       class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+            </div>
+            <div>
+                <label for="senha" class="block mb-1 text-sm font-medium">Senha</label>
+                <input type="password" id="senha" placeholder="••••••••" 
+                       class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+            </div>
+            <button id="loginBtn" class="w-full bg-white text-purple-700 py-3 px-6 rounded-lg font-medium hover:bg-gray-100 transition-all flex items-center justify-center gap-2">
+                <i data-feather="log-in" class="w-5 h-5"></i>
+                Entrar
+            </button>
+        </div>
+    </div>
 
-<form id="agendamentoForm" style="display:none;">
-  <input type="text" name="Nome" placeholder="Nome" required>
-  <input type="email" name="Email" placeholder="Email" required>
-  <input type="text" name="Telefone" placeholder="Telefone" required>
-  <input type="date" name="Data" placeholder="Data do Agendamento" required>
-  <input type="time" name="Horario" placeholder="Horário" required>
-  <button type="submit">Agendar</button>
-</form>
+    <!-- Appointment Form (Hidden Initially) -->
+    <form id="agendamentoForm" style="display:none;" class="glass-card rounded-xl p-8 mb-8 shadow-xl hover:scale-105 transition-transform" data-aos="fade-up">
+        <h2 class="text-2xl font-semibold mb-6 flex items-center gap-2">
+            <i data-feather="calendar" class="w-5 h-5"></i>
+            Novo Agendamento
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-4">
+                <div>
+                    <label for="Nome" class="block mb-1 text-sm font-medium">Nome Completo</label>
+                    <input type="text" name="Nome" placeholder="Seu nome" required 
+                           class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                </div>
+                <div>
+                    <label for="Email" class="block mb-1 text-sm font-medium">Email</label>
+                    <input type="email" name="Email" placeholder="seu@email.com" required 
+                           class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                </div>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label for="Telefone" class="block mb-1 text-sm font-medium">Telefone</label>
+                    <input type="text" name="Telefone" placeholder="(00) 00000-0000" required 
+                           class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="Data" class="block mb-1 text-sm font-medium">Data</label>
+                        <input type="date" name="Data" placeholder="Data do Agendamento" required 
+                               class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                    </div>
+                    <div>
+                        <label for="Horario" class="block mb-1 text-sm font-medium">Horário</label>
+                        <input type="time" name="Horario" placeholder="Horário" required 
+                               class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button type="submit" class="mt-6 w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-purple-700 transition-all flex items-center justify-center gap-2">
+            <i data-feather="plus" class="w-5 h-5"></i>
+            Agendar
+        </button>
+    </form>
 
-<div class="filter-row">
-  <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email">
-  <select id="statusFilter">
-    <option value="">Todos os status</option>
-    <option value="pendente">Pendente</option>
-    <option value="confirmado">Confirmado</option>
-  </select>
-  <button id="exportCSVBtn">Exportar CSV</button>
-  <button id="exportPDFBtn">Exportar PDF</button>
+    <!-- Filters Section -->
+    <div id="filtersSection" style="display:none;" class="glass-card rounded-xl p-6 mb-6 shadow-xl" data-aos="fade-up">
+        <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1">
+                <label for="searchInput" class="sr-only">Pesquisar</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-feather="search" class="w-5 h-5 text-gray-300"></i>
+                    </div>
+                    <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email" 
+                           class="w-full pl-10 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+                </div>
+            </div>
+            <div class="w-full md:w-64">
+                <label for="statusFilter" class="sr-only">Status</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-feather="filter" class="w-5 h-5 text-gray-300"></i>
+                    </div>
+                    <select id="statusFilter" class="w-full pl-10 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300 appearance-none">
+                        <option value="">Todos os status</option>
+                        <option value="pendente">Pendente</option>
+                        <option value="confirmado">Confirmado</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button id="exportCSVBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center gap-2">
+                    <i data-feather="download" class="w-5 h-5"></i>
+                    <span class="hidden md:inline">CSV</span>
+                </button>
+                <button id="exportPDFBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center gap-2">
+                    <i data-feather="file-text" class="w-5 h-5"></i>
+                    <span class="hidden md:inline">PDF</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Appointments List -->
+    <div id="meusAgendamentos" class="glass-card rounded-xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" style="display:none;" data-aos="fade-up">
+        <div class="text-center py-8">
+            <i data-feather="calendar" class="w-12 h-12 mx-auto text-gray-300 mb-4"></i>
+            <p class="text-gray-300">Nenhum agendamento encontrado</p>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="successMsg" style="display:none;" class="fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <i data-feather="check-circle" class="w-5 h-5"></i>
+        <span>Agendamento realizado com sucesso!</span>
+    </div>
+    <div id="errorMsg" style="display:none;" class="fixed top-6 right-6 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <i data-feather="alert-circle" class="w-5 h-5"></i>
+        <span id="errorText">Ocorreu um erro</span>
+    </div>
+
 </div>
 
-<div id="meusAgendamentos"></div>
-
-<div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
-<div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
-
+<!-- Original JavaScript -->
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
+// ---------- Seu JS original permanece inalterado ----------
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -193,14 +200,14 @@ function renderAgendamentos(){
 
   filtrados.forEach(a=>{
     const div = document.createElement("div");
-    div.className = `agendamento ${a.status}`;
+    div.className = `agendamento ${a.status} bg-white/10 p-4 mb-4 rounded-lg shadow hover:scale-105 transition-transform`;
     div.innerHTML = `
       <strong>${formatData(a.data)} ${a.horario}</strong>
       <div><strong>Nome:</strong> ${a.nome}</div>
       <div><strong>Email:</strong> ${a.email}</div>
       <div><strong>Telefone:</strong> ${a.telefone}</div>
       <div><strong>Status:</strong> ${a.status}</div>
-      ${!a.confirmado?`<button data-id="${a.id}">Confirmar</button>`:""}
+      ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 bg-purple-600 text-white py-1 px-3 rounded hover:bg-purple-700">Confirmar</button>`:""}
     `;
     meusAgendamentos.appendChild(div);
 
@@ -229,6 +236,8 @@ async function listarAgendamentos(){
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
     renderAgendamentos();
+    document.getElementById('filtersSection').style.display = 'block';
+    meusAgendamentos.style.display = 'block';
   } catch(e){ console.error(e); }
 }
 
@@ -319,4 +328,3 @@ exportPDFBtn.addEventListener("click", ()=>{
 </script>
 </body>
 </html>
-
