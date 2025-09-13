@@ -103,27 +103,32 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+    // Dentro de /agendar/:cliente
+const { Nome, Email, Telefone, Data, Horario } = req.body;
+if (!Nome || !Email || !Telefone || !Data || !Horario)
+  return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const livre = await horarioDisponivel(cliente, Data, Horario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+// Normaliza para HH:mm
+const horarioNormalizado = Horario.slice(0,5);
 
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente,
-        nome: Nome,
-        email: Email,
-        telefone: Telefone,
-        data: Data,
-        horario: Horario,
-        status: "pendente",
-        confirmado: false
-      }])
-      .select()
-      .single();
+const livre = await horarioDisponivel(cliente, Data, horarioNormalizado);
+if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
+const { data, error } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente,
+    nome: Nome,
+    email: Email,
+    telefone: Telefone,
+    data: Data,
+    horario: horarioNormalizado,
+    status: "pendente",
+    confirmado: false
+  }])
+  .select()
+  .single();
+
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
     // Google Sheets
@@ -267,6 +272,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
