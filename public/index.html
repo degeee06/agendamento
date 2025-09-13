@@ -288,7 +288,6 @@ function renderAgendamentos() {
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
 
-  // Filtra e ordena
   const filtrados = agendamentosCache
     .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
                  (filtroStatus ? a.status === filtroStatus : true))
@@ -307,25 +306,36 @@ function renderAgendamentos() {
     return;
   }
 
-  // Renderiza todos os itens normalmente
-  meusAgendamentos.innerHTML = ""; // limpa o container
+  meusAgendamentos.innerHTML = "";
   filtrados.forEach(a => {
     const div = document.createElement("div");
-    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
-    div.innerHTML = `
-      <strong>${formatData(a.data)} ${a.horario}</strong>
-      <div><strong>Nome:</strong> ${a.nome}</div>
-      <div><strong>Email:</strong> ${a.email}</div>
-      <div><strong>Telefone:</strong> ${a.telefone}</div>
-      <div><strong>Status:</strong> ${a.status}</div>
-      ${!a.confirmado ? `<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>` : ""}
-    `;
+  div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
+div.innerHTML = `
+  <strong>${formatData(a.data)} ${a.horario}</strong>
+  <div><strong>Nome:</strong> ${a.nome}</div>
+  <div><strong>Email:</strong> ${a.email}</div>
+  <div><strong>Telefone:</strong> ${a.telefone}</div>
+  <div><strong>Status:</strong> 
+    <span class="px-2 py-1 rounded text-sm ${
+      a.status === "confirmado" ? "bg-green-700" :
+      a.status === "pendente" ? "bg-yellow-600" :
+      a.status === "cancelado" ? "bg-red-700" : "bg-gray-600"
+    }">
+      ${a.status}
+    </span>
+  </div>
+  <div class="flex gap-2 mt-2">
+    ${a.status === "pendente" ? `<button data-id="${a.id}" class="btn-confirm bg-green-600 px-3 py-1 rounded text-white">Confirmar</button>` : ""}
+    ${a.status !== "cancelado" ? `<button data-id="${a.id}" class="btn-cancel bg-red-600 px-3 py-1 rounded text-white">Cancelar</button>` : ""}
+  </div>
+`;
+
     meusAgendamentos.appendChild(div);
 
     // Botão confirmar
-    const btn = div.querySelector("button");
-    if (btn) {
-      btn.addEventListener("click", async () => {
+    const btnConfirm = div.querySelector(".btn-confirm");
+    if (btnConfirm) {
+      btnConfirm.addEventListener("click", async () => {
         try {
           const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
             method: "POST",
@@ -333,13 +343,42 @@ function renderAgendamentos() {
           });
           if (res.ok) {
             showToast("Agendamento confirmado!", "success");
-            listarAgendamentos(); // atualiza a lista
+            listarAgendamentos();
           } else {
             showToast("Erro ao confirmar", "error");
           }
         } catch (e) {
           console.error(e);
           showToast("Erro ao confirmar", "error");
+        }
+      });
+    }
+
+    // Botão cancelar
+    const btnCancel = div.querySelector(".btn-cancel");
+    if (btnCancel) {
+      btnCancel.addEventListener("click", async () => {
+        if (!confirm("Deseja realmente cancelar este agendamento?")) return;
+
+        try {
+          const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
+  method: "POST", // ou PATCH, depende do seu backend
+  headers: { 
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${userToken}` 
+  },
+  body: JSON.stringify({ status: "cancelado" })
+});
+
+          if (res.ok) {
+            showToast("Agendamento cancelado!", "info");
+            listarAgendamentos(); // atualiza a lista
+          } else {
+            showToast("Erro ao cancelar", "error");
+          }
+        } catch (e) {
+          console.error(e);
+          showToast("Erro ao cancelar", "error");
         }
       });
     }
@@ -479,6 +518,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
