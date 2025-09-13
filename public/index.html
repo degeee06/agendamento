@@ -249,17 +249,14 @@ function showToast(message, type = "success") {
 
 
 // ---------------- VIRTUALIZAÇÃO CORRIGIDA ----------------
-function renderAgendamentos(){
+function renderAgendamentos() {
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
 
   const filtrados = agendamentosCache
     .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
                  (filtroStatus ? a.status === filtroStatus : true))
-    .filter(a => {
-      const dia = new Date(`${a.data}T${a.horario}`).getDay();
-      return dia === diaSelecionado;
-    })
+    .filter(a => new Date(`${a.data}T${a.horario}`).getDay() === diaSelecionado)
     .sort((a,b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
 
   const itemHeight = 90;
@@ -268,22 +265,22 @@ function renderAgendamentos(){
   const start = Math.floor(scrollTop / itemHeight);
   const end = Math.min(start + visibleCount, filtrados.length);
 
-  // Mantém os elementos do container e atualiza apenas os visíveis
-  const existing = Array.from(meusAgendamentos.querySelectorAll(".agendamento"));
-  const spacerTop = meusAgendamentos.querySelector(".spacer-top") || document.createElement("div");
-  const spacerBottom = meusAgendamentos.querySelector(".spacer-bottom") || document.createElement("div");
+  // ---------- CORREÇÃO ----------
+  // Se já não existem, cria os spacers
+  let spacerTop = meusAgendamentos.querySelector(".spacer-top");
+  let spacerBottom = meusAgendamentos.querySelector(".spacer-bottom");
 
-  spacerTop.className = "spacer-top";
-  spacerBottom.className = "spacer-bottom";
+  if(!spacerTop) { spacerTop = document.createElement("div"); spacerTop.className = "spacer-top"; meusAgendamentos.prepend(spacerTop); }
+  if(!spacerBottom) { spacerBottom = document.createElement("div"); spacerBottom.className = "spacer-bottom"; meusAgendamentos.appendChild(spacerBottom); }
+
   spacerTop.style.height = `${start * itemHeight}px`;
   spacerBottom.style.height = `${(filtrados.length - end) * itemHeight}px`;
 
-  // Limpa somente os agendamentos antigos
-  existing.forEach(el => el.remove());
-  meusAgendamentos.innerHTML = "";
-  meusAgendamentos.appendChild(spacerTop);
+  // Remove somente os agendamentos existentes
+  meusAgendamentos.querySelectorAll(".agendamento").forEach(el => el.remove());
 
-  for(let i = start; i < end; i++){
+  // Renderiza apenas os visíveis
+  for (let i = start; i < end; i++) {
     const a = filtrados[i];
     const div = document.createElement("div");
     div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
@@ -295,30 +292,27 @@ function renderAgendamentos(){
       <div><strong>Status:</strong> ${a.status}</div>
       ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>`:""}
     `;
-    meusAgendamentos.appendChild(div);
+    spacerBottom.before(div);
 
     const btn = div.querySelector("button");
-    if(btn){
-      btn.addEventListener("click", async ()=> {
-        try{
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ 
-            listarAgendamentos(); 
-            showToast("Agendamento confirmado!", "success"); 
-          }
-        } catch(e){ 
-          console.error(e); 
-          showToast("Erro ao confirmar", "error"); 
+    if(btn) btn.addEventListener("click", async () => {
+      try {
+        const res = await fetch(`/confirmar/${cliente}/${a.id}`, { method: "POST", headers: {"Authorization": `Bearer ${userToken}`} });
+        if(res.ok) {
+          listarAgendamentos();
+          showToast("Agendamento confirmado!", "success");
         }
-      });
-    }
+      } catch(e) {
+        console.error(e);
+        showToast("Erro ao confirmar", "error");
+      }
+    });
   }
-
-  meusAgendamentos.appendChild(spacerBottom);
 }
 
-// Event listener do scroll continua igual
+// Scroll listener permanece
 meusAgendamentos.addEventListener("scroll", renderAgendamentos);
+
 
 
 // Mostrar tabs quando logar
@@ -451,6 +445,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
