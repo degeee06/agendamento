@@ -79,10 +79,11 @@ async function horarioDisponivel(cliente, data, horario) {
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .neq("status", "cancelado"); // ✅ Ignora agendamentos cancelados
+    .in("status", ["pendente", "confirmado"]); // apenas agendamentos válidos
   if (error) throw error;
   return agendamentos.length === 0;
 }
+
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -261,6 +262,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
