@@ -183,8 +183,6 @@ let diaSelecionado = 1; // segunda por padrão
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const loginSection = document.getElementById('loginSection');
-const successMsg = document.getElementById('successMsg');
-const errorMsg = document.getElementById('errorMsg');
 const meusAgendamentos = document.getElementById('meusAgendamentos');
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
@@ -196,6 +194,27 @@ const cliente = pathParts[1] || '';
 
 function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
+// ---------------- TOASTS MODERNOS ----------------
+function showToast(type, message){
+  const colors = {
+    success: "bg-green-600",
+    error: "bg-red-600",
+    info: "bg-blue-600",
+    warning: "bg-yellow-600"
+  };
+  const toast = document.createElement("div");
+  toast.className = `${colors[type]||colors.info} fixed top-6 right-6 px-6 py-3 rounded-lg shadow-lg text-white flex items-center gap-2 animate-fade-in z-50`;
+  toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i><span>${message}</span>`;
+  document.body.appendChild(toast);
+  feather.replace();
+
+  setTimeout(()=>{
+    toast.classList.add("opacity-0","translate-x-5","transition","duration-500");
+    setTimeout(()=>toast.remove(),500);
+  },3000);
+}
+
+// ---------------- VIRTUALIZAÇÃO ----------------
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
@@ -219,7 +238,19 @@ function renderAgendamentos(){
     return; 
   }
 
-  filtrados.forEach(a=>{
+  // virtualização (itens ~80px altura média)
+  const itemHeight = 90;
+  const visibleCount = Math.ceil(meusAgendamentos.clientHeight / itemHeight)+2;
+  const scrollTop = meusAgendamentos.scrollTop;
+  const start = Math.floor(scrollTop/itemHeight);
+  const end = Math.min(start+visibleCount, filtrados.length);
+
+  const spacerTop = document.createElement("div");
+  spacerTop.style.height = `${start*itemHeight}px`;
+  meusAgendamentos.appendChild(spacerTop);
+
+  for(let i=start;i<end;i++){
+    const a = filtrados[i];
     const div = document.createElement("div");
     div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
     div.innerHTML = `
@@ -237,12 +268,18 @@ function renderAgendamentos(){
       btn.addEventListener("click", async ()=>{
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); }
-        } catch(e){ console.error(e); }
+          if(res.ok){ listarAgendamentos(); showToast("success","Agendamento confirmado!"); }
+        } catch(e){ console.error(e); showToast("error","Erro ao confirmar"); }
       });
     }
-  });
+  }
+
+  const spacerBottom = document.createElement("div");
+  spacerBottom.style.height = `${(filtrados.length-end)*itemHeight}px`;
+  meusAgendamentos.appendChild(spacerBottom);
 }
+
+meusAgendamentos.addEventListener("scroll", renderAgendamentos);
 
 // Mostrar tabs quando logar
 async function listarAgendamentos(){
@@ -258,26 +295,22 @@ async function listarAgendamentos(){
     document.getElementById('filtersSection').style.display = 'block';
     document.getElementById('diasTabs').style.display = 'flex';
 
-    // inicializa tabs
     initTabsDias();
 
-    // abrir automaticamente a aba do dia atual
     let hoje = new Date().getDay(); 
-    if (hoje === 0) hoje = 1; // se domingo, abre segunda
+    if (hoje === 0) hoje = 1; 
     const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
     if (btnHoje) btnHoje.click();
 
-  } catch(e){ console.error(e); }
+  } catch(e){ console.error(e); showToast("error","Erro ao listar agendamentos"); }
 }
-
 
 // Login
 loginBtn.addEventListener('click', async () => {
-  errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
+  if(error){ showToast("error",error.message); return; }
   userToken = data.session.access_token;
   loginSection.style.display = 'none';
   form.style.display = 'block';
@@ -286,8 +319,6 @@ loginBtn.addEventListener('click', async () => {
 
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
-  successMsg.style.display='none';
-  errorMsg.style.display='none';
 
   const formData = new FormData(form);
   const dataToSend = {};
@@ -300,14 +331,12 @@ form.addEventListener('submit', async (e)=>{
     const result = await check.json();
 
     if(result.ocupados.includes(dataToSend.Horario)){
-      errorMsg.textContent='Horário já ocupado';
-      errorMsg.style.display='block';
-      return; // <-- importante: para aqui, não mostra sucesso
+      showToast("warning","Horário já ocupado");
+      return;
     }
   } catch(err){ 
     console.error(err); 
-    errorMsg.textContent='Erro ao verificar horários';
-    errorMsg.style.display='block';
+    showToast("error","Erro ao verificar horários");
     return;
   }
 
@@ -320,24 +349,17 @@ form.addEventListener('submit', async (e)=>{
     const result = await response.json();
 
     if(response.ok){ 
-  successMsg.style.display = 'block';
-  setTimeout(() => {
-    successMsg.style.display = 'none';
-  }, 3000); // 3000ms = 3 segundos
-  form.reset(); 
-  listarAgendamentos(); 
-} else { 
-    errorMsg.textContent = result.msg || 'Erro ao agendar'; 
-    errorMsg.style.display = 'block';
-  setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
-}
+      showToast("success","Agendamento realizado com sucesso!");
+      form.reset(); 
+      listarAgendamentos(); 
+    } else { 
+      showToast("error",result.msg || 'Erro ao agendar');
+    }
   } catch(err){ 
     console.error(err); 
-    errorMsg.textContent='Erro ao enviar agendamento';
-    errorMsg.style.display='block'; 
+    showToast("error","Erro ao enviar agendamento");
   }
 });
-
 
 // Filtros
 searchInput.addEventListener("input", renderAgendamentos);
@@ -348,18 +370,13 @@ function initTabsDias() {
   const tabs = document.querySelectorAll(".tab-dia");
   tabs.forEach(btn => {
     btn.addEventListener("click", () => {
-      // remover destaque das outras abas
       tabs.forEach(b => b.classList.remove("bg-purple-600","active"));
       tabs.forEach(b => b.classList.add("bg-white/10"));
 
-      // destacar a aba clicada
       btn.classList.remove("bg-white/10");
       btn.classList.add("bg-purple-600","active");
 
-      // atualizar dia selecionado
       diaSelecionado = parseInt(btn.dataset.dia);
-
-      // renderizar novamente
       renderAgendamentos();
     });
   });
@@ -392,8 +409,8 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
-</body>
-</html>
+
+
 
 
 
