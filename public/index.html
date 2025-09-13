@@ -136,6 +136,16 @@
         </div>
     </div>
 
+    <!-- Tabs Dias da Semana -->
+    <div id="diasTabs" style="display:none;" class="flex gap-2 mb-6" data-aos="fade-up">
+      <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-purple-600">Segunda</button>
+      <button data-dia="2" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Terça</button>
+      <button data-dia="3" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Quarta</button>
+      <button data-dia="4" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Quinta</button>
+      <button data-dia="5" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Sexta</button>
+      <button data-dia="6" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Sábado</button>
+    </div>
+
     <!-- Appointments List -->
     <div id="meusAgendamentos" class="glass-card rounded-xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" style="display:none;" data-aos="fade-up">
         <div class="text-center py-8">
@@ -165,6 +175,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
 let agendamentosCache = [];
+let diaSelecionado = 1; // segunda por padrão
+
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const loginSection = document.getElementById('loginSection');
@@ -180,17 +192,6 @@ const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
 function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
-<!-- Tabs Dias da Semana -->
-<div id="diasTabs" style="display:none;" class="flex gap-2 mb-6" data-aos="fade-up">
-  <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-purple-600">Segunda</button>
-  <button data-dia="2" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Terça</button>
-  <button data-dia="3" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Quarta</button>
-  <button data-dia="4" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Quinta</button>
-  <button data-dia="5" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Sexta</button>
-  <button data-dia="6" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Sábado</button>
-</div>
-
-let diaSelecionado = 1; // Segunda por padrão
 
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
@@ -240,36 +241,6 @@ function renderAgendamentos(){
   });
 }
 
-
-
-  meusAgendamentos.innerHTML = "";
-  if(filtrados.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
-
-  filtrados.forEach(a=>{
-    const div = document.createElement("div");
-    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
-    div.innerHTML = `
-      <strong>${formatData(a.data)} ${a.horario}</strong>
-      <div><strong>Nome:</strong> ${a.nome}</div>
-      <div><strong>Email:</strong> ${a.email}</div>
-      <div><strong>Telefone:</strong> ${a.telefone}</div>
-      <div><strong>Status:</strong> ${a.status}</div>
-      ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>`:""}
-    `;
-    meusAgendamentos.appendChild(div);
-
-    const btn = div.querySelector("button");
-    if(btn){
-      btn.addEventListener("click", async ()=>{
-        try{
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); }
-        } catch(e){ console.error(e); }
-      });
-    }
-  });
-}
-
 async function listarAgendamentos(){
   if(!userToken) return;
   try {
@@ -278,6 +249,7 @@ async function listarAgendamentos(){
     agendamentosCache = agendamentos;
     meusAgendamentos.style.display = 'block';
     document.getElementById('filtersSection').style.display = 'block';
+    document.getElementById('diasTabs').style.display = 'flex';
     renderAgendamentos();
   } catch(e){ console.error(e); }
 }
@@ -331,37 +303,6 @@ form.addEventListener('submit', async (e)=>{
 searchInput.addEventListener("input", renderAgendamentos);
 statusFilter.addEventListener("change", renderAgendamentos);
 
-// Export CSV
-exportCSVBtn.addEventListener("click", ()=>{
-  if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
-  const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
-  let csv="Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
-  sorted.forEach(a=>{ csv+=`${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`; });
-  const blob = new Blob([csv], {type:"text/csv"});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "agendamentos.csv";
-  link.click();
-  URL.revokeObjectURL(url);
-});
-
-// Export PDF
-exportPDFBtn.addEventListener("click", ()=>{
-  if(agendamentosCache.length===0) return alert("Nenhum agendamento para exportar.");
-  const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
-  const doc = new window.jspdf.jsPDF();
-  doc.setFontSize(12);
-  doc.text("Agendamentos", 10, 10);
-  let y = 20;
-  sorted.forEach(a=>{
-    const [yyyy, mm, dd] = a.data.split("-");
-    doc.text(`${dd}/${mm}/${yyyy} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
-    y += 10;
-    if(y > 280){ doc.addPage(); y = 10; }
-  });
-  doc.save("agendamentos.pdf");
-});
 // Tabs Dias da Semana
 document.querySelectorAll(".tab-dia").forEach(btn=>{
   btn.addEventListener("click", ()=>{
@@ -372,25 +313,32 @@ document.querySelectorAll(".tab-dia").forEach(btn=>{
   });
 });
 
-// Mostrar tabs quando logar
-async function listarAgendamentos(){
-  if(!userToken) return;
-  try {
-    const res = await fetch(`/meus-agendamentos/${cliente}`, { headers: {"Authorization":`Bearer ${userToken}`} });
-    const { agendamentos } = await res.json();
-    agendamentosCache = agendamentos;
-    meusAgendamentos.style.display = 'block';
-    document.getElementById('filtersSection').style.display = 'block';
-    document.getElementById('diasTabs').style.display = 'flex';
-    renderAgendamentos();
-  } catch(e){ console.error(e); }
-}
+// Exportações
+exportCSVBtn.addEventListener("click", ()=>{
+  let csv = "Nome,Email,Telefone,Data,Horario,Status\n";
+  agendamentosCache.forEach(a=>{ csv+=`${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`; });
+  const blob = new Blob([csv], { type:"text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download="agendamentos.csv";
+  link.click();
+});
 
-AOS.init({ duration: 800, easing: 'ease-in-out', once: true });
+exportPDFBtn.addEventListener("click", ()=>{
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.text("Agendamentos", 10,10);
+  let y=20;
+  agendamentosCache.forEach(a=>{
+    doc.text(`${a.data} ${a.horario} - ${a.nome} (${a.email}) - ${a.telefone} - ${a.status}`, 10,y);
+    y+=10;
+  });
+  doc.save("agendamentos.pdf");
+});
+
+// Init
+AOS.init();
 feather.replace();
 </script>
 </body>
 </html>
-
-
-
