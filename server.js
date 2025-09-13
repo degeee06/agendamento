@@ -246,6 +246,7 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
 
 
 
+
 // Listar agendamentos do cliente
 app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -267,5 +268,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
