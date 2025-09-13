@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <meta charset="UTF-8">
 <title>Agendamento</title>
 <style>
@@ -83,6 +84,13 @@ async function listarAgendamentos(){
     renderAgendamentos();
   } catch(e){ console.error(e); }
 }
+const filtrados = agendamentosCache
+  .filter(a => {
+    const nomeEmail = (a.nome + a.email).toLowerCase();
+    const statusMatch = statusFilter.value ? a.status === statusFilter.value : true;
+    return nomeEmail.includes(searchInput.value.toLowerCase()) && statusMatch;
+  })
+  .sort((a,b) => new Date(a.data) - new Date(b.data)); // ordena do dia mais próximo
 
 function renderAgendamentos(){
   const container = document.getElementById("meusAgendamentos");
@@ -123,8 +131,13 @@ function renderAgendamentos(){
 // Export CSV
 exportBtn.addEventListener("click", ()=>{
   if(agendamentosCache.length === 0) return alert("Nenhum agendamento para exportar.");
+
+  // --- Ordena pelo mais próximo
+  const sorted = [...agendamentosCache].sort((a,b)=> new Date(a.data) - new Date(b.data));
+
+  // --- CSV
   let csv = "Data,Horario,Nome,Email,Telefone,Status,Confirmado\n";
-  agendamentosCache.forEach(a=>{
+  sorted.forEach(a=>{
     csv += `${a.data},${a.horario},${a.nome},${a.email},${a.telefone},${a.status},${a.confirmado}\n`;
   });
   const blob = new Blob([csv], {type:"text/csv"});
@@ -134,7 +147,22 @@ exportBtn.addEventListener("click", ()=>{
   link.download = "agendamentos.csv";
   link.click();
   URL.revokeObjectURL(url);
+
+  // --- PDF
+  import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js").then(({ jsPDF })=>{
+    const doc = new jsPDF.jsPDF();
+    doc.setFontSize(12);
+    doc.text("Agendamentos", 10, 10);
+    let y = 20;
+    sorted.forEach(a=>{
+      doc.text(`${a.data} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
+      y += 10;
+      if(y>280){ doc.addPage(); y=10; }
+    });
+    doc.save("agendamentos.pdf");
+  });
 });
+
 
 loginBtn.addEventListener('click', async () => {
   errorMsg.style.display='none';
@@ -188,4 +216,5 @@ statusFilter.addEventListener("change", renderAgendamentos);
 </script>
 </body>
 </html>
+
 
