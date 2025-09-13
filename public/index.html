@@ -270,41 +270,17 @@ function renderAgendamentos() {
     .sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
 
   if (filtrados.length === 0) {
-    meusAgendamentos.innerHTML = "<div class='text-center py-8 text-gray-300'>Nenhum agendamento.</div>";
+    meusAgendamentos.innerHTML = `
+      <div class='text-center py-8 text-gray-300'>
+        Nenhum agendamento.
+      </div>
+    `;
     return;
   }
 
-  const itemHeight = 90; // altura de cada item
-  const totalHeight = filtrados.length * itemHeight;
-
-  // Cria ou atualiza wrapper interno
-  let wrapper = meusAgendamentos.querySelector(".wrapper");
-  if (!wrapper) {
-    wrapper = document.createElement("div");
-    wrapper.className = "wrapper";
-    wrapper.style.position = "relative";
-    wrapper.style.width = "100%";
-    wrapper.style.height = `${totalHeight}px`;
-    meusAgendamentos.innerHTML = "";
-    meusAgendamentos.appendChild(wrapper);
-  } else {
-    wrapper.style.height = `${totalHeight}px`;
-    wrapper.innerHTML = "";
-  }
-
-  const scrollTop = meusAgendamentos.scrollTop;
-  const visibleCount = Math.ceil(meusAgendamentos.clientHeight / itemHeight) + 2;
-  const start = Math.floor(scrollTop / itemHeight);
-  const end = Math.min(start + visibleCount, filtrados.length);
-
-  // Spacer topo
-  const spacerTop = document.createElement("div");
-  spacerTop.style.height = `${start * itemHeight}px`;
-  wrapper.appendChild(spacerTop);
-
-  // Itens visíveis
-  for (let i = start; i < end; i++) {
-    const a = filtrados[i];
+  // Renderiza todos os itens normalmente
+  meusAgendamentos.innerHTML = ""; // limpa o container
+  filtrados.forEach(a => {
     const div = document.createElement("div");
     div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
     div.innerHTML = `
@@ -315,7 +291,7 @@ function renderAgendamentos() {
       <div><strong>Status:</strong> ${a.status}</div>
       ${!a.confirmado ? `<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>` : ""}
     `;
-    wrapper.appendChild(div);
+    meusAgendamentos.appendChild(div);
 
     // Botão confirmar
     const btn = div.querySelector("button");
@@ -338,16 +314,8 @@ function renderAgendamentos() {
         }
       });
     }
-  }
-
-  // Spacer inferior
-  const spacerBottom = document.createElement("div");
-  spacerBottom.style.height = `${(filtrados.length - end) * itemHeight}px`;
-  wrapper.appendChild(spacerBottom);
+  });
 }
-
-// Scroll listener
-meusAgendamentos.addEventListener("scroll", renderAgendamentos);
 
 
 
@@ -482,6 +450,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
