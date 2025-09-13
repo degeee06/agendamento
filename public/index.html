@@ -19,13 +19,11 @@ button:hover{background:#45a049;}
 .filter-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
 .filter-row input, .filter-row select{flex:1;}
 .filter-row button{flex:none;}
-.pagination button{margin:0 3px;padding:5px 10px; cursor:pointer;}
-.pagination button:hover{opacity:0.8;}
-.pagination button.current{font-weight:bold;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
+
 <h2>Formulário de Agendamento</h2>
 
 <input type="email" id="email" placeholder="Email">
@@ -33,16 +31,15 @@ button:hover{background:#45a049;}
 <button id="loginBtn">Login</button>
 
 <form id="agendamentoForm" style="display:none;">
-<input type="text" name="Nome" placeholder="Nome" required>
-<input type="email" name="Email" placeholder="Email" required>
-<input type="text" name="Telefone" placeholder="Telefone" required>
-<input type="date" name="Data" placeholder="Data do Agendamento" required>
-<input type="time" name="Horario" placeholder="Horário" required>
-<button type="submit">Agendar</button>
+  <input type="text" name="Nome" placeholder="Nome" required>
+  <input type="email" name="Email" placeholder="Email" required>
+  <input type="text" name="Telefone" placeholder="Telefone" required>
+  <input type="date" name="Data" placeholder="Data do Agendamento" required>
+  <input type="time" name="Horario" placeholder="Horário" required>
+  <button type="submit">Agendar</button>
 </form>
 
 <h3>Meus Agendamentos</h3>
-
 <div class="filter-row">
   <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email">
   <select id="statusFilter">
@@ -54,7 +51,7 @@ button:hover{background:#45a049;}
   <button id="exportPDFBtn">Exportar PDF</button>
 </div>
 
-<div id="meusAgendamentos"></div>
+<div id="meusAgendamentos" style="max-height:500px; overflow-y:auto;"></div>
 
 <div class="success" id="successMsg" style="display:none;">✅ Agendamento realizado!</div>
 <div class="error" id="errorMsg" style="display:none;">❌ Ocorreu um erro</div>
@@ -68,54 +65,51 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
 let agendamentosCache = [];
+let itensMostrados = 0;
+const pageSize = 20;
 
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
 const meusAgendamentos = document.getElementById('meusAgendamentos');
-
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
 const exportCSVBtn = document.getElementById("exportCSVBtn");
 const exportPDFBtn = document.getElementById("exportPDFBtn");
-
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-// Paginação
-let currentPage = 1;
-const perPage = 10;
+// Formata data dd/mm/aaaa
+function formatData(data){
+  const [yyyy,mm,dd] = data.split("-");
+  return `${dd}/${mm}/${yyyy}`;
+}
 
-// Renderiza agendamentos com filtros e paginação
-function renderAgendamentos() {
+// Renderiza agendamentos (scroll infinito)
+function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
-
   const filtrados = agendamentosCache
-    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) && (filtroStatus ? a.status === filtroStatus : true))
+    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+                 (filtroStatus ? a.status === filtroStatus : true))
     .sort((a,b)=>new Date(a.data)-new Date(b.data));
 
-  const totalPages = Math.ceil(filtrados.length / perPage);
-  const start = (currentPage - 1) * perPage;
-  const end = start + perPage;
-  const pageItems = filtrados.slice(start, end);
+  const pagina = filtrados.slice(0, itensMostrados + pageSize);
+  itensMostrados = pagina.length;
 
   meusAgendamentos.innerHTML = "";
-  if(pageItems.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
+  if(pagina.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
 
-  pageItems.forEach(a=>{
-    const [yyyy, mm, dd] = a.data.split("-");
+  pagina.forEach(a=>{
     const div = document.createElement("div");
     div.className = `agendamento ${a.status}`;
-    div.innerHTML = `
-      <strong>${dd}/${mm}/${yyyy} ${a.horario}</strong>
+    div.innerHTML = `<strong>${formatData(a.data)} ${a.horario}</strong>
       <div><strong>Nome:</strong> ${a.nome}</div>
       <div><strong>Email:</strong> ${a.email}</div>
       <div><strong>Telefone:</strong> ${a.telefone}</div>
       <div><strong>Status:</strong> ${a.status}</div>
-      ${!a.confirmado?`<button data-id="${a.id}">Confirmar</button>`:""}
-    `;
+      ${!a.confirmado?`<button data-id="${a.id}">Confirmar</button>`:""}`;
     meusAgendamentos.appendChild(div);
 
     const btn = div.querySelector("button");
@@ -123,31 +117,23 @@ function renderAgendamentos() {
       btn.addEventListener("click", async ()=>{
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{
-            method:"POST",
-            headers:{"Authorization":`Bearer ${userToken}`}
+            method:"POST", headers:{"Authorization":`Bearer ${userToken}`}
           });
           if(res.ok){ listarAgendamentos(); }
         } catch(e){ console.error(e); }
       });
     }
   });
-
-  // Paginação
-  const pagination = document.createElement("div");
-  pagination.className = "pagination";
-  pagination.style.textAlign = "center";
-  pagination.style.marginTop = "10px";
-  for(let i=1;i<=totalPages;i++){
-    const btn = document.createElement("button");
-    btn.textContent = i;
-    btn.className = i === currentPage ? "current" : "";
-    btn.addEventListener("click", ()=>{ currentPage = i; renderAgendamentos(); });
-    pagination.appendChild(btn);
-  }
-  meusAgendamentos.appendChild(pagination);
 }
 
-// Lista agendamentos do backend
+// Scroll infinito
+meusAgendamentos.addEventListener('scroll', ()=>{
+  if(meusAgendamentos.scrollTop + meusAgendamentos.clientHeight >= meusAgendamentos.scrollHeight - 50){
+    renderAgendamentos();
+  }
+});
+
+// Lista agendamentos
 async function listarAgendamentos(){
   if(!userToken) return;
   try {
@@ -156,12 +142,13 @@ async function listarAgendamentos(){
     });
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
+    itensMostrados = 0;
     renderAgendamentos();
   } catch(e){ console.error(e); }
 }
 
 // Login
-loginBtn.addEventListener('click', async () => {
+loginBtn.addEventListener('click', async ()=>{
   errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
@@ -175,41 +162,38 @@ loginBtn.addEventListener('click', async () => {
   listarAgendamentos();
 });
 
-// Submit do agendamento
-form.addEventListener('submit', async (e) => {
+// Agendar
+form.addEventListener('submit', async (e)=>{
   e.preventDefault();
   successMsg.style.display='none';
   errorMsg.style.display='none';
-
   const formData = new FormData(form);
   const dataToSend = {};
   formData.forEach((v,k)=>dataToSend[k]=v);
 
-  try {
+  try{
     const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
-      headers: { "Authorization": `Bearer ${userToken}` }
+      headers: {"Authorization":`Bearer ${userToken}`}
     });
     const result = await check.json();
     if(result.ocupados.includes(dataToSend.Horario)){
-      errorMsg.textContent='Horário já ocupado';
-      errorMsg.style.display='block';
-      return;
+      errorMsg.textContent='Horário já ocupado'; errorMsg.style.display='block'; return;
     }
   } catch(err){ console.error(err); }
 
-  try {
+  try{
     const response = await fetch(`/agendar/${cliente}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+      method:'POST',
+      headers: {'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
     if(response.ok){ successMsg.style.display='block'; form.reset(); listarAgendamentos(); }
-    else { errorMsg.textContent=result.msg || 'Erro'; errorMsg.style.display='block'; }
+    else { errorMsg.textContent=result.msg||'Erro'; errorMsg.style.display='block'; }
   } catch(err){ console.error(err); errorMsg.textContent='Erro'; errorMsg.style.display='block'; }
 });
 
-// Re-render quando filtros mudarem
+// Filtros
 searchInput.addEventListener("input", renderAgendamentos);
 statusFilter.addEventListener("change", renderAgendamentos);
 
@@ -234,16 +218,13 @@ exportPDFBtn.addEventListener("click", ()=>{
   const sorted = [...agendamentosCache].sort((a,b)=>new Date(a.data)-new Date(b.data));
   const doc = new window.jspdf.jsPDF();
   doc.setFontSize(12);
-  doc.text("Agendamentos", 10, 10);
-  let y = 20;
+  doc.text("Agendamentos",10,10);
+  let y=20;
   sorted.forEach(a=>{
-    const [yyyy, mm, dd] = a.data.split("-");
-    doc.text(`${dd}/${mm}/${yyyy} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`, 10, y);
-    y += 10;
-    if(y > 280){ 
-      doc.addPage(); 
-      y = 10; 
-    }
+    const [yyyy,mm,dd] = a.data.split("-");
+    doc.text(`${dd}/${mm}/${yyyy} ${a.horario} - ${a.nome} - ${a.email} - ${a.telefone} - ${a.status}`,10,y);
+    y+=10;
+    if(y>280){ doc.addPage(); y=10; }
   });
   doc.save("agendamentos.pdf");
 });
