@@ -97,6 +97,7 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+
 // Agendar
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -107,9 +108,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const livre = await horarioDisponivel(cliente, Data, Horario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
-
+    // Inserção no Supabase
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -124,7 +123,14 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       }])
       .select()
       .single();
-    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+
+    if (error) {
+      // Verifica se é violação de unique constraint
+      if (error.code === "23505") { // PostgreSQL unique violation
+        return res.status(400).json({ msg: "Horário indisponível" });
+      }
+      return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+    }
 
     // Google Sheets
     const doc = await accessSpreadsheet(cliente);
@@ -138,6 +144,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "❌ Erro interno" });
   }
 });
+
 
 // Disponíveis
 app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
@@ -265,6 +272,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
