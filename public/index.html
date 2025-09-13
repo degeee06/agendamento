@@ -364,9 +364,10 @@ form.addEventListener('submit', async (e)=>{
     const result = await check.json();
 
     if(result.ocupados.includes(dataToSend.Horario)){
-      showToast("warning","Horário já ocupado");
-      return;
-    }
+  showToast("Horário não disponível", "warning"); // ✅ nova mensagem
+  return;
+}
+
   } catch(err){ 
     console.error(err); 
     showToast("error","Erro ao verificar horários");
@@ -382,12 +383,13 @@ form.addEventListener('submit', async (e)=>{
     const result = await response.json();
 
     if(response.ok){ 
-      showToast("success","Agendamento realizado com sucesso!");
-      form.reset(); 
-      listarAgendamentos(); 
-    } else { 
-      showToast("error",result.msg || 'Erro ao agendar');
-    }
+  showToast("Agendado com sucesso!", "success");  // ✅ nova mensagem
+  form.reset(); 
+  listarAgendamentos(); 
+} else { 
+  showToast("Erro ao agendar", "error");
+}
+
   } catch(err){ 
     console.error(err); 
     showToast("error","Erro ao enviar agendamento");
@@ -442,6 +444,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
