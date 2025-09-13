@@ -187,7 +187,12 @@ function renderAgendamentos(){
   const filtrados = agendamentosCache
     .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
                  (filtroStatus ? a.status === filtroStatus : true))
-    .sort((a,b)=>new Date(a.data)-new Date(b.data));
+    .sort((a,b) => {
+  const dateA = new Date(`${a.data}T${a.horario}`);
+  const dateB = new Date(`${b.data}T${b.horario}`);
+  return dateA - dateB;
+});
+
 
   meusAgendamentos.innerHTML = "";
   if(filtrados.length === 0){ meusAgendamentos.textContent="Nenhum agendamento."; return; }
@@ -315,4 +320,5 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
