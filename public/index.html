@@ -17,13 +17,16 @@
     }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    .toast {
-        transition: opacity 0.5s;
-        pointer-events: none;
-    }
+
+    /* Toast animations */
+    @keyframes toast-show { 0% { opacity:0; transform: translateY(-20px); } 100% { opacity:1; transform: translateY(0); } }
+    @keyframes toast-hide { 0% { opacity:1; transform: translateY(0); } 100% { opacity:0; transform: translateY(-20px); } }
+    .toast { opacity:0; transform: translateY(-20px); animation-fill-mode: forwards; }
+    .toast-show { animation: toast-show 0.3s forwards; }
+    .toast-hide { animation: toast-hide 0.3s forwards; }
 </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans">
+<body class="min-h-screen bg-gradient-to-br from-blue-800 to-blue-900 text-white font-sans">
 <div class="container mx-auto px-4 py-12 max-w-4xl">
 
     <!-- Header -->
@@ -56,7 +59,7 @@
         </div>
     </div>
 
-    <!-- Appointment Form -->
+    <!-- Appointment Form (Hidden Initially) -->
     <form id="agendamentoForm" style="display:none;" class="glass-card rounded-xl p-8 mb-8 shadow-xl hover:scale-105 transition-transform" data-aos="fade-up">
         <h2 class="text-2xl font-semibold mb-6 flex items-center gap-2">
             <i data-feather="calendar" class="w-5 h-5"></i>
@@ -157,16 +160,16 @@
         </div>
     </div>
 
-</div>
+    <!-- Toast Messages -->
+    <div id="successMsg" class="toast fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2">
+        <i data-feather="check-circle" class="w-5 h-5"></i>
+        <span>Agendamento realizado com sucesso!</span>
+    </div>
+    <div id="errorMsg" class="toast fixed top-6 right-6 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2">
+        <i data-feather="alert-circle" class="w-5 h-5"></i>
+        <span id="errorText">Ocorreu um erro</span>
+    </div>
 
-<!-- Toasts -->
-<div id="toastSuccess" class="toast fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 opacity-0 pointer-events-none">
-  <i data-feather="check-circle" class="w-5 h-5"></i>
-  <span>Agendamento realizado com sucesso!</span>
-</div>
-<div id="toastError" class="toast fixed top-6 right-6 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 opacity-0 pointer-events-none">
-  <i data-feather="alert-circle" class="w-5 h-5"></i>
-  <span id="toastErrorText">Ocorreu um erro</span>
 </div>
 
 <script type="module">
@@ -178,11 +181,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
 let agendamentosCache = [];
-let diaSelecionado = 1; // segunda por padrão
+let diaSelecionado = 1;
 
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
 const loginSection = document.getElementById('loginSection');
+const successMsg = document.getElementById('successMsg');
+const errorMsg = document.getElementById('errorMsg');
+const errorText = document.getElementById('errorText');
 const meusAgendamentos = document.getElementById('meusAgendamentos');
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
@@ -192,22 +198,17 @@ const exportPDFBtn = document.getElementById("exportPDFBtn");
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
-
-function showToast(type, message) {
-  const toast = type === "success" ? document.getElementById("toastSuccess") : document.getElementById("toastError");
-  if(type === "error") document.getElementById("toastErrorText").textContent = message || "Ocorreu um erro";
-
-  toast.classList.add("opacity-100");
-  toast.classList.remove("pointer-events-none");
-
-  setTimeout(() => {
-    toast.classList.remove("opacity-100");
-    toast.classList.add("pointer-events-none");
-  }, 3000);
+function showToast(msgElement) {
+    msgElement.classList.remove("toast-hide");
+    msgElement.classList.add("toast-show");
+    setTimeout(() => {
+        msgElement.classList.remove("toast-show");
+        msgElement.classList.add("toast-hide");
+    }, 3000);
 }
 
-// Renderiza agendamentos
+function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
@@ -219,7 +220,11 @@ function renderAgendamentos(){
       const dia = new Date(`${a.data}T${a.horario}`).getDay();
       return dia === diaSelecionado;
     })
-    .sort((a,b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
+    .sort((a,b) => {
+      const dateA = new Date(`${a.data}T${a.horario}`);
+      const dateB = new Date(`${b.data}T${b.horario}`);
+      return dateA - dateB;
+    });
 
   meusAgendamentos.innerHTML = "";
   if(filtrados.length === 0){ 
@@ -245,18 +250,20 @@ function renderAgendamentos(){
       btn.addEventListener("click", async ()=>{
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); showToast("success"); }
-        } catch(e){ console.error(e); showToast("error","Erro ao confirmar"); }
+          if(res.ok){ listarAgendamentos(); }
+        } catch(e){ console.error(e); }
       });
     }
   });
 }
 
-// Listar agendamentos
+// Mostrar tabs quando logar
 async function listarAgendamentos(){
   if(!userToken) return;
   try {
-    const res = await fetch(`/meus-agendamentos/${cliente}`, { headers: {"Authorization":`Bearer ${userToken}`} });
+    const res = await fetch(`/meus-agendamentos/${cliente}`, {
+      headers: {"Authorization":`Bearer ${userToken}`}
+    });
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
 
@@ -264,31 +271,37 @@ async function listarAgendamentos(){
     document.getElementById('filtersSection').style.display = 'block';
     document.getElementById('diasTabs').style.display = 'flex';
 
+    // inicializa tabs
     initTabsDias();
 
+    // abrir automaticamente a aba do dia atual
     let hoje = new Date().getDay(); 
-    if (hoje === 0) hoje = 1;
+    if (hoje === 0) hoje = 1; // se domingo, abre segunda
     const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
     if (btnHoje) btnHoje.click();
 
-  } catch(e){ console.error(e); showToast("error","Erro ao listar agendamentos"); }
+  } catch(e){ console.error(e); }
 }
+
 
 // Login
 loginBtn.addEventListener('click', async () => {
+  errorMsg.style.display='none';
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ showToast("error", error.message); return; }
+  if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
   userToken = data.session.access_token;
   loginSection.style.display = 'none';
   form.style.display = 'block';
   listarAgendamentos();
 });
 
-// Submit Form
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
+  successMsg.style.display='none';
+  errorMsg.style.display='none';
+
   const formData = new FormData(form);
   const dataToSend = {};
   formData.forEach((v,k)=>dataToSend[k]=v);
@@ -298,11 +311,18 @@ form.addEventListener('submit', async (e)=>{
       headers: { "Authorization": `Bearer ${userToken}` } 
     });
     const result = await check.json();
+
     if(result.ocupados.includes(dataToSend.Horario)){
-      showToast("error","Horário já ocupado");
-      return;
+      errorMsg.textContent='Horário já ocupado';
+      errorMsg.style.display='block';
+      return; // <-- importante: para aqui, não mostra sucesso
     }
-  } catch(err){ console.error(err); showToast("error","Erro ao verificar horários"); return; }
+  } catch(err){ 
+    console.error(err); 
+    errorMsg.textContent='Erro ao verificar horários';
+    errorMsg.style.display='block';
+    return;
+  }
 
   try{
     const response = await fetch(`/agendar/${cliente}`, {
@@ -311,34 +331,54 @@ form.addEventListener('submit', async (e)=>{
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
+
     if(response.ok){ 
-      showToast("success");
-      form.reset(); 
-      listarAgendamentos(); 
-    } else showToast("error", result.msg || 'Erro ao agendar');
-  } catch(err){ console.error(err); showToast("error","Erro ao enviar agendamento"); }
+  successMsg.style.display = 'block';
+  setTimeout(() => {
+    successMsg.style.display = 'none';
+  }, 3000); // 3000ms = 3 segundos
+  form.reset(); 
+  listarAgendamentos(); 
+} else { 
+    errorMsg.textContent = result.msg || 'Erro ao agendar'; 
+    errorMsg.style.display = 'block';
+  setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
+}
+  } catch(err){ 
+    console.error(err); 
+    errorMsg.textContent='Erro ao enviar agendamento';
+    errorMsg.style.display='block'; 
+  }
 });
+
 
 // Filtros
 searchInput.addEventListener("input", renderAgendamentos);
 statusFilter.addEventListener("change", renderAgendamentos);
 
-// Tabs Dias
+// Tabs Dias da Semana
 function initTabsDias() {
   const tabs = document.querySelectorAll(".tab-dia");
   tabs.forEach(btn => {
     btn.addEventListener("click", () => {
+      // remover destaque das outras abas
       tabs.forEach(b => b.classList.remove("bg-purple-600","active"));
       tabs.forEach(b => b.classList.add("bg-white/10"));
+
+      // destacar a aba clicada
       btn.classList.remove("bg-white/10");
       btn.classList.add("bg-purple-600","active");
+
+      // atualizar dia selecionado
       diaSelecionado = parseInt(btn.dataset.dia);
+
+      // renderizar novamente
       renderAgendamentos();
     });
   });
 }
 
-// Export CSV/PDF
+// Exportações
 exportCSVBtn.addEventListener("click", ()=>{
   let csv = "Nome,Email,Telefone,Data,Horario,Status\n";
   agendamentosCache.forEach(a=>{ csv+=`${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`; });
@@ -367,3 +407,18 @@ feather.replace();
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
