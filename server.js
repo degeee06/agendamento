@@ -79,10 +79,12 @@ async function horarioDisponivel(cliente, data, horario) {
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .in("status", ["pendente", "confirmado"]); // somente horários ativos
+    .in("status", ["pendente", "confirmado"]); // mantém só ativos
   if (error) throw error;
+  // horário está livre se não houver agendamento pendente ou confirmado
   return !agendamentos || agendamentos.length === 0;
 }
+
 
 
 
@@ -265,6 +267,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
