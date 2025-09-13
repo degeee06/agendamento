@@ -21,9 +21,6 @@ const planilhasClientes = {
 };
 const clientesValidos = Object.keys(planilhasClientes);
 
-
-
-
 // Google Service Account
 let creds;
 try {
@@ -73,21 +70,6 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
-async function horarioDisponivel(cliente, data, horario) {
-  const { data: agendamentos, error } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", cliente)
-    .eq("data", data)
-    .eq("horario", horario)
-    .neq("status", "cancelado"); // <- ignora cancelados
-
-  if (error) throw error;
-  return agendamentos.length === 0;
-}
-
-
-
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
 
@@ -97,8 +79,7 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-
-// Agendar
+// ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -108,7 +89,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // Inserção no Supabase
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -125,8 +105,8 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .single();
 
     if (error) {
-      // Verifica se é violação de unique constraint
-      if (error.code === "23505") { // PostgreSQL unique violation
+      // Captura violação de unique constraint (horário já ocupado)
+      if (error.code === "23505") {
         return res.status(400).json({ msg: "Horário indisponível" });
       }
       return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
@@ -145,8 +125,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-
-// Disponíveis
+// ---------------- Disponíveis ----------------
 app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -168,7 +147,7 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   }
 });
 
-// Confirmar
+// ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -189,16 +168,15 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
-
     const rows = await sheet.getRows();
     const row = rows.find((r) => r.id === data.id);
     if (row) {
-    row.status = "confirmado";
-    row.confirmado = true;
-    await row.save();
-  } else {
-    await sheet.addRow(data);
-  }
+      row.status = "confirmado";
+      row.confirmado = true;
+      await row.save();
+    } else {
+      await sheet.addRow(data);
+    }
 
     res.json({ msg: "✅ Agendamento confirmado", agendamento: data });
   } catch (err) {
@@ -207,8 +185,7 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   }
 });
 
-
-// Cancelar
+// ---------------- Cancelar ----------------
 app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -222,7 +199,6 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("cliente", cliente)
       .select()
       .single();
-
     if (error) return res.status(500).json({ msg: "Erro ao cancelar agendamento" });
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
@@ -247,11 +223,7 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
   }
 });
 
-
-
-
-
-// Listar agendamentos do cliente
+// ---------------- Listar agendamentos ----------------
 app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -261,7 +233,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .select("*")
       .eq("cliente", cliente);
-
     if (error) return res.status(500).json({ msg: "Erro Supabase" });
 
     res.json({ agendamentos: data });
@@ -272,10 +243,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
-
-
