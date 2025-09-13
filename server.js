@@ -78,10 +78,12 @@ async function horarioDisponivel(cliente, data, horario) {
     .select("*")
     .eq("cliente", cliente)
     .eq("data", data)
-    .eq("horario", horario);
+    .eq("horario", horario)
+    .neq("status", "cancelado"); // <--- aqui
   if (error) throw error;
   return agendamentos.length === 0;
 }
+
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -257,6 +259,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
