@@ -320,14 +320,16 @@ form.addEventListener('submit', async (e)=>{
     const result = await response.json();
 
     if(response.ok){ 
-      successMsg.style.display='block'; 
-      setTimeout(()=>{ successMsg.style.display='none'; }, 3000);
-      form.reset(); 
-      listarAgendamentos(); 
-    } else { 
-      errorMsg.textContent=result.msg || 'Erro ao agendar'; 
-      errorMsg.style.display='block'; 
-    }
+  successMsg.style.display = 'block';
+  setTimeout(() => {
+    successMsg.style.display = 'none';
+  }, 3000); // 3000ms = 3 segundos
+  form.reset(); 
+  listarAgendamentos(); 
+} else { 
+  errorMsg.textContent = result.msg || 'Erro ao agendar'; 
+  errorMsg.style.display = 'block'; 
+}
   } catch(err){ 
     console.error(err); 
     errorMsg.textContent='Erro ao enviar agendamento';
@@ -391,6 +393,7 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
 
