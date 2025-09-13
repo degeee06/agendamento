@@ -29,29 +29,28 @@
     </header>
 
     <!-- Login Section -->
-<div id="loginSection" class="glass-card rounded-xl p-8 mb-8 shadow-xl" data-aos="fade-up">
-    <h2 class="text-2xl font-semibold mb-6 flex items-center gap-2">
-        <i data-feather="lock" class="w-5 h-5"></i>
-        Acesso ao Sistema
-    </h2>
-    <div class="space-y-4">
-        <div>
-            <label for="email" class="block mb-1 text-sm font-medium">Email</label>
-            <input type="email" id="email" placeholder="seu@email.com" 
-                   class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+    <div id="loginSection" class="glass-card rounded-xl p-8 mb-8 shadow-xl" data-aos="fade-up">
+        <h2 class="text-2xl font-semibold mb-6 flex items-center gap-2">
+            <i data-feather="lock" class="w-5 h-5"></i>
+            Acesso ao Sistema
+        </h2>
+        <div class="space-y-4">
+            <div>
+                <label for="email" class="block mb-1 text-sm font-medium">Email</label>
+                <input type="email" id="email" placeholder="seu@email.com" 
+                       class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+            </div>
+            <div>
+                <label for="senha" class="block mb-1 text-sm font-medium">Senha</label>
+                <input type="password" id="senha" placeholder="••••••••" 
+                       class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
+            </div>
+            <button id="loginBtn" class="w-full bg-white text-purple-700 py-3 px-6 rounded-lg font-medium hover:bg-gray-100 transition-all flex items-center justify-center gap-2">
+                <i data-feather="log-in" class="w-5 h-5"></i>
+                Entrar
+            </button>
         </div>
-        <div>
-            <label for="senha" class="block mb-1 text-sm font-medium">Senha</label>
-            <input type="password" id="senha" placeholder="••••••••" 
-                   class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-300">
-        </div>
-        <button id="loginBtn" class="w-full bg-white text-purple-700 py-3 px-6 rounded-lg font-medium hover:bg-gray-100 transition-all flex items-center justify-center gap-2">
-            <i data-feather="log-in" class="w-5 h-5"></i>
-            Entrar
-        </button>
     </div>
-</div>
-
 
     <!-- Appointment Form (Hidden Initially) -->
     <form id="agendamentoForm" style="display:none;" class="glass-card rounded-xl p-8 mb-8 shadow-xl hover:scale-105 transition-transform" data-aos="fade-up">
@@ -157,11 +156,9 @@
 
 </div>
 
-<!-- Original JavaScript -->
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-// ---------- Seu JS original permanece inalterado ----------
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -170,10 +167,10 @@ let userToken = null;
 let agendamentosCache = [];
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
+const loginSection = document.getElementById('loginSection');
 const successMsg = document.getElementById('successMsg');
 const errorMsg = document.getElementById('errorMsg');
 const meusAgendamentos = document.getElementById('meusAgendamentos');
-
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
 const exportCSVBtn = document.getElementById("exportCSVBtn");
@@ -182,15 +179,11 @@ const exportPDFBtn = document.getElementById("exportPDFBtn");
 const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
-function formatData(data){
-  const [y,m,d] = data.split("-");
-  return `${d}/${m}/${y}`;
-}
+function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
-
   const filtrados = agendamentosCache
     .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
                  (filtroStatus ? a.status === filtroStatus : true))
@@ -201,14 +194,14 @@ function renderAgendamentos(){
 
   filtrados.forEach(a=>{
     const div = document.createElement("div");
-    div.className = `agendamento ${a.status} bg-white/10 p-4 mb-4 rounded-lg shadow hover:scale-105 transition-transform`;
+    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
     div.innerHTML = `
       <strong>${formatData(a.data)} ${a.horario}</strong>
       <div><strong>Nome:</strong> ${a.nome}</div>
       <div><strong>Email:</strong> ${a.email}</div>
       <div><strong>Telefone:</strong> ${a.telefone}</div>
       <div><strong>Status:</strong> ${a.status}</div>
-      ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 bg-purple-600 text-white py-1 px-3 rounded hover:bg-purple-700">Confirmar</button>`:""}
+      ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>`:""}
     `;
     meusAgendamentos.appendChild(div);
 
@@ -216,10 +209,7 @@ function renderAgendamentos(){
     if(btn){
       btn.addEventListener("click", async ()=>{
         try{
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{
-            method:"POST",
-            headers:{"Authorization":`Bearer ${userToken}`}
-          });
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
           if(res.ok){ listarAgendamentos(); }
         } catch(e){ console.error(e); }
       });
@@ -227,18 +217,15 @@ function renderAgendamentos(){
   });
 }
 
-// Listar agendamentos
 async function listarAgendamentos(){
   if(!userToken) return;
   try {
-    const res = await fetch(`/meus-agendamentos/${cliente}`, {
-      headers: {"Authorization":`Bearer ${userToken}`}
-    });
+    const res = await fetch(`/meus-agendamentos/${cliente}`, { headers: {"Authorization":`Bearer ${userToken}`} });
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
-    renderAgendamentos();
-    document.getElementById('filtersSection').style.display = 'block';
     meusAgendamentos.style.display = 'block';
+    document.getElementById('filtersSection').style.display = 'block';
+    renderAgendamentos();
   } catch(e){ console.error(e); }
 }
 
@@ -250,9 +237,7 @@ loginBtn.addEventListener('click', async () => {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
   if(error){ errorMsg.textContent = error.message; errorMsg.style.display='block'; return; }
   userToken = data.session.access_token;
-  loginBtn.style.display = 'none';
-  document.getElementById('email').style.display = 'none';
-  document.getElementById('senha').style.display = 'none';
+  loginSection.style.display = 'none';
   form.style.display = 'block';
   listarAgendamentos();
 });
@@ -268,9 +253,7 @@ form.addEventListener('submit', async (e)=>{
   formData.forEach((v,k)=>dataToSend[k]=v);
 
   try{
-    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, {
-      headers: { "Authorization": `Bearer ${userToken}` }
-    });
+    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { headers: { "Authorization": `Bearer ${userToken}` } });
     const result = await check.json();
     if(result.ocupados.includes(dataToSend.Horario)){
       errorMsg.textContent='Horário já ocupado';
@@ -326,7 +309,9 @@ exportPDFBtn.addEventListener("click", ()=>{
   });
   doc.save("agendamentos.pdf");
 });
+
+AOS.init({ duration: 800, easing: 'ease-in-out', once: true });
+feather.replace();
 </script>
 </body>
 </html>
-
