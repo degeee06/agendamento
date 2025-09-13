@@ -255,7 +255,6 @@ function showToast(message, type = "success") {
 
 
 
-// ---------------- VIRTUALIZAÇÃO COM SCROLLBAR REAL ----------------
 function renderAgendamentos() {
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
@@ -270,20 +269,21 @@ function renderAgendamentos() {
     })
     .sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
 
-  if(filtrados.length === 0){
+  if (filtrados.length === 0) {
     meusAgendamentos.innerHTML = "<div class='text-center py-8 text-gray-300'>Nenhum agendamento.</div>";
     return;
   }
 
-  const itemHeight = 90;
+  const itemHeight = 90; // altura de cada item
   const totalHeight = filtrados.length * itemHeight;
 
-  // Wrapper interno mantém altura total
+  // Cria ou atualiza wrapper interno
   let wrapper = meusAgendamentos.querySelector(".wrapper");
-  if(!wrapper){
+  if (!wrapper) {
     wrapper = document.createElement("div");
     wrapper.className = "wrapper";
     wrapper.style.position = "relative";
+    wrapper.style.width = "100%";
     wrapper.style.height = `${totalHeight}px`;
     meusAgendamentos.innerHTML = "";
     meusAgendamentos.appendChild(wrapper);
@@ -299,11 +299,11 @@ function renderAgendamentos() {
 
   // Spacer topo
   const spacerTop = document.createElement("div");
-  spacerTop.style.height = `${start*itemHeight}px`;
+  spacerTop.style.height = `${start * itemHeight}px`;
   wrapper.appendChild(spacerTop);
 
   // Itens visíveis
-  for(let i = start; i < end; i++){
+  for (let i = start; i < end; i++) {
     const a = filtrados[i];
     const div = document.createElement("div");
     div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
@@ -319,20 +319,20 @@ function renderAgendamentos() {
 
     // Botão confirmar
     const btn = div.querySelector("button");
-    if(btn){
+    if (btn) {
       btn.addEventListener("click", async () => {
-        try{
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{
+        try {
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
             method: "POST",
-            headers: {"Authorization": `Bearer ${userToken}`}
+            headers: { "Authorization": `Bearer ${userToken}` }
           });
-          if(res.ok){
+          if (res.ok) {
             showToast("Agendamento confirmado!", "success");
             listarAgendamentos(); // atualiza a lista
           } else {
             showToast("Erro ao confirmar", "error");
           }
-        } catch(e){
+        } catch (e) {
           console.error(e);
           showToast("Erro ao confirmar", "error");
         }
@@ -348,6 +348,7 @@ function renderAgendamentos() {
 
 // Scroll listener
 meusAgendamentos.addEventListener("scroll", renderAgendamentos);
+
 
 
 
@@ -481,6 +482,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
