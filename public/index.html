@@ -327,8 +327,9 @@ form.addEventListener('submit', async (e)=>{
   form.reset(); 
   listarAgendamentos(); 
 } else { 
-  errorMsg.textContent = result.msg || 'Erro ao agendar'; 
-  errorMsg.style.display = 'block'; 
+    errorMsg.textContent = result.msg || 'Erro ao agendar'; 
+    errorMsg.style.display = 'block';
+  setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
 }
   } catch(err){ 
     console.error(err); 
@@ -393,6 +394,7 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
 
