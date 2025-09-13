@@ -168,6 +168,8 @@
     </div>
 
 </div>
+<!-- Container para toasts -->
+<div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -288,7 +290,7 @@ function renderAgendamentos(){
       btn.addEventListener("click", async ()=>{
         try{
           const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
-          if(res.ok){ listarAgendamentos(); showToast("success","Agendamento confirmado!"); }
+          if(res.ok){ listarAgendamentos(); showToast("Agendamento confirmado!", "success"); }
         } catch(e){ console.error(e); showToast("error","Erro ao confirmar"); }
       });
     }
@@ -429,6 +431,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
