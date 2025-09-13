@@ -82,12 +82,14 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
 
   if (error) throw error;
 
+  // se for reagendar o próprio agendamento, libera
   if (ignoreId) {
-    return agendamentos.every(a => a.id === ignoreId); // só bloqueia se for outro cliente
+    return agendamentos.every(a => a.id === ignoreId);
   }
 
   return agendamentos.length === 0;
 }
+
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -265,4 +267,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
