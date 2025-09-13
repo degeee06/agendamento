@@ -180,18 +180,66 @@ const pathParts = window.location.pathname.split('/');
 const cliente = pathParts[1] || '';
 
 function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+<!-- Tabs Dias da Semana -->
+<div id="diasTabs" style="display:none;" class="flex gap-2 mb-6" data-aos="fade-up">
+  <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-purple-600">Segunda</button>
+  <button data-dia="2" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Terça</button>
+  <button data-dia="3" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Quarta</button>
+  <button data-dia="4" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Quinta</button>
+  <button data-dia="5" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Sexta</button>
+  <button data-dia="6" class="tab-dia px-4 py-2 rounded-lg bg-white/10">Sábado</button>
+</div>
+
+let diaSelecionado = 1; // Segunda por padrão
 
 function renderAgendamentos(){
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
+
   const filtrados = agendamentosCache
     .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
                  (filtroStatus ? a.status === filtroStatus : true))
+    .filter(a => {
+      const dia = new Date(`${a.data}T${a.horario}`).getDay();
+      return dia === diaSelecionado;
+    })
     .sort((a,b) => {
-  const dateA = new Date(`${a.data}T${a.horario}`);
-  const dateB = new Date(`${b.data}T${b.horario}`);
-  return dateA - dateB;
-});
+      const dateA = new Date(`${a.data}T${a.horario}`);
+      const dateB = new Date(`${b.data}T${b.horario}`);
+      return dateA - dateB;
+    });
+
+  meusAgendamentos.innerHTML = "";
+  if(filtrados.length === 0){ 
+    meusAgendamentos.textContent="Nenhum agendamento."; 
+    return; 
+  }
+
+  filtrados.forEach(a=>{
+    const div = document.createElement("div");
+    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
+    div.innerHTML = `
+      <strong>${formatData(a.data)} ${a.horario}</strong>
+      <div><strong>Nome:</strong> ${a.nome}</div>
+      <div><strong>Email:</strong> ${a.email}</div>
+      <div><strong>Telefone:</strong> ${a.telefone}</div>
+      <div><strong>Status:</strong> ${a.status}</div>
+      ${!a.confirmado?`<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>`:""}
+    `;
+    meusAgendamentos.appendChild(div);
+
+    const btn = div.querySelector("button");
+    if(btn){
+      btn.addEventListener("click", async ()=>{
+        try{
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST", headers:{"Authorization":`Bearer ${userToken}`}});
+          if(res.ok){ listarAgendamentos(); }
+        } catch(e){ console.error(e); }
+      });
+    }
+  });
+}
+
 
 
   meusAgendamentos.innerHTML = "";
@@ -314,11 +362,35 @@ exportPDFBtn.addEventListener("click", ()=>{
   });
   doc.save("agendamentos.pdf");
 });
+// Tabs Dias da Semana
+document.querySelectorAll(".tab-dia").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab-dia").forEach(b=>b.classList.remove("bg-purple-600","active"));
+    btn.classList.add("bg-purple-600","active");
+    diaSelecionado = parseInt(btn.dataset.dia);
+    renderAgendamentos();
+  });
+});
+
+// Mostrar tabs quando logar
+async function listarAgendamentos(){
+  if(!userToken) return;
+  try {
+    const res = await fetch(`/meus-agendamentos/${cliente}`, { headers: {"Authorization":`Bearer ${userToken}`} });
+    const { agendamentos } = await res.json();
+    agendamentosCache = agendamentos;
+    meusAgendamentos.style.display = 'block';
+    document.getElementById('filtersSection').style.display = 'block';
+    document.getElementById('diasTabs').style.display = 'flex';
+    renderAgendamentos();
+  } catch(e){ console.error(e); }
+}
 
 AOS.init({ duration: 800, easing: 'ease-in-out', once: true });
 feather.replace();
 </script>
 </body>
 </html>
+
 
 
