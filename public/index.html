@@ -241,19 +241,26 @@ function renderAgendamentos(){
   });
 }
 
+// Mostrar tabs quando logar
 async function listarAgendamentos(){
   if(!userToken) return;
   try {
-    const res = await fetch(`/meus-agendamentos/${cliente}`, { headers: {"Authorization":`Bearer ${userToken}`} });
+    const res = await fetch(`/meus-agendamentos/${cliente}`, {
+      headers: {"Authorization":`Bearer ${userToken}`}
+    });
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
+
     meusAgendamentos.style.display = 'block';
     document.getElementById('filtersSection').style.display = 'block';
     document.getElementById('diasTabs').style.display = 'flex';
+
+    // inicializa as tabs só depois que elas aparecem
+    initTabsDias();
+
     renderAgendamentos();
   } catch(e){ console.error(e); }
 }
-
 // Login
 loginBtn.addEventListener('click', async () => {
   errorMsg.style.display='none';
@@ -304,14 +311,26 @@ searchInput.addEventListener("input", renderAgendamentos);
 statusFilter.addEventListener("change", renderAgendamentos);
 
 // Tabs Dias da Semana
-document.querySelectorAll(".tab-dia").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    document.querySelectorAll(".tab-dia").forEach(b=>b.classList.remove("bg-purple-600","active"));
-    btn.classList.add("bg-purple-600","active");
-    diaSelecionado = parseInt(btn.dataset.dia);
-    renderAgendamentos();
+function initTabsDias() {
+  const tabs = document.querySelectorAll(".tab-dia");
+  tabs.forEach(btn => {
+    btn.addEventListener("click", () => {
+      // remover destaque das outras abas
+      tabs.forEach(b => b.classList.remove("bg-purple-600","active"));
+      tabs.forEach(b => b.classList.add("bg-white/10"));
+
+      // destacar a aba clicada
+      btn.classList.remove("bg-white/10");
+      btn.classList.add("bg-purple-600","active");
+
+      // atualizar dia selecionado
+      diaSelecionado = parseInt(btn.dataset.dia);
+
+      // renderizar novamente
+      renderAgendamentos();
+    });
   });
-});
+}
 
 // Exportações
 exportCSVBtn.addEventListener("click", ()=>{
@@ -342,3 +361,4 @@ feather.replace();
 </script>
 </body>
 </html>
+
