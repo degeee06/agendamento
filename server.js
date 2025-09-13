@@ -149,11 +149,13 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
+    // ✅ Aqui: ignora agendamentos cancelados
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("horario")
       .eq("cliente", cliente)
-      .eq("data", req.params.data);
+      .eq("data", req.params.data)
+      .neq("status", "cancelado");
 
     if (error) return res.status(500).json({ msg: "Erro Supabase" });
 
@@ -164,6 +166,7 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // Confirmar
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -266,6 +269,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
