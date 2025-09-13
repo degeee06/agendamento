@@ -91,6 +91,94 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+
+// ---------------- Reagendar ----------------
+app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente)
+      return res.status(403).json({ msg: "Acesso negado" });
+
+    const { id } = req.params;
+    const { novaData, novoHorario } = req.body;
+
+    if (!novaData || !novoHorario)
+      return res.status(400).json({ msg: "Nova data e horário obrigatórios" });
+
+    // Busca o agendamento original
+    const { data: agendamento, error: errorGet } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .single();
+
+    if (errorGet || !agendamento)
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Marca o antigo como reagendado
+    const { error: errorUpdate } = await supabase
+      .from("agendamentos")
+      .update({ status: "reagendado" })
+      .eq("id", id);
+
+    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
+
+    // Verifica se o novo horário já está ocupado
+    const { data: ocupados, error: errorCheck } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .eq("data", novaData)
+      .eq("horario", novoHorario)
+      .eq("status", "pendente");
+
+    if (errorCheck) return res.status(500).json({ msg: "Erro Supabase" });
+    if (ocupados.length > 0)
+      return res.status(400).json({ msg: "Horário indisponível" });
+
+    // Cria um novo agendamento com os dados atualizados
+    const novoAgendamento = {
+      cliente,
+      data: novaData,
+      horario: novoHorario,
+      status: "pendente",
+      confirmado: false
+    };
+
+    const { data: novo, error: errorInsert } = await supabase
+      .from("agendamentos")
+      .insert([novoAgendamento])
+      .select()
+      .single();
+
+    if (errorInsert) return res.status(500).json({ msg: "Erro ao criar novo agendamento" });
+
+    // Atualiza a planilha com apenas o registro atual
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(novo));
+
+    // Remove registros antigos do mesmo cliente que já foram reagendados
+    const rows = await sheet.getRows();
+    for (const r of rows) {
+      if (r.id === id) { // remove a linha antiga
+        await r.delete();
+      }
+    }
+
+    // Adiciona o novo agendamento na planilha
+    await sheet.addRow(novo);
+
+    res.json({ msg: "✅ Reagendamento realizado com sucesso", agendamento: novo });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "❌ Erro interno" });
+  }
+});
+
+
+
 // Agendar
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -215,3 +303,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
