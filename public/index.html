@@ -11,10 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
     .glass-card {
-        background: rgba(0, 0, 50, 0.4); /* azul escuro translúcido */
-        backdrop-filter: blur(10px);
-        background: linear-gradient(135deg, rgba(0,0,50,0.3), rgba(0,0,70,0.3));
-
+        background: linear-gradient(135deg, rgba(30,40,60,0.3), rgba(50,60,80,0.3));
         border: 1px solid rgba(255,255,255,0.1);
         backdrop-filter: blur(12px);
     }
@@ -22,6 +19,9 @@
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 </head>
+<body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans">
+<div class="container mx-auto px-4 py-12 max-w-4xl">
+
 <body class="min-h-screen bg-gradient-to-br from-blue-800 to-blue-900 text-white font-sans">
 <div class="container mx-auto px-4 py-12 max-w-4xl">
 
@@ -371,6 +371,7 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
 
 
