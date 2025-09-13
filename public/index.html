@@ -288,7 +288,7 @@ function renderAgendamentos(agendamentos) {
   const lista = document.getElementById("agendamentosLista");
   lista.innerHTML = "";
 
-  if (agendamentos.length === 0) {
+  if (!agendamentos || agendamentos.length === 0) {
     lista.innerHTML = "<p>Nenhum agendamento encontrado.</p>";
     return;
   }
@@ -309,7 +309,7 @@ function renderAgendamentos(agendamentos) {
       </div>
     `;
 
-    // Botão confirmar
+    // ---- manter o Confirmar do jeito que já tinha ----
     const btnConfirmar = div.querySelector(".btn-confirmar");
     if (btnConfirmar) {
       btnConfirmar.addEventListener("click", async () => {
@@ -330,6 +330,33 @@ function renderAgendamentos(agendamentos) {
         }
       });
     }
+
+    // ---- novo botão Cancelar (não mexe no resto) ----
+    const btnCancelar = div.querySelector(".btn-cancelar");
+    if (btnCancelar) {
+      btnCancelar.addEventListener("click", async () => {
+        try {
+          const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${userToken}` }
+          });
+          if (res.ok) {
+            showToast("Agendamento cancelado!", "info");
+            listarAgendamentos();
+          } else {
+            showToast("Erro ao cancelar", "error");
+          }
+        } catch (e) {
+          console.error(e);
+          showToast("Erro ao cancelar", "error");
+        }
+      });
+    }
+
+    lista.appendChild(div);
+  });
+}
+
 
     // Botão cancelar
     const btnCancelar = div.querySelector(".btn-cancelar");
@@ -489,6 +516,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
