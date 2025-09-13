@@ -21,6 +21,19 @@ const planilhasClientes = {
 };
 const clientesValidos = Object.keys(planilhasClientes);
 
+
+// Exemplo Node.js/Express
+const agendamentosExistentes = await db.query(
+  "SELECT * FROM agendamentos WHERE data = ? AND horario = ? AND status != 'cancelado'",
+  [data.Data, data.Horario]
+);
+
+if (agendamentosExistentes.length > 0) {
+  return res.status(400).json({ error: "Horário ocupado" });
+}
+
+
+
 // Google Service Account
 let creds;
 try {
@@ -262,6 +275,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
