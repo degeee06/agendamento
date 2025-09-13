@@ -22,10 +22,8 @@
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans">
-<div class="container mx-auto px-4 py-12 max-w-4xl">
-
-
+<body class="min-h-screen bg-gradient-to-br from-slate-700 to-slate-900 text-white font-sans flex items-center justify-center">
+  <div class="container mx-auto px-4 max-w-md">
     <!-- Header -->
     <header class="text-center mb-12" data-aos="fade-down">
         <h1 class="text-4xl font-bold mb-2">Agendamento Moderno</h1>
@@ -55,6 +53,15 @@
             </button>
         </div>
     </div>
+</body>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    feather.replace();
+    AOS.init();
+  });
+</script>
+
 
     <!-- Appointment Form (Hidden Initially) -->
     <form id="agendamentoForm" style="display:none;" class="glass-card rounded-xl p-8 mb-8 shadow-xl hover:scale-105 transition-transform" data-aos="fade-up">
@@ -389,6 +396,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 </div>
 </body>
 </html>
+
 
 
 
