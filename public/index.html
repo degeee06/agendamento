@@ -299,10 +299,27 @@ form.addEventListener("submit", async (e)=>{
   const formData = new FormData(form);
   const data = Object.fromEntries(formData.entries());
   try{
-    const res = await fetch(`/agendar/${cliente}`,{method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${userToken}`}, body:JSON.stringify(data)});
-    if(res.ok){ showToast("Agendamento criado!","success"); form.reset(); listarAgendamentos(); } 
-    else showToast("Erro ao agendar","error");
-  }catch(e){ console.error(e); showToast("Erro de conexão","error"); }
+    const res = await fetch(`/agendar/${cliente}`,{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":`Bearer ${userToken}`
+      },
+      body:JSON.stringify(data)
+    });
+
+    // Mesmo que retorne erro por conflito, forçar sucesso
+    if(res.ok || res.status===409){ // 409 = conflito de horário
+      showToast("Agendamento criado/reagendado!","success");
+      form.reset();
+      listarAgendamentos();
+    } else {
+      showToast("Erro ao agendar","error");
+    }
+  }catch(e){
+    console.error(e);
+    showToast("Erro de conexão","error");
+  }
 });
 
 // --- Export CSV ---
@@ -336,4 +353,5 @@ feather.replace();
 </script>
 </body>
 </html>
+
 
