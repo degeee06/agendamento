@@ -566,14 +566,15 @@
 }
 
 
-        loginBtn.addEventListener('click', async () => {
+        // ---------------- LOGIN ----------------
+loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value;
     const senha = document.getElementById('senha').value;
     if (!email || !senha) {
         showToast("Preencha email e senha", "warning");
         return;
     }
-
+    
     try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
         if (error) { 
@@ -585,17 +586,16 @@
         loginSection.style.display = 'none';
         form.style.display = 'block';
 
-        // ------------------- Seleciona automaticamente o dia atual -------------------
-        const hoje = new Date();
-        diaSelecionado = hoje.getDay(); // 0 = domingo ... 6 = sábado
-        if (diaSelecionado === 0) diaSelecionado = 1; // se não quiser domingo, pula pra segunda
+        // ------------------- Seleciona o dia atual -------------------
+        let hoje = new Date().getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+        if (hoje === 0) hoje = 1; // se não usar domingo, cai pra segunda
 
-        // Ativa visualmente a aba correspondente
-        document.querySelectorAll(".tab-dia").forEach((btn, index) => {
-            btn.classList.toggle("active", index === diaSelecionado);
-        });
+        diaSelecionado = hoje;
 
-        listarAgendamentos(); // já carrega agendamentos do dia atual
+        // Ativa a aba correspondente no front
+        const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
+        if (btnHoje) btnHoje.click();
+
         showToast("Login realizado com sucesso!", "success");
     } catch (e) {
         console.error(e);
@@ -757,9 +757,6 @@
     </script>
 </body>
 </html>
-
-
-
 
 
 
