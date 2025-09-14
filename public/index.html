@@ -516,14 +516,15 @@
                         if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
 
                         try {
-                            const res = await fetch(`/reagendar/${cliente}/${a.id}`,{
-                                method: "POST",
-                                headers: {
-                                    "Authorization":`Bearer ${userToken}`,
-                                    "Content-Type":"application/json"
-                                },
-                                body: JSON.stringify({novaData, novoHorario})
-                            });
+                            const res = await fetch(`/reagendar/${cliente}/${a._rowNumber}`, {
+                         method: "POST",
+                         headers: { 
+                         "Authorization": `Bearer ${userToken}`,
+                          "Content-Type": "application/json"
+                   },
+                          body: JSON.stringify({ novaData, novoHorario })
+                              });
+
                             if(res.ok){
                                 showToast("Agendamento reagendado!","success");
                                 listarAgendamentos();
@@ -739,6 +740,7 @@
     </script>
 </body>
 </html>
+
 
 
 
