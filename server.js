@@ -81,91 +81,40 @@ app.get("/:cliente", (req, res) => {
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente)
-      return res.status(403).json({ msg: "Acesso negado" });
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const { Nome, Email, Telefone, Data, Horario } = req.body;
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // Verifica se já existe agendamento no mesmo horário/data
-    const { data: existente } = await supabase
+    // Cria novo agendamento
+    const novoAgendamento = {
+      cliente,
+      nome: Nome,
+      email: Email,
+      telefone: Telefone,
+      data: Data,
+      horario: Horario,
+      status: "pendente",
+      confirmado: false
+    };
+
+    const { data, error } = await supabase
       .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", Data)
-      .eq("horario", Horario)
-      .in("status", ["pendente", "confirmado"])
-      .single()
-      .catch(() => ({ data: null }));
+      .insert([novoAgendamento])
+      .select()
+      .single();
+    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    let agendamentoFinal;
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(data));
+    await sheet.addRow(data);
 
-    if (existente) {
-      // Substitui o agendamento existente
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .update({
-          nome: Nome,
-          email: Email,
-          telefone: Telefone,
-          status: "pendente",
-          confirmado: false
-        })
-        .eq("id", existente.id)
-        .select()
-        .single();
-
-      if (error) return res.status(500).json({ msg: "Erro ao atualizar agendamento existente" });
-      agendamentoFinal = data;
-
-      // Atualiza Google Sheets
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(data));
-      const rows = await sheet.getRows();
-      const row = rows.find(r => r.id == existente.id);
-      if (row) {
-        row.nome = Nome;
-        row.email = Email;
-        row.telefone = Telefone;
-        row.status = "pendente";
-        row.confirmado = false;
-        await row.save();
-      } else {
-        await sheet.addRow(data);
-      }
-
-    } else {
-      // Cria novo agendamento
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .insert([{
-          cliente,
-          nome: Nome,
-          email: Email,
-          telefone: Telefone,
-          data: Data,
-          horario: Horario,
-          status: "pendente",
-          confirmado: false
-        }])
-        .select()
-        .single();
-
-      if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
-      agendamentoFinal = data;
-
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(data));
-      await sheet.addRow(data);
-    }
-
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: agendamentoFinal });
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
 
   } catch (err) {
-    console.error(err);
+    console.error("Erro interno na rota /agendar:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
@@ -189,91 +138,46 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .single();
     if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Marca o agendamento original como "reagendado"
-    const { error: errorUpdate } = await supabase
+    // Marca original como reagendado
+    await supabase
       .from("agendamentos")
       .update({ status: "reagendado" })
       .eq("id", id);
-    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar agendamento original" });
 
-    // Verifica se já existe agendamento no mesmo horário/data
-    const { data: existente } = await supabase
+    // Cria novo agendamento
+    const novoAgendamento = {
+      cliente,
+      nome: agendamento.nome,
+      email: agendamento.email,
+      telefone: agendamento.telefone,
+      data: novaData,
+      horario: novoHorario,
+      status: "pendente",
+      confirmado: false
+    };
+
+    const { data: novo, error: errorInsert } = await supabase
       .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", novaData)
-      .eq("horario", novoHorario)
-      .in("status", ["pendente", "confirmado"])
-      .single()
-      .catch(() => ({ data: null }));
+      .insert([novoAgendamento])
+      .select()
+      .single();
+    if (errorInsert) return res.status(500).json({ msg: "Erro ao criar novo agendamento" });
 
-    let novoAgendamentoFinal;
-
-    if (existente) {
-      // Substitui o existente
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .update({
-          nome: agendamento.nome,
-          email: agendamento.email,
-          telefone: agendamento.telefone,
-          status: "pendente",
-          confirmado: false
-        })
-        .eq("id", existente.id)
-        .select()
-        .single();
-
-      if (error) return res.status(500).json({ msg: "Erro ao atualizar agendamento existente" });
-      novoAgendamentoFinal = data;
-
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(data));
-      const rows = await sheet.getRows();
-      const row = rows.find(r => r.id == existente.id);
-      if (row) {
-        row.nome = agendamento.nome;
-        row.email = agendamento.email;
-        row.telefone = agendamento.telefone;
-        row.status = "pendente";
-        row.confirmado = false;
-        await row.save();
-      } else {
-        await sheet.addRow(data);
-      }
-
-    } else {
-      // Cria novo reagendamento
-      const novoAgendamento = {
-        cliente,
-        nome: agendamento.nome,
-        email: agendamento.email,
-        telefone: agendamento.telefone,
-        data: novaData,
-        horario: novoHorario,
-        status: "pendente",
-        confirmado: false
-      };
-
-      const { data: novo, error: errorInsert } = await supabase
-        .from("agendamentos")
-        .insert([novoAgendamento])
-        .select()
-        .single();
-      if (errorInsert) return res.status(500).json({ msg: "Erro ao criar novo agendamento" });
-      novoAgendamentoFinal = novo;
-
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(novo));
-      await sheet.addRow(novo);
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(novo));
+    const rows = await sheet.getRows();
+    const rowOriginal = rows.find(r => r.id == agendamento.id);
+    if (rowOriginal) {
+      rowOriginal.status = "reagendado";
+      await rowOriginal.save();
     }
+    await sheet.addRow(novo);
 
-    res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novoAgendamentoFinal });
+    res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
 
   } catch (err) {
-    console.error(err);
+    console.error("Erro interno na rota /reagendar:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
