@@ -346,31 +346,33 @@ function renderAgendamentos() {
     btnContainer.appendChild(reBtn);
 
     // Cancelar
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancelar";
-    cancelBtn.className = "px-3 py-1 bg-red-600 rounded text-white";
+    // Cancelar
+const cancelBtn = document.createElement("button");
+cancelBtn.textContent = "Cancelar";
+cancelBtn.className = "px-3 py-1 bg-red-600 rounded text-white";
 
-    cancelBtn.addEventListener("click", async () => {
-      if(!confirm("Deseja realmente cancelar este agendamento?")) return;
+cancelBtn.addEventListener("click", async () => {
+  if(!confirm("Deseja realmente cancelar este agendamento?")) return;
 
-      try {
-        const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${userToken}` }
-        });
-        if(res.ok){
-          showToast("Agendamento cancelado!", "success");
-          listarAgendamentos();
-        } else {
-          showToast("Erro ao cancelar", "error");
-        }
-      } catch(e){
-        console.error(e);
-        showToast("Erro ao cancelar", "error");
-      }
+  try {
+    const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${userToken}` }
     });
+    if(res.ok){
+      showToast("Agendamento cancelado!", "success");
+      renderAgendamentos(); // ✅ aqui corrigido
+    } else {
+      showToast("Erro ao cancelar", "error");
+    }
+  } catch(e){
+    console.error(e);
+    showToast("Erro ao cancelar", "error");
+  }
+});
 
-    btnContainer.appendChild(cancelBtn);
+btnContainer.appendChild(cancelBtn);
+
     div.appendChild(btnContainer);
     meusAgendamentos.appendChild(div);
   });
@@ -425,6 +427,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
