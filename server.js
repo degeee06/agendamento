@@ -153,6 +153,54 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   }
 });
 
+
+// ---------------- Cancelar ----------------
+app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { id } = req.params;
+
+    // Busca agendamento
+    const { data: agendamento, error: errorGet } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .single();
+
+    if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Atualiza status para cancelado
+    const { data, error: errorUpdate } = await supabase
+      .from("agendamentos")
+      .update({ status: "cancelado" })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (errorUpdate) return res.status(500).json({ msg: "Erro ao cancelar agendamento" });
+
+    // Atualiza Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    const rows = await sheet.getRows();
+    const row = rows.find(r => r.id == id);
+    if (row) {
+      row.status = "cancelado";
+      await row.save();
+    }
+
+    res.json({ msg: "Agendamento cancelado com sucesso!", agendamento: data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+
+
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
@@ -270,3 +318,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
