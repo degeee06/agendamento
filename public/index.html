@@ -284,7 +284,7 @@ scrollContainer.addEventListener('mousemove', (e) => {
 
 
 
-function renderAgendamentos(lista) {
+function renderAgendamentos(lista, cliente) {
   const container = document.getElementById("agendamentos");
   container.innerHTML = "";
 
@@ -301,7 +301,7 @@ function renderAgendamentos(lista) {
       <p>Status: <span class="font-bold">${a.status}</span></p>
       <div class="mt-2 space-x-2">
         ${
-          a.status === "pendente" && !a.confirmado
+          a.status === "pendente"
             ? `<button data-id="${a.id}" class="px-3 py-1 bg-green-600 rounded text-white confirmarBtn">Confirmar</button>`
             : ""
         }
@@ -546,6 +546,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
