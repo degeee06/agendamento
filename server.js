@@ -95,6 +95,7 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -105,10 +106,9 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-     const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
-     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
-
-
+    // verifica disponibilidade usando os valores corretos
+    const livre = await horarioDisponivel(cliente, Data, Horario);
+    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     const { data, error } = await supabase
       .from("agendamentos")
@@ -137,6 +137,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -323,6 +324,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
