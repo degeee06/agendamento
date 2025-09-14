@@ -403,19 +403,30 @@
                 if(!a.confirmado) {
                     const btn = document.createElement("button");
                     btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                    btn.className = "px-3 py-1.5 text-sm rounded-lg bg-green-600 hover:bg-green-700 text-white flex items-center gap-1";
+                    btn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
                     btn.addEventListener("click", async () => {
+                        btn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Confirmando...`;
+                        feather.replace();
                         try {
                             const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
                                 method: "POST",
                                 headers: { "Authorization": `Bearer ${userToken}` }
                             });
                             if (res.ok) {
-                                showToast("Agendamento confirmado!", "success");
-                                listarAgendamentos();
-                            } else showToast("Erro ao confirmar", "error");
+                                btn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+                                setTimeout(() => {
+                                    showToast("Agendamento confirmado!", "success");
+                                    listarAgendamentos();
+                                }, 300);
+                            } else {
+                                btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+                                feather.replace();
+                                showToast("Erro ao confirmar", "error");
+                            }
                         } catch (e) {
                             console.error(e);
+                            btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+                            feather.replace();
                             showToast("Erro ao confirmar", "error");
                         }
                     });
@@ -425,29 +436,38 @@
                 // Reagendar
                 const reBtn = document.createElement("button");
                 reBtn.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-                reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1";
+                reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
 
                 // Cancelar
                 const cancelBtn = document.createElement("button");
                 cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-                cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white flex items-center gap-1";
+                cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
                 cancelBtn.addEventListener("click", async () => {
                     if(!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
                     
+                    cancelBtn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Cancelando...`;
+                    feather.replace();
                     try {
                         const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
                             method: "POST",
                             headers: { "Authorization": `Bearer ${userToken}` }
                         });
                         if (res.ok) {
-                            showToast("Agendamento cancelado!", "success");
-                            listarAgendamentos();
+                            cancelBtn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+                            setTimeout(() => {
+                                showToast("Agendamento cancelado!", "success");
+                                listarAgendamentos();
+                            }, 300);
                         } else {
+                            cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                            feather.replace();
                             const errorData = await res.json();
                             showToast(errorData.message || "Erro ao cancelar", "error");
                         }
                     } catch (e) {
                         console.error(e);
+                        cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                        feather.replace();
                         showToast("Erro ao cancelar agendamento", "error");
                     }
                 });
@@ -515,6 +535,7 @@
                     });
                 });
                 btnContainer.appendChild(reBtn);
+                feather.replace();
 
                 div.appendChild(btnContainer);
                 meusAgendamentos.appendChild(div);
@@ -723,34 +744,3 @@
 </html>
 
 
-Key improvements made:
-
-1. **Visual Design**:
-   - Added a beautiful gradient to the header and buttons
-   - Improved glassmorphism effect with better blur and transparency
-   - Added subtle animations and transitions
-   - Better spacing and typography with Inter font
-
-2. **UI Components**:
-   - Enhanced form inputs with icons and better styling
-   - Improved appointment cards with avatar placeholders and status badges
-   - Better toast notifications with gradient backgrounds
-   - More elegant tabs for days of the week
-
-3. **Functionality**:
-   - Added input validation for login and appointment forms
-   - Improved error handling with more descriptive messages
-   - Enhanced PDF export with proper formatting and styling
-   - Better CSV export with validation
-
-4. **Responsiveness**:
-   - Improved mobile layout for all components
-   - Better handling of overflow content
-   - Responsive spacing and sizing
-
-5. **Accessibility**:
-   - Better contrast for text
-   - Proper labels for form inputs
-   - Focus states for interactive elements
-
-The design is now more polished, professional, and user-friendly while maintaining all the original functionality.
