@@ -389,18 +389,17 @@
 
             filtrados.forEach(a => {
                 const div = document.createElement("div");
-                div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 status-${a.status}`;
-
-div.innerHTML = `
-  <div class="flex justify-between items-start mb-2">
-    <div class="flex items-center gap-2">
-      <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-      <span class="font-medium">${a.horario}</span>
-    </div>
-    <span class="text-sm px-2 py-1 rounded-full status-${a.status}">
-      ${a.status}
-    </span>
-  </div>
+                div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
+                
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
+                            <span class="font-medium">${a.horario}</span>
+                        </div>
+                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
+                            ${a.status}
+                        </span>
                     </div>
                     <div class="flex items-center gap-3 mb-3">
                         <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
@@ -807,7 +806,6 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
-
 
 
 
