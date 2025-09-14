@@ -570,15 +570,15 @@
 loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value;
     const senha = document.getElementById('senha').value;
-    if (!email || !senha) {
+    if(!email || !senha) {
         showToast("Preencha email e senha", "warning");
         return;
     }
     
     try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-        if (error) { 
-            showToast(error.message, "error"); 
+        if(error){ 
+            showToast(error.message,"error"); 
             return; 
         }
 
@@ -586,18 +586,25 @@ loginBtn.addEventListener('click', async () => {
         loginSection.style.display = 'none';
         form.style.display = 'block';
 
-        // ------------------- Seleciona o dia atual -------------------
-        let hoje = new Date().getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
-        if (hoje === 0) hoje = 1; // se não usar domingo, cai pra segunda
+        listarAgendamentos().then(() => {
+            // ------------------- Seleciona o dia atual -------------------
+            let hoje = new Date().getDay(); // 0 = Domingo ... 6 = Sábado
+            if (hoje === 0) {
+                hoje = 1; // se for domingo, pula pra segunda
+            }
 
-        diaSelecionado = hoje;
-
-        // Ativa a aba correspondente no front
-        const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-        if (btnHoje) btnHoje.click();
+            const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
+            if (btnHoje) {
+                btnHoje.click();
+            } else {
+                // fallback: sempre garante segunda
+                document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
+            }
+        });
 
         showToast("Login realizado com sucesso!", "success");
-    } catch (e) {
+
+    } catch(e) {
         console.error(e);
         showToast("Erro ao fazer login", "error");
     }
@@ -757,6 +764,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
