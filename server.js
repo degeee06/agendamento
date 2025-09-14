@@ -106,9 +106,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // verifica disponibilidade usando os valores corretos
-    const livre = await horarioDisponivel(cliente, Data, Horario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     const { data, error } = await supabase
       .from("agendamentos")
@@ -324,6 +321,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
