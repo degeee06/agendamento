@@ -276,29 +276,57 @@ function renderAgendamentos() {
       btnContainer.appendChild(confirmBtn);
 
       // Reagendar
-      const reBtn=document.createElement("button");
-      reBtn.textContent="Reagendar";
-      reBtn.className="px-3 py-1 bg-yellow-500 rounded text-white";
-      reBtn.addEventListener("click",async ()=>{
-        const novaData=prompt("Nova data (YYYY-MM-DD):");
-        const novoHorario=prompt("Novo horário (HH:MM):");
-        if(!novaData||!novoHorario) return;
-        try{
-          const res=await fetch(`/reagendar/${cliente}/${a.id}`,{
-            method:"POST",
-            headers:{"Authorization":`Bearer ${userToken}`,"Content-Type":"application/json"},
-            body:JSON.stringify({novaData,novoHorario})
-          });
-          if(res.ok){ showToast("Agendamento reagendado!","success"); listarAgendamentos(); }
-          else showToast("Erro ao reagendar","error");
-        } catch(e){ console.error(e); showToast("Erro ao reagendar","error"); }
-      });
-      btnContainer.appendChild(reBtn);
-    }
+const reBtn = document.createElement("button");
+reBtn.textContent = "Reagendar";
+reBtn.className = "px-3 py-1 bg-yellow-500 rounded text-white";
 
-    meusAgendamentos.appendChild(div);
+reBtn.addEventListener("click", () => {
+  // Checa se já existe o mini-form
+  if(div.querySelector(".reagendar-form")) return;
+
+  // Cria mini-form
+  const miniForm = document.createElement("div");
+  miniForm.className = "reagendar-form mt-2 flex flex-col gap-2 p-2 bg-white/10 rounded";
+
+  miniForm.innerHTML = `
+    <input type="date" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
+    <input type="time" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
+    <div class="flex gap-2">
+      <button class="confirmar-mini bg-green-600 text-white px-2 py-1 rounded">Confirmar</button>
+      <button class="cancelar-mini bg-red-600 text-white px-2 py-1 rounded">Cancelar</button>
+    </div>
+  `;
+
+  div.appendChild(miniForm);
+
+  // Cancelar
+  miniForm.querySelector(".cancelar-mini").addEventListener("click", ()=>{
+    miniForm.remove();
   });
-}
+
+  // Confirmar
+  miniForm.querySelector(".confirmar-mini").addEventListener("click", async ()=>{
+    const novaData = miniForm.querySelector('input[type="date"]').value;
+    const novoHorario = miniForm.querySelector('input[type="time"]').value;
+    if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
+
+    try {
+      const res = await fetch(`/reagendar/${cliente}/${a.id}`,{
+        method: "POST",
+        headers: {"Authorization":`Bearer ${userToken}`,"Content-Type":"application/json"},
+        body: JSON.stringify({novaData, novoHorario})
+      });
+      if(res.ok){
+        showToast("Agendamento reagendado!","success");
+        listarAgendamentos();
+      } else showToast("Erro ao reagendar","error");
+    } catch(e){
+      console.error(e);
+      showToast("Erro ao reagendar","error");
+    }
+  });
+});
+btnContainer.appendChild(reBtn);
 
 // ---------------- LISTAR AGENDAMENTOS ----------------
 async function listarAgendamentos(){
@@ -403,6 +431,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
