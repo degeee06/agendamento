@@ -85,7 +85,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
+    const { nome, email, telefone, data, horario } = req.body;
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
@@ -272,6 +272,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
