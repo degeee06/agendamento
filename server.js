@@ -50,6 +50,44 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
+loginBtn.addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+    if (!email || !senha) {
+        showToast("Preencha email e senha", "warning");
+        return;
+    }
+
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+        if (error) { 
+            showToast(error.message, "error"); 
+            return; 
+        }
+
+        userToken = data.session.access_token;
+        loginSection.style.display = 'none';
+        form.style.display = 'block';
+
+        // ------------------- Seleciona automaticamente o dia atual -------------------
+        const hoje = new Date();
+        diaSelecionado = hoje.getDay(); // 0 = domingo ... 6 = sábado
+        if (diaSelecionado === 0) diaSelecionado = 1; // se não quiser domingo, pula pra segunda
+
+        // Ativa visualmente a aba correspondente
+        document.querySelectorAll(".tab-dia").forEach((btn, index) => {
+            btn.classList.toggle("active", index === diaSelecionado);
+        });
+
+        listarAgendamentos(); // já carrega agendamentos do dia atual
+        showToast("Login realizado com sucesso!", "success");
+    } catch (e) {
+        console.error(e);
+        showToast("Erro ao fazer login", "error");
+    }
+});
+
+
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet(cliente) {
   const SPREADSHEET_ID = planilhasClientes[cliente];
@@ -270,6 +308,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
