@@ -284,6 +284,7 @@ scrollContainer.addEventListener('mousemove', (e) => {
 
 
 
+// ---------------- Função para renderizar agendamentos ----------------
 function renderAgendamentos(lista, cliente) {
   const container = document.getElementById("agendamentos");
   container.innerHTML = "";
@@ -304,12 +305,8 @@ function renderAgendamentos(lista, cliente) {
       <div class="mt-2 space-x-2">
         ${
           a.status === "pendente"
-            ? `<button data-id="${a.id}" class="px-3 py-1 bg-green-600 rounded text-white confirmarBtn">Confirmar</button>`
-            : ""
-        }
-        ${
-          a.status === "pendente"
-            ? `<button data-id="${a.id}" class="px-3 py-1 bg-yellow-600 rounded text-white reagendarBtn">Reagendar</button>`
+            ? `<button data-id="${a.id}" class="px-3 py-1 bg-green-600 rounded text-white confirmarBtn">Confirmar</button>
+               <button data-id="${a.id}" class="px-3 py-1 bg-yellow-600 rounded text-white reagendarBtn">Reagendar</button>`
             : ""
         }
       </div>
@@ -318,177 +315,159 @@ function renderAgendamentos(lista, cliente) {
     container.appendChild(div);
   });
 
-  // ✅ recria handlers depois de renderizar
-  document.querySelectorAll(".confirmarBtn").forEach(btn => { /* ... */ });
-  document.querySelectorAll(".reagendarBtn").forEach(btn => { /* ... */ });
-}
-
-
- document.querySelectorAll(".confirmarBtn").forEach(btn => {
-  btn.addEventListener("click", async () => {
-    const id = btn.dataset.id;
-    const res = await fetch(`/confirmar/${cliente}/${id}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${userToken}` }
-    });
-    const result = await res.json();
-    if (res.ok) {
-      showToast("✅ Agendamento confirmado!", "success");
-      listarAgendamentos();
-    } else {
-      showToast(result.msg || "Erro ao confirmar", "error");
-    }
-  });
-});
-
-document.querySelectorAll(".reagendarBtn").forEach(btn => {
-  btn.addEventListener("click", async () => {
-    const id = btn.dataset.id;
-    const novaData = prompt("Informe a nova data (AAAA-MM-DD):");
-    const novoHorario = prompt("Informe o novo horário (HH:MM):");
-    if (!novaData || !novoHorario) return;
-
-    const res = await fetch(`/reagendar/${cliente}/${id}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${userToken}`
-      },
-      body: JSON.stringify({ novaData, novoHorario })
-    });
-    const result = await res.json();
-    if (res.ok) {
-      showToast("✅ Reagendamento feito!", "success");
-      listarAgendamentos();
-    } else {
-      showToast(result.msg || "Erro ao reagendar", "error");
-    }
-  });
-});
-
-
-
-  // Renderiza todos os itens normalmente
-  meusAgendamentos.innerHTML = ""; // limpa o container
-  filtrados.forEach(a => {
-    const div = document.createElement("div");
-    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
-    div.innerHTML = `
-      <strong>${formatData(a.data)} ${a.horario}</strong>
-      <div><strong>Nome:</strong> ${a.nome}</div>
-      <div><strong>Email:</strong> ${a.email}</div>
-      <div><strong>Telefone:</strong> ${a.telefone}</div>
-      <div><strong>Status:</strong> ${a.status}</div>
-      ${!a.confirmado ? `<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>` : ""}
-    `;
-    meusAgendamentos.appendChild(div);
-
-    // Botão confirmar
-    const btn = div.querySelector("button");
-    if (btn) {
-      btn.addEventListener("click", async () => {
-        try {
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${userToken}` }
-          });
-          if (res.ok) {
-            showToast("Agendamento confirmado!", "success");
-            listarAgendamentos(); // atualiza a lista
-          } else {
-            showToast("Erro ao confirmar", "error");
-          }
-        } catch (e) {
-          console.error(e);
-          showToast("Erro ao confirmar", "error");
+  // ✅ Handler Confirmar
+  container.querySelectorAll(".confirmarBtn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      try {
+        const res = await fetch(`/confirmar/${cliente}/${id}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${userToken}` }
+        });
+        const result = await res.json();
+        if (res.ok) {
+          showToast("✅ Agendamento confirmado!", "success");
+          listarAgendamentos();
+        } else {
+          showToast(result.msg || "Erro ao confirmar", "error");
         }
-      });
-    }
+      } catch (e) {
+        console.error(e);
+        showToast("Erro ao confirmar", "error");
+      }
+    });
+  });
+
+  // ✅ Handler Reagendar
+  container.querySelectorAll(".reagendarBtn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const novaData = prompt("Informe a nova data (AAAA-MM-DD):");
+      const novoHorario = prompt("Informe o novo horário (HH:MM):");
+      if (!novaData || !novoHorario) return;
+
+      try {
+        const res = await fetch(`/reagendar/${cliente}/${id}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userToken}`
+          },
+          body: JSON.stringify({ novaData, novoHorario })
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+          showToast("✅ Reagendamento feito!", "success");
+          listarAgendamentos();
+        } else {
+          showToast(result.msg || "Erro ao reagendar", "error");
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Erro ao reagendar", "error");
+      }
+    });
   });
 }
 
-
-
-
-// Mostrar tabs quando logar
-async function listarAgendamentos(){
-  if(!userToken) return;
+// ---------------- Listar agendamentos ----------------
+async function listarAgendamentos() {
+  if (!userToken) return;
   try {
     const res = await fetch(`/meus-agendamentos/${cliente}`, {
-      headers: {"Authorization":`Bearer ${userToken}`}
+      headers: { "Authorization": `Bearer ${userToken}` }
     });
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
 
+    // Exibir seções e tabs
     meusAgendamentos.style.display = 'block';
     document.getElementById('filtersSection').style.display = 'block';
     document.getElementById('diasTabs').style.display = 'flex';
-
     initTabsDias();
 
+    // Renderiza todos os agendamentos
+    renderAgendamentos(agendamentos, cliente);
+
+    // Seleciona aba do dia atual
     let hoje = new Date().getDay(); 
-    if (hoje === 0) hoje = 1; 
+    if (hoje === 0) hoje = 1;
     const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
     if (btnHoje) btnHoje.click();
 
-  } catch(e){ console.error(e); showToast("error","Erro ao listar agendamentos"); }
+  } catch (e) {
+    console.error(e);
+    showToast("error", "Erro ao listar agendamentos");
+  }
 }
 
-// Login
+// ---------------- Login ----------------
 loginBtn.addEventListener('click', async () => {
   const email = document.getElementById('email').value;
   const senha = document.getElementById('senha').value;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ showToast("error",error.message); return; }
+  if (error) { 
+    showToast("error", error.message); 
+    return; 
+  }
+
   userToken = data.session.access_token;
   loginSection.style.display = 'none';
   form.style.display = 'block';
+
   listarAgendamentos();
 });
 
-form.addEventListener('submit', async (e)=>{
+// ---------------- Agendamento via formulário ----------------
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const formData = new FormData(form);
   const dataToSend = {};
-  formData.forEach((v,k)=>dataToSend[k]=v);
+  formData.forEach((v, k) => dataToSend[k] = v);
 
-  try{
+  // ✅ Verifica disponibilidade
+  try {
     const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { 
       headers: { "Authorization": `Bearer ${userToken}` } 
     });
     const result = await check.json();
 
-    if(result.ocupados.includes(dataToSend.Horario)){
-  showToast("Horário não disponível", "warning"); // ✅ nova mensagem
-  return;
-}
+    if (result.ocupados.includes(dataToSend.Horario)) {
+      showToast("Horário não disponível", "warning");
+      return;
+    }
 
-  } catch(err){ 
+  } catch (err) { 
     console.error(err); 
-    showToast("error","Erro ao verificar horários");
+    showToast("error", "Erro ao verificar horários");
     return;
   }
 
-  try{
+  // ✅ Salva agendamento
+  try {
     const response = await fetch(`/agendar/${cliente}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+      headers: { 
+        'Content-Type': 'application/json', 
+        "Authorization": `Bearer ${userToken}` 
+      },
       body: JSON.stringify(dataToSend)
     });
     const result = await response.json();
 
-    if(response.ok){ 
-  showToast("Agendado com sucesso!", "success");  // ✅ nova mensagem
-  form.reset(); 
-  listarAgendamentos(); 
-} else { 
-  showToast("Horário ocupado", "error");
-}
+    if (response.ok) { 
+      showToast("Agendado com sucesso!", "success");
+      form.reset(); 
+      listarAgendamentos(); 
+    } else { 
+      showToast(result.msg || "Horário ocupado", "error");
+    }
 
-  } catch(err){ 
+  } catch (err) { 
     console.error(err); 
-    showToast("error","Erro ao enviar agendamento");
+    showToast("error", "Erro ao enviar agendamento");
   }
 });
 
@@ -540,6 +519,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
