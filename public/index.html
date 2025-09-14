@@ -545,21 +545,24 @@
 
         // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
-            if(!userToken) return;
-            try{
-                const res=await fetch(`/meus-agendamentos/${cliente}`,{headers:{"Authorization":`Bearer ${userToken}`}});
-                const { agendamentos } = await res.json();
-                agendamentosCache = agendamentos;
-                meusAgendamentos.style.display='block';
-                document.getElementById('filtersSection').style.display='block';
-                document.getElementById('diasTabs').style.display='flex';
-                initTabsDias();
-                let hoje=new Date().getDay();
-                if(hoje===0) hoje=1;
-                const btnHoje=document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-                if(btnHoje) btnHoje.click();
-            } catch(e){ console.error(e); showToast("Erro ao listar agendamentos","error"); }
-        }
+    if(!userToken) return;
+    try{
+        const res = await fetch(`/meus-agendamentos/${cliente}`, {
+            headers: { "Authorization": `Bearer ${userToken}` }
+        });
+        const { agendamentos } = await res.json();
+        agendamentosCache = agendamentos;
+        meusAgendamentos.style.display = 'block';
+        document.getElementById('filtersSection').style.display = 'block';
+        document.getElementById('diasTabs').style.display = 'flex';
+        initTabsDias();
+        renderAgendamentos(); // só atualiza a lista, sem alterar o dia
+    } catch(e){
+        console.error(e);
+        showToast("Erro ao listar agendamentos","error");
+    }
+}
+
 
         // ---------------- LOGIN ----------------
         loginBtn.addEventListener('click', async ()=>{
@@ -742,4 +745,5 @@
     </script>
 </body>
 </html>
+
 
