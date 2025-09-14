@@ -230,6 +230,7 @@
                         <option value="">Todos os status</option>
                         <option value="pendente">Pendente</option>
                         <option value="confirmado">Confirmado</option>
+                        <option value="cancelado">Cancelado</option>
                     </select>
                 </div>
                 <div class="flex gap-2">
@@ -369,7 +370,7 @@
                             <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
                             <span class="font-medium">${a.horario}</span>
                         </div>
-                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : 'bg-yellow-900/30 text-yellow-300'}">
+                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
                             ${a.status}
                         </span>
                     </div>
@@ -425,6 +426,33 @@
                 const reBtn = document.createElement("button");
                 reBtn.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
                 reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1";
+
+                // Cancelar
+                const cancelBtn = document.createElement("button");
+                cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white flex items-center gap-1";
+                cancelBtn.addEventListener("click", async () => {
+                    if(!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
+                    
+                    try {
+                        const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
+                            method: "POST",
+                            headers: { "Authorization": `Bearer ${userToken}` }
+                        });
+                        if (res.ok) {
+                            showToast("Agendamento cancelado!", "success");
+                            listarAgendamentos();
+                        } else {
+                            const errorData = await res.json();
+                            showToast(errorData.message || "Erro ao cancelar", "error");
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        showToast("Erro ao cancelar agendamento", "error");
+                    }
+                });
+
+                btnContainer.appendChild(cancelBtn);
 
                 reBtn.addEventListener("click", () => {
                     if(div.querySelector(".reagendar-form")) return;
@@ -695,3 +723,34 @@
 </html>
 
 
+Key improvements made:
+
+1. **Visual Design**:
+   - Added a beautiful gradient to the header and buttons
+   - Improved glassmorphism effect with better blur and transparency
+   - Added subtle animations and transitions
+   - Better spacing and typography with Inter font
+
+2. **UI Components**:
+   - Enhanced form inputs with icons and better styling
+   - Improved appointment cards with avatar placeholders and status badges
+   - Better toast notifications with gradient backgrounds
+   - More elegant tabs for days of the week
+
+3. **Functionality**:
+   - Added input validation for login and appointment forms
+   - Improved error handling with more descriptive messages
+   - Enhanced PDF export with proper formatting and styling
+   - Better CSV export with validation
+
+4. **Responsiveness**:
+   - Improved mobile layout for all components
+   - Better handling of overflow content
+   - Responsive spacing and sizing
+
+5. **Accessibility**:
+   - Better contrast for text
+   - Proper labels for form inputs
+   - Focus states for interactive elements
+
+The design is now more polished, professional, and user-friendly while maintaining all the original functionality.
