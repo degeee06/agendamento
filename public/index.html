@@ -472,8 +472,19 @@ form.addEventListener('submit', async (e) => {
 });
 
 // Filtros
-searchInput.addEventListener("input", renderAgendamentos);
-statusFilter.addEventListener("change", renderAgendamentos);
+searchInput.addEventListener("input", () => {
+  const filtro = searchInput.value.toLowerCase();
+  const status = statusFilter.value;
+  const filtrados = agendamentosCache.filter(a => 
+    (a.nome.toLowerCase().includes(filtro) || a.email.toLowerCase().includes(filtro)) &&
+    (status ? a.status === status : true) &&
+    (a.diaSemana == diaSelecionado)
+  );
+  renderAgendamentos(filtrados, cliente);
+});
+
+statusFilter.addEventListener("change", () => searchInput.dispatchEvent(new Event("input")));
+
 
 // Tabs Dias da Semana
 function initTabsDias() {
@@ -487,7 +498,11 @@ function initTabsDias() {
       btn.classList.add("bg-purple-600","active");
 
       diaSelecionado = parseInt(btn.dataset.dia);
-      renderAgendamentos();
+      renderAgendamentos(
+  agendamentosCache.filter(a => a.diaSemana == diaSelecionado),
+  cliente
+);
+
     });
   });
 }
@@ -519,6 +534,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
