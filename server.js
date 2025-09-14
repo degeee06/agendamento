@@ -272,9 +272,17 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("id", id);
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar agendamento original" });
 
-    // Verifica se o horário está livre (ignora o próprio agendamento)
-    const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+    // Verifica se o horário está livre ou ocupado por cancelado/reagendado
+    const { data: conflitos, error: errorCheck } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .eq("data", novaData)
+      .eq("horario", novoHorario)
+      .in("status", ["pendente", "confirmado"]); // considera ocupados apenas pendente/confirmado
+
+    if (errorCheck) throw errorCheck;
+    if (conflitos.length > 0) return res.status(400).json({ msg: "Horário indisponível" });
 
     // Cria novo agendamento
     const novoAgendamento = {
@@ -300,7 +308,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novo));
     const rows = await sheet.getRows();
-    for (const r of rows) if (r.id === id) await r.delete();
+    for (const r of rows) if (r.id === id) await r.delete(); // remove o antigo
     await sheet.addRow(novo);
 
     res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
@@ -309,6 +317,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 
 // ---------------- Listar ----------------
@@ -331,6 +340,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
