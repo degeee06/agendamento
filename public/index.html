@@ -60,17 +60,39 @@
             box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
         }
         
-        .status-pendente {
-            color: #f59e0b;
-        }
-        
-        .status-confirmado {
-            color: #10b981;
-        }
-        
-        .status-cancelado {
-            color: #ef4444;
-        }
+       .status-pendente {
+    background-color: #facc15;
+    color: #1f2937;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 5px rgba(250, 205, 15, 0.4);
+}
+
+.status-confirmado {
+    background-color: #10b981;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 5px rgba(16, 185, 129, 0.4);
+}
+
+.status-cancelado {
+    background-color: #ef4444;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
+}
+
         
         .tab-dia.active {
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -334,105 +356,154 @@
         }
 
         // ---------------- RENDER AGENDAMENTOS ----------------
-        function renderAgendamentos() {
-            const filtroNome = searchInput.value.toLowerCase();
-            const filtroStatus = statusFilter.value;
+       function renderAgendamentos() {
+    const filtroNome = searchInput.value.toLowerCase();
+    const filtroStatus = statusFilter.value;
 
-            const filtrados = agendamentosCache
-                .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                            (filtroStatus ? a.status === filtroStatus : true))
-                .filter(a => {
-                    const dia = new Date(`${a.data}T${a.horario}`).getDay();
-                    return dia === diaSelecionado;
-                })
-                .sort((a, b) => new Date(`${b.data}T${b.horario}`) - new Date(`${a.data}T${a.horario}`));
+    const filtrados = agendamentosCache
+        .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+                    (filtroStatus ? a.status === filtroStatus : true))
+        .filter(a => {
+            const dia = new Date(`${a.data}T${a.horario}`).getDay();
+            return dia === diaSelecionado;
+        })
+        .sort((a, b) => new Date(`${b.data}T${b.horario}`) - new Date(`${a.data}T${a.horario}`));
 
-            if (filtrados.length === 0) {
-                meusAgendamentos.innerHTML = `
-                    <div class='text-center py-8'>
-                        <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                            <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                        </div>
-                        <p class="text-gray-300">Nenhum agendamento encontrado</p>
-                    </div>
-                `;
-                return;
-            }
+    if (filtrados.length === 0) {
+        meusAgendamentos.innerHTML = `
+            <div class='text-center py-8'>
+                <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
+                    <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
+                </div>
+                <p class="text-gray-300">Nenhum agendamento encontrado</p>
+            </div>
+        `;
+        return;
+    }
 
-            meusAgendamentos.innerHTML = "";
+    meusAgendamentos.innerHTML = "";
 
-            filtrados.forEach(a => {
-                const div = document.createElement("div");
-                div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
-                
-                div.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-                            <span class="font-medium">${a.horario}</span>
-                        </div>
-                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
-                            ${a.status}
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                            <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-medium">${a.nome}</h3>
-                            <p class="text-sm text-gray-300">${formatData(a.data)}</p>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-                            <span class="truncate">${a.email}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                            <span>${a.telefone}</span>
-                        </div>
-                    </div>
-                `;
+    filtrados.forEach(a => {
+        const div = document.createElement("div");
+        div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300`;
 
-                // Container para botões
-                const btnContainer = document.createElement("div");
-                btnContainer.className = "flex gap-2 mt-4";
+        // Escolhe ícone do status
+        const statusIcon = a.status === 'confirmado' ? 'check-circle' : a.status === 'pendente' ? 'clock' : 'x-circle';
 
-                // Confirmar
-                if(!a.confirmado) {
-                    const btn = document.createElement("button");
-                    btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                    btn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-                    btn.addEventListener("click", async () => {
-                        btn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Confirmando...`;
-                        feather.replace();
-                        try {
-                            const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-                                method: "POST",
-                                headers: { "Authorization": `Bearer ${userToken}` }
-                            });
-                            if (res.ok) {
-                                btn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
-                                setTimeout(() => {
-                                    showToast("Agendamento confirmado!", "success");
-                                    listarAgendamentos();
-                                }, 300);
-                            } else {
-                                btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                                feather.replace();
-                                showToast("Erro ao confirmar", "error");
-                            }
-                        } catch (e) {
-                            console.error(e);
-                            btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                            feather.replace();
-                            showToast("Erro ao confirmar", "error");
-                        }
+        div.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex items-center gap-2">
+                    <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
+                    <span class="font-medium">${a.horario}</span>
+                </div>
+                <span class="status-${a.status} flex items-center gap-1">
+                    <i data-feather="${statusIcon}" class="w-3 h-3"></i>
+                    ${a.status.toUpperCase()}
+                </span>
+            </div>
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                    <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
+                </div>
+                <div>
+                    <h3 class="font-medium">${a.nome}</h3>
+                    <p class="text-sm text-gray-300">${formatData(a.data)}</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="flex items-center gap-2">
+                    <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
+                    <span class="truncate">${a.email}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
+                    <span>${a.telefone}</span>
+                </div>
+            </div>
+        `;
+
+        // Botões (confirmar, reagendar, cancelar)
+        const btnContainer = document.createElement("div");
+        btnContainer.className = "flex gap-2 mt-4";
+
+        if(!a.confirmado) {
+            const btn = document.createElement("button");
+            btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+            btn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+            btn.addEventListener("click", async () => {
+                btn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Confirmando...`;
+                feather.replace();
+                try {
+                    const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
+                        method: "POST",
+                        headers: { "Authorization": `Bearer ${userToken}` }
                     });
-                    btnContainer.appendChild(btn);
+                    if (res.ok) {
+                        btn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+                        setTimeout(() => {
+                            showToast("Agendamento confirmado!", "success");
+                            listarAgendamentos();
+                        }, 300);
+                    } else {
+                        btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+                        feather.replace();
+                        showToast("Erro ao confirmar", "error");
+                    }
+                } catch (e) {
+                    console.error(e);
+                    btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+                    feather.replace();
+                    showToast("Erro ao confirmar", "error");
                 }
+            });
+            btnContainer.appendChild(btn);
+        }
+
+        // Reagendar e Cancelar continuam iguais
+        const reBtn = document.createElement("button");
+        reBtn.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
+        reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+        cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+
+        cancelBtn.addEventListener("click", async () => {
+            if(!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
+            cancelBtn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Cancelando...`;
+            feather.replace();
+            try {
+                const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${userToken}` }
+                });
+                if (res.ok) {
+                    cancelBtn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+                    setTimeout(() => {
+                        showToast("Agendamento cancelado!", "success");
+                        listarAgendamentos();
+                    }, 300);
+                } else {
+                    cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                    feather.replace();
+                    const errorData = await res.json();
+                    showToast(errorData.message || "Erro ao cancelar", "error");
+                }
+            } catch (e) {
+                console.error(e);
+                cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                feather.replace();
+                showToast("Erro ao cancelar agendamento", "error");
+            }
+        });
+
+        btnContainer.appendChild(cancelBtn);
+        btnContainer.appendChild(reBtn);
+        div.appendChild(btnContainer);
+        meusAgendamentos.appendChild(div);
+        feather.replace();
+    });
+}
 
                 // Reagendar
                 const reBtn = document.createElement("button");
@@ -765,6 +836,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
