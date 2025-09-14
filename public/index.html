@@ -191,7 +191,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let userToken = null;
 let agendamentosCache = [];
-let diaSelecionado = 1; // segunda por padrão
+let diaSelecionado = 1;
 
 const form = document.getElementById('agendamentoForm');
 const loginBtn = document.getElementById('loginBtn');
@@ -207,9 +207,8 @@ const cliente = pathParts[1] || '';
 
 function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
-// ---------------- TOASTS MODERNOS ----------------
+// ---------------- TOASTS ----------------
 let activeToasts = [];
-
 function showToast(message, type = "success") {
   const colors = {
     success: "bg-green-600",
@@ -217,265 +216,194 @@ function showToast(message, type = "success") {
     info: "bg-blue-600",
     warning: "bg-yellow-600"
   };
-
   const container = document.getElementById("toast-container");
-
-  // Limita a 3 toasts ativos
   if (activeToasts.length >= 3) {
     const oldest = activeToasts.shift();
     oldest.remove();
   }
-
   const toast = document.createElement("div");
   toast.className = `p-4 rounded-lg shadow-md text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-500 flex items-center gap-2`;
-  toast.innerHTML = `<i data-feather="${type === "success" ? "check-circle" : type === "error" ? "alert-circle" : "info"}" class="w-5 h-5"></i> <span>${message}</span>`;
-
+  toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
   container.appendChild(toast);
   activeToasts.push(toast);
   feather.replace();
-
-  // --- Scroll com drag no mouse ---
-const scrollContainer = document.getElementById('meusAgendamentos');
-let isDown = false;
-let startY;
-let scrollTop;
-
-scrollContainer.addEventListener('mousedown', (e) => {
-  isDown = true;
-  startY = e.pageY - scrollContainer.offsetTop;
-  scrollTop = scrollContainer.scrollTop;
-});
-
-scrollContainer.addEventListener('mouseleave', () => {
-  isDown = false;
-});
-
-scrollContainer.addEventListener('mouseup', () => {
-  isDown = false;
-});
-
-scrollContainer.addEventListener('mousemove', (e) => {
-  if(!isDown) return;
-  e.preventDefault();
-  const y = e.pageY - scrollContainer.offsetTop;
-  const walk = (y - startY) * 1; // 1 = velocidade do scroll
-  scrollContainer.scrollTop = scrollTop - walk;
-});
-
-
-  // Entrada animada
-  requestAnimationFrame(() => {
-    toast.classList.remove("opacity-0", "translate-x-5");
-    toast.classList.add("opacity-100", "translate-x-0");
-  });
-
-  // Sai após 3s
-  setTimeout(() => {
-    toast.classList.add("opacity-0", "translate-x-5");
-    setTimeout(() => {
-      toast.remove();
-      activeToasts = activeToasts.filter(t => t !== toast);
-    }, 500);
-  }, 3000);
+  requestAnimationFrame(()=>{toast.classList.remove("opacity-0","translate-x-5"); toast.classList.add("opacity-100","translate-x-0");});
+  setTimeout(()=>{toast.classList.add("opacity-0","translate-x-5"); setTimeout(()=>{toast.remove(); activeToasts=activeToasts.filter(t=>t!==toast);},500);},3000);
 }
 
-
-
+// ---------------- RENDER AGENDAMENTOS ----------------
 function renderAgendamentos() {
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
 
-  // Filtra e ordena
   const filtrados = agendamentosCache
-    .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                 (filtroStatus ? a.status === filtroStatus : true))
-    .filter(a => {
-      const dia = new Date(`${a.data}T${a.horario}`).getDay();
-      return dia === diaSelecionado;
-    })
-    .sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
+    .filter(a=>((a.nome+a.email).toLowerCase().includes(filtroNome)) && (filtroStatus?a.status===filtroStatus:true))
+    .filter(a=>{const dia=new Date(`${a.data}T${a.horario}`).getDay(); return dia===diaSelecionado;})
+    .sort((a,b)=>new Date(`${a.data}T${a.horario}`)-new Date(`${b.data}T${b.horario}`));
 
-  if (filtrados.length === 0) {
-    meusAgendamentos.innerHTML = `
-      <div class='text-center py-8 text-gray-300'>
-        Nenhum agendamento.
-      </div>
-    `;
+  if(filtrados.length===0){
+    meusAgendamentos.innerHTML=`<div class='text-center py-8 text-gray-300'>Nenhum agendamento.</div>`;
     return;
   }
 
-  // Renderiza todos os itens normalmente
-  meusAgendamentos.innerHTML = ""; // limpa o container
-  filtrados.forEach(a => {
-    const div = document.createElement("div");
-    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
-    div.innerHTML = `
+  meusAgendamentos.innerHTML="";
+  filtrados.forEach(a=>{
+    const div=document.createElement("div");
+    div.className=`agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
+    div.innerHTML=`
       <strong>${formatData(a.data)} ${a.horario}</strong>
       <div><strong>Nome:</strong> ${a.nome}</div>
       <div><strong>Email:</strong> ${a.email}</div>
       <div><strong>Telefone:</strong> ${a.telefone}</div>
       <div><strong>Status:</strong> ${a.status}</div>
-      ${!a.confirmado ? `<button data-id="${a.id}" class="mt-2 px-3 py-1 bg-green-600 rounded text-white">Confirmar</button>` : ""}
+      <div class="mt-2 flex gap-2"></div>
     `;
-    meusAgendamentos.appendChild(div);
 
-    // Botão confirmar
-    const btn = div.querySelector("button");
-    if (btn) {
-      btn.addEventListener("click", async () => {
-        try {
-          const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${userToken}` }
-          });
-          if (res.ok) {
-            showToast("Agendamento confirmado!", "success");
-            listarAgendamentos(); // atualiza a lista
-          } else {
-            showToast("Erro ao confirmar", "error");
-          }
-        } catch (e) {
-          console.error(e);
-          showToast("Erro ao confirmar", "error");
-        }
+    const btnContainer = div.querySelector("div.flex");
+
+    // Confirmar
+    if(!a.confirmado){
+      const confirmBtn=document.createElement("button");
+      confirmBtn.textContent="Confirmar";
+      confirmBtn.className="px-3 py-1 bg-green-600 rounded text-white";
+      confirmBtn.addEventListener("click",async ()=>{
+        try{
+          const res=await fetch(`/confirmar/${cliente}/${a.id}`,{method:"POST",headers:{"Authorization":`Bearer ${userToken}`}});
+          if(res.ok){ showToast("Agendamento confirmado!","success"); listarAgendamentos(); }
+          else showToast("Erro ao confirmar","error");
+        } catch(e){ console.error(e); showToast("Erro ao confirmar","error"); }
       });
+      btnContainer.appendChild(confirmBtn);
+
+      // Reagendar
+      const reBtn=document.createElement("button");
+      reBtn.textContent="Reagendar";
+      reBtn.className="px-3 py-1 bg-yellow-500 rounded text-white";
+      reBtn.addEventListener("click",async ()=>{
+        const novaData=prompt("Nova data (YYYY-MM-DD):");
+        const novoHorario=prompt("Novo horário (HH:MM):");
+        if(!novaData||!novoHorario) return;
+        try{
+          const res=await fetch(`/reagendar/${cliente}/${a.id}`,{
+            method:"POST",
+            headers:{"Authorization":`Bearer ${userToken}`,"Content-Type":"application/json"},
+            body:JSON.stringify({novaData,novoHorario})
+          });
+          if(res.ok){ showToast("Agendamento reagendado!","success"); listarAgendamentos(); }
+          else showToast("Erro ao reagendar","error");
+        } catch(e){ console.error(e); showToast("Erro ao reagendar","error"); }
+      });
+      btnContainer.appendChild(reBtn);
     }
+
+    meusAgendamentos.appendChild(div);
   });
 }
 
-
-
-
-// Mostrar tabs quando logar
+// ---------------- LISTAR AGENDAMENTOS ----------------
 async function listarAgendamentos(){
   if(!userToken) return;
-  try {
-    const res = await fetch(`/meus-agendamentos/${cliente}`, {
-      headers: {"Authorization":`Bearer ${userToken}`}
-    });
+  try{
+    const res=await fetch(`/meus-agendamentos/${cliente}`,{headers:{"Authorization":`Bearer ${userToken}`}});
     const { agendamentos } = await res.json();
     agendamentosCache = agendamentos;
-
-    meusAgendamentos.style.display = 'block';
-    document.getElementById('filtersSection').style.display = 'block';
-    document.getElementById('diasTabs').style.display = 'flex';
-
+    meusAgendamentos.style.display='block';
+    document.getElementById('filtersSection').style.display='block';
+    document.getElementById('diasTabs').style.display='flex';
     initTabsDias();
-
-    let hoje = new Date().getDay(); 
-    if (hoje === 0) hoje = 1; 
-    const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-    if (btnHoje) btnHoje.click();
-
-  } catch(e){ console.error(e); showToast("error","Erro ao listar agendamentos"); }
+    let hoje=new Date().getDay();
+    if(hoje===0) hoje=1;
+    const btnHoje=document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
+    if(btnHoje) btnHoje.click();
+  } catch(e){ console.error(e); showToast("Erro ao listar agendamentos","error"); }
 }
 
-// Login
-loginBtn.addEventListener('click', async () => {
-  const email = document.getElementById('email').value;
-  const senha = document.getElementById('senha').value;
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-  if(error){ showToast("error",error.message); return; }
-  userToken = data.session.access_token;
-  loginSection.style.display = 'none';
-  form.style.display = 'block';
+// ---------------- LOGIN ----------------
+loginBtn.addEventListener('click', async ()=>{
+  const email=document.getElementById('email').value;
+  const senha=document.getElementById('senha').value;
+  const { data, error } = await supabase.auth.signInWithPassword({email,password:senha});
+  if(error){ showToast(error.message,"error"); return; }
+  userToken=data.session.access_token;
+  loginSection.style.display='none';
+  form.style.display='block';
   listarAgendamentos();
 });
 
+// ---------------- AGENDAR ----------------
 form.addEventListener('submit', async (e)=>{
   e.preventDefault();
-
-  const formData = new FormData(form);
-  const dataToSend = {};
+  const formData=new FormData(form);
+  const dataToSend={};
   formData.forEach((v,k)=>dataToSend[k]=v);
 
+  // Verifica horários ocupados
   try{
-    const check = await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`, { 
-      headers: { "Authorization": `Bearer ${userToken}` } 
-    });
-    const result = await check.json();
-
-    if(result.ocupados.includes(dataToSend.Horario)){
-  showToast("Horário não disponível", "warning"); // ✅ nova mensagem
-  return;
-}
-
-  } catch(err){ 
-    console.error(err); 
-    showToast("error","Erro ao verificar horários");
-    return;
-  }
+    const check=await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`,{headers:{"Authorization":`Bearer ${userToken}`}});
+    const result=await check.json();
+    if(result.ocupados.includes(dataToSend.Horario)){ showToast("Horário não disponível","warning"); return; }
+  } catch(err){ console.error(err); showToast("Erro ao verificar horários","error"); return; }
 
   try{
-    const response = await fetch(`/agendar/${cliente}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
-      body: JSON.stringify(dataToSend)
+    const response=await fetch(`/agendar/${cliente}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
+      body:JSON.stringify(dataToSend)
     });
-    const result = await response.json();
-
-    if(response.ok){ 
-  showToast("Agendado com sucesso!", "success");  // ✅ nova mensagem
-  form.reset(); 
-  listarAgendamentos(); 
-} else { 
-  showToast("Horário ocupado", "error");
-}
-
-  } catch(err){ 
-    console.error(err); 
-    showToast("error","Erro ao enviar agendamento");
-  }
+    if(response.ok){ showToast("Agendado com sucesso!","success"); form.reset(); listarAgendamentos(); }
+    else showToast("Horário ocupado","error");
+  } catch(err){ console.error(err); showToast("Erro ao enviar agendamento","error"); }
 });
 
-// Filtros
+// ---------------- FILTROS ----------------
 searchInput.addEventListener("input", renderAgendamentos);
 statusFilter.addEventListener("change", renderAgendamentos);
 
-// Tabs Dias da Semana
-function initTabsDias() {
-  const tabs = document.querySelectorAll(".tab-dia");
-  tabs.forEach(btn => {
-    btn.addEventListener("click", () => {
-      tabs.forEach(b => b.classList.remove("bg-purple-600","active"));
-      tabs.forEach(b => b.classList.add("bg-white/10"));
-
+// ---------------- TABS ----------------
+function initTabsDias(){
+  const tabs=document.querySelectorAll(".tab-dia");
+  tabs.forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      tabs.forEach(b=>b.classList.remove("bg-purple-600","active"));
+      tabs.forEach(b=>b.classList.add("bg-white/10"));
       btn.classList.remove("bg-white/10");
       btn.classList.add("bg-purple-600","active");
-
-      diaSelecionado = parseInt(btn.dataset.dia);
+      diaSelecionado=parseInt(btn.dataset.dia);
       renderAgendamentos();
     });
   });
 }
 
-// Exportações
+// ---------------- EXPORT ----------------
 exportCSVBtn.addEventListener("click", ()=>{
-  let csv = "Nome,Email,Telefone,Data,Horario,Status\n";
-  agendamentosCache.forEach(a=>{ csv+=`${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`; });
-  const blob = new Blob([csv], { type:"text/csv" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download="agendamentos.csv";
+  const filtrados = agendamentosCache.filter(a=>statusFilter.value?a.status===statusFilter.value:true);
+  let csv="Nome,Email,Telefone,Data,Horario,Status\n";
+  filtrados.forEach(a=>{csv+=`${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`;});
+  const blob=new Blob([csv],{type:"text/csv"});
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=`agendamentos_${cliente}.csv`;
   link.click();
 });
 
 exportPDFBtn.addEventListener("click", ()=>{
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.text("Agendamentos", 10,10);
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF();
+  doc.text("Agendamentos",10,10);
   let y=20;
-  agendamentosCache.forEach(a=>{
-    doc.text(`${a.data} ${a.horario} - ${a.nome} (${a.email}) - ${a.telefone} - ${a.status}`, 10,y);
+  const filtrados = agendamentosCache.filter(a=>statusFilter.value?a.status===statusFilter.value:true);
+  filtrados.forEach(a=>{
+    doc.text(`${a.data} ${a.horario} - ${a.nome} (${a.email}) - ${a.telefone} - ${a.status}`,10,y);
     y+=10;
   });
-  doc.save("agendamentos.pdf");
+  doc.save(`agendamentos_${cliente}.pdf`);
 });
 
-// Init
+// ---------------- INIT ----------------
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
