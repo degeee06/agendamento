@@ -120,28 +120,42 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 });
 
 // ---------------- Reagendar ----------------
-app.post("/reagendar/:cliente/:rowNumber", async (req, res) => {
-  const { cliente, rowNumber } = req.params;
+app.post("/reagendar/:cliente/:id", async (req, res) => {
+  const { cliente, id } = req.params;
   const { novaData, novoHorario } = req.body;
 
   try {
+    // Atualiza no Supabase
+    const { data: agendamento, error } = await supabase
+      .from("agendamentos")
+      .update({ data: novaData, horario: novoHorario })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ message: "Erro ao atualizar Supabase" });
+    if (!agendamento) return res.status(404).json({ message: "Agendamento não encontrado" });
+
+    // Atualiza no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     const rows = await sheet.getRows();
-    const agendamento = rows.find(r => r._rowNumber == rowNumber && r.cliente === cliente);
+    const row = rows.find(r => r.id == id); // procura pelo mesmo ID do Supabase
 
-    if(!agendamento) return res.status(404).json({ message: "Agendamento não encontrado" });
+    if (row) {
+      row.data = novaData;
+      row.horario = novoHorario;
+      await row.save();
+    }
 
-    agendamento.data = novaData;
-    agendamento.horario = novoHorario;
-    await agendamento.save();
-
-    return res.json({ message: "Agendamento reagendado com sucesso!" });
-  } catch(e) {
+    return res.json({ message: "Agendamento reagendado com sucesso!", agendamento });
+  } catch (e) {
     console.error(e);
-    return res.status(500).json({ message: "Erro ao reagendar" });
+    return res.status(500).json({ message: "Erro interno ao reagendar" });
   }
 });
+
 
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -215,3 +229,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
