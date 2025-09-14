@@ -586,7 +586,7 @@
         // ------------------- Seleciona o dia atual -------------------
         const hoje = new Date();
         diaSelecionado = hoje.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
-        if(diaSelecionado === 1) diaSelecionado = 1; // Ajuste para segunda, se quiser ignorar domingo
+        if(diaSelecionado === 0) diaSelecionado = 0; // Ajuste para segunda, se quiser ignorar domingo
 
         listarAgendamentos(); // já renderiza com o dia atual
         showToast("Login realizado com sucesso!", "success");
@@ -749,6 +749,7 @@
     </script>
 </body>
 </html>
+
 
 
 
