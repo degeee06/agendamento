@@ -135,6 +135,50 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// Em vez de bloquear
+const existente = await supabase
+  .from("agendamentos")
+  .select("*")
+  .eq("cliente", cliente)
+  .eq("data", Data)
+  .eq("horario", Horario)
+  .in("status", ["pendente", "confirmado"])
+  .single();
+
+if (existente.data) {
+  // Substitui o agendamento existente
+  const { data, error } = await supabase
+    .from("agendamentos")
+    .update({
+      nome: Nome,
+      email: Email,
+      telefone: Telefone,
+      status: "pendente",
+      confirmado: false
+    })
+    .eq("id", existente.data.id)
+    .select()
+    .single();
+
+  return res.json({ msg: "Agendamento substituído com sucesso!", agendamento: data });
+}
+
+// Caso não exista, insere novo
+const { data, error } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente,
+    nome: Nome,
+    email: Email,
+    telefone: Telefone,
+    data: Data,
+    horario: Horario,
+    status: "pendente",
+    confirmado: false
+  }])
+  .select()
+  .single();
+
 
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -321,6 +365,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
