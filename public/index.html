@@ -600,13 +600,7 @@
                 return;
             }
 
-            // Verifica horários ocupados
-            try{
-                const check=await fetch(`/disponiveis/${cliente}/${dataToSend.Data}`,{headers:{"Authorization":`Bearer ${userToken}`}});
-                const result=await check.json();
-                if(result.ocupados.includes(dataToSend.Horario)){ showToast("Horário não disponível","warning"); return; }
-            } catch(err){ console.error(err); showToast("Erro ao verificar horários","error"); return; }
-
+     
             try{
                 const response=await fetch(`/agendar/${cliente}`,{
                     method:'POST',
@@ -745,5 +739,6 @@
     </script>
 </body>
 </html>
+
 
 
