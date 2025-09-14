@@ -105,8 +105,9 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const livre = await horarioDisponivel(cliente, novaData, novoHorario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+     const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
+     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
 
 
     const { data, error } = await supabase
@@ -314,4 +315,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
