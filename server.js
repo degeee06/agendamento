@@ -119,27 +119,27 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// Reagendar
-app.post("/reagendar/:cliente/:id", async (req, res) => {
-    const { cliente, id } = req.params;
+app.post("/reagendar/:cliente/:rowNumber", async (req, res) => {
+    const { cliente, rowNumber } = req.params;
     const { novaData, novoHorario } = req.body;
 
     try {
         const rows = await sheet.getRows();
-        const agendamento = rows.find(r => r.id == id && r.cliente === cliente);
-        if (!agendamento) return res.status(404).json({ message: "Agendamento não encontrado" });
+        const agendamento = rows.find(r => r._rowNumber == rowNumber && r.cliente === cliente);
 
-        // Atualiza data e horário, sem checar conflitos
+        if(!agendamento) return res.status(404).json({ message: "Agendamento não encontrado" });
+
         agendamento.data = novaData;
         agendamento.horario = novoHorario;
         await agendamento.save();
 
         return res.json({ message: "Agendamento reagendado com sucesso!" });
-    } catch (e) {
+    } catch(e) {
         console.error(e);
         return res.status(500).json({ message: "Erro ao reagendar" });
     }
 });
+
 
 // Agendar novo
 app.post("/agendar/:cliente", async (req, res) => {
@@ -248,6 +248,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
