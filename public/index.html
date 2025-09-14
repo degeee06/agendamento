@@ -257,125 +257,127 @@ function renderAgendamentos() {
   meusAgendamentos.innerHTML = ""; // limpa o container
 
   filtrados.forEach(a => {
-  const div = document.createElement("div");
-  div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
+    const div = document.createElement("div");
+    div.className = `agendamento ${a.status} glass-card rounded-xl p-4 mb-4 shadow hover:scale-105 transition-transform`;
+    
+    div.innerHTML = `
+      <strong>${formatData(a.data)} ${a.horario}</strong>
+      <div><strong>Nome:</strong> ${a.nome}</div>
+      <div><strong>Email:</strong> ${a.email}</div>
+      <div><strong>Telefone:</strong> ${a.telefone}</div>
+      <div><strong>Status:</strong> ${a.status}</div>
+    `;
 
-  div.innerHTML = `
-    <strong>${formatData(a.data)} ${a.horario}</strong>
-    <div><strong>Nome:</strong> ${a.nome}</div>
-    <div><strong>Email:</strong> ${a.email}</div>
-    <div><strong>Telefone:</strong> ${a.telefone}</div>
-    <div><strong>Status:</strong> ${a.status}</div>
-  `;
+    // Container para botões
+    const btnContainer = document.createElement("div");
+    btnContainer.className = "flex gap-2 mt-2 flex-wrap";
 
-  // Container para botões
-  const btnContainer = document.createElement("div");
-  btnContainer.className = "flex gap-2 mt-2";
+    // Confirmar
+    if(!a.confirmado) {
+      const btnConfirmar = document.createElement("button");
+      btnConfirmar.textContent = "Confirmar";
+      btnConfirmar.className = "px-3 py-1 bg-green-600 rounded text-white";
+      btnConfirmar.addEventListener("click", async () => {
+        try {
+          const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${userToken}` }
+          });
+          if (res.ok) {
+            showToast("Agendamento confirmado!", "success");
+            listarAgendamentos();
+          } else showToast("Erro ao confirmar", "error");
+        } catch (e) {
+          console.error(e);
+          showToast("Erro ao confirmar", "error");
+        }
+      });
+      btnContainer.appendChild(btnConfirmar);
+    }
 
-  // Confirmar
-  if(!a.confirmado) {
-    const btnConfirmar = document.createElement("button");
-    btnConfirmar.textContent = "Confirmar";
-    btnConfirmar.className = "px-3 py-1 bg-green-600 rounded text-white";
-    btnConfirmar.addEventListener("click", async () => {
+    // Reagendar
+    const reBtn = document.createElement("button");
+    reBtn.textContent = "Reagendar";
+    reBtn.className = "px-3 py-1 bg-yellow-500 rounded text-white";
+
+    reBtn.addEventListener("click", () => {
+      if(div.querySelector(".reagendar-form")) return; // evita duplicar form
+
+      const miniForm = document.createElement("div");
+      miniForm.className = "reagendar-form mt-2 flex flex-col gap-2 p-2 bg-white/10 rounded";
+
+      miniForm.innerHTML = `
+        <input type="date" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
+        <input type="time" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
+        <div class="flex gap-2">
+          <button class="confirmar-mini bg-green-600 text-white px-2 py-1 rounded">Confirmar</button>
+          <button class="cancelar-mini bg-red-600 text-white px-2 py-1 rounded">Cancelar</button>
+        </div>
+      `;
+
+      div.appendChild(miniForm);
+
+      // Cancelar mini form
+      miniForm.querySelector(".cancelar-mini").addEventListener("click", () => {
+        miniForm.remove();
+      });
+
+      // Confirmar mini form
+      miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
+        const novaData = miniForm.querySelector('input[type="date"]').value;
+        const novoHorario = miniForm.querySelector('input[type="time"]').value;
+        if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
+
+        try {
+          const res = await fetch(`/reagendar/${cliente}/${a.id}`,{
+            method: "POST",
+            headers: {
+              "Authorization":`Bearer ${userToken}`,
+              "Content-Type":"application/json"
+            },
+            body: JSON.stringify({novaData, novoHorario})
+          });
+          if(res.ok){
+            showToast("Agendamento reagendado!","success");
+            listarAgendamentos();
+          } else showToast("Erro ao reagendar","error");
+        } catch(e){
+          console.error(e);
+          showToast("Erro ao reagendar","error");
+        }
+      });
+    });
+    btnContainer.appendChild(reBtn);
+
+    // Cancelar agendamento
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancelar";
+    cancelBtn.className = "px-3 py-1 bg-red-600 rounded text-white";
+    cancelBtn.addEventListener("click", async () => {
+      if(!confirm("Deseja realmente cancelar este agendamento?")) return;
+
       try {
-        const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
+        const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${userToken}` }
         });
         if(res.ok){
-          showToast("Agendamento confirmado!", "success");
+          showToast("Agendamento cancelado!", "success");
           listarAgendamentos();
-        } else showToast("Erro ao confirmar", "error");
+        } else {
+          showToast("Erro ao cancelar agendamento", "error");
+        }
       } catch(e){
         console.error(e);
-        showToast("Erro ao confirmar", "error");
+        showToast("Erro ao cancelar agendamento", "error");
       }
     });
-    btnContainer.appendChild(btnConfirmar);
-  }
+    btnContainer.appendChild(cancelBtn);
 
-  // Reagendar
-  const btnReagendar = document.createElement("button");
-  btnReagendar.textContent = "Reagendar";
-  btnReagendar.className = "px-3 py-1 bg-yellow-500 rounded text-white";
-
-  btnReagendar.addEventListener("click", () => {
-    if(div.querySelector(".reagendar-form")) return; // evita duplicar form
-
-    const miniForm = document.createElement("div");
-    miniForm.className = "reagendar-form mt-2 flex flex-col gap-2 p-2 bg-white/10 rounded";
-
-    miniForm.innerHTML = `
-      <input type="date" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
-      <input type="time" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
-      <div class="flex gap-2">
-        <button class="confirmar-mini bg-green-600 text-white px-2 py-1 rounded">Confirmar</button>
-        <button class="cancelar-mini bg-red-600 text-white px-2 py-1 rounded">Cancelar</button>
-      </div>
-    `;
-
-    div.appendChild(miniForm);
-
-    // Cancelar mini-form
-    miniForm.querySelector(".cancelar-mini").addEventListener("click", () => {
-      miniForm.remove();
-    });
-
-    // Confirmar mini-form
-    miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
-      const novaData = miniForm.querySelector('input[type="date"]').value;
-      const novoHorario = miniForm.querySelector('input[type="time"]').value;
-      if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
-
-      try {
-        const res = await fetch(`/reagendar/${cliente}/${a.id}`, {
-          method: "POST",
-          headers: {
-            "Authorization":`Bearer ${userToken}`,
-            "Content-Type":"application/json"
-          },
-          body: JSON.stringify({novaData, novoHorario})
-        });
-        if(res.ok){
-          showToast("Agendamento reagendado!","success");
-          listarAgendamentos();
-        } else showToast("Erro ao reagendar","error");
-      } catch(e){
-        console.error(e);
-        showToast("Erro ao reagendar","error");
-      }
-    });
+    div.appendChild(btnContainer);
+    meusAgendamentos.appendChild(div);
   });
-
-  btnContainer.appendChild(btnReagendar);
-
-  // Cancelar
-  const btnCancelar = document.createElement("button");
-  btnCancelar.textContent = "Cancelar";
-  btnCancelar.className = "px-3 py-1 bg-red-600 rounded text-white";
-  btnCancelar.addEventListener("click", async () => {
-    if(!confirm("Deseja realmente cancelar este agendamento?")) return;
-    try {
-      const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${userToken}` }
-      });
-      if(res.ok){
-        showToast("Agendamento cancelado!", "success");
-        listarAgendamentos();
-      } else showToast("Erro ao cancelar", "error");
-    } catch(e){
-      console.error(e);
-      showToast("Erro ao cancelar", "error");
-    }
-  });
-  btnContainer.appendChild(btnCancelar);
-
-  div.appendChild(btnContainer);
-  meusAgendamentos.appendChild(div);
-});
-
+}
 
 
 // ---------------- LISTAR AGENDAMENTOS ----------------
@@ -481,9 +483,6 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
-
-
-
 
 
 
