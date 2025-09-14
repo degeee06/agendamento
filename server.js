@@ -8,20 +8,20 @@ import { createClient } from "@supabase/supabase-js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// Supabase
+// ---------------- Supabase ----------------
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Clientes e IDs das planilhas deles
+// ---------------- Clientes e planilhas ----------------
 const planilhasClientes = {
   cliente1: process.env.ID_PLANILHA_CLIENTE1,
   cliente2: process.env.ID_PLANILHA_CLIENTE2
 };
 const clientesValidos = Object.keys(planilhasClientes);
 
-// Google Service Account
+// ---------------- Google Service Account ----------------
 let creds;
 try {
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -30,6 +30,7 @@ try {
   process.exit(1);
 }
 
+// ---------------- App ----------------
 const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -59,10 +60,7 @@ async function accessSpreadsheet(cliente) {
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => {
-    await sheet.setHeaderRow(newKeys);
-  });
-
+  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
   const currentHeaders = sheet.headerValues || [];
   const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
   if (headersToAdd.length > 0) {
@@ -78,12 +76,10 @@ async function horarioDisponivel(cliente, data, horario) {
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .eq("status", "pendente"); // ✅ só bloqueia se o horário estiver ativo/pendente
-
+    .eq("status", "pendente"); // só bloqueia horários ativos
   if (error) throw error;
   return agendamentos.length === 0;
 }
-
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -94,95 +90,7 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-
-// ---------------- Reagendar ----------------
-app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente)
-      return res.status(403).json({ msg: "Acesso negado" });
-
-    const { id } = req.params;
-    const { novaData, novoHorario } = req.body;
-
-    if (!novaData || !novoHorario)
-      return res.status(400).json({ msg: "Nova data e horário obrigatórios" });
-
-    // Busca o agendamento original
-    const { data: agendamento, error: errorGet } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("id", id)
-      .eq("cliente", cliente)
-      .single();
-
-    if (errorGet || !agendamento)
-      return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    // Marca o antigo como reagendado
-    const { error: errorUpdate } = await supabase
-      .from("agendamentos")
-      .update({ status: "reagendado" })
-      .eq("id", id);
-
-    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
-
-    // Verifica se o novo horário já está ocupado
-    const { data: ocupados, error: errorCheck } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", novaData)
-      .eq("horario", novoHorario)
-      .eq("status", "pendente");
-
-    if (errorCheck) return res.status(500).json({ msg: "Erro Supabase" });
-    if (ocupados.length > 0)
-      return res.status(400).json({ msg: "Horário indisponível" });
-
-    // Cria um novo agendamento com os dados atualizados
-    const novoAgendamento = {
-      cliente,
-      data: novaData,
-      horario: novoHorario,
-      status: "pendente",
-      confirmado: false
-    };
-
-    const { data: novo, error: errorInsert } = await supabase
-      .from("agendamentos")
-      .insert([novoAgendamento])
-      .select()
-      .single();
-
-    if (errorInsert) return res.status(500).json({ msg: "Erro ao criar novo agendamento" });
-
-    // Atualiza a planilha com apenas o registro atual
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(novo));
-
-    // Remove registros antigos do mesmo cliente que já foram reagendados
-    const rows = await sheet.getRows();
-    for (const r of rows) {
-      if (r.id === id) { // remove a linha antiga
-        await r.delete();
-      }
-    }
-
-    // Adiciona o novo agendamento na planilha
-    await sheet.addRow(novo);
-
-    res.json({ msg: "✅ Reagendamento realizado com sucesso", agendamento: novo });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "❌ Erro interno" });
-  }
-});
-
-
-
-// Agendar
+// ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -211,20 +119,19 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .single();
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    // Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
     await sheet.addRow(data);
 
-    res.json({ msg: "✅ Agendamento realizado com sucesso", agendamento: data });
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: "❌ Erro interno" });
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
-// Disponíveis
+// ---------------- Disponíveis ----------------
 app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -246,7 +153,7 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
   }
 });
 
-// Confirmar
+// ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -263,29 +170,87 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
     if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
-
     const rows = await sheet.getRows();
-    const row = rows.find((r) => r.id === data.id);
+    const row = rows.find(r => r.id === data.id);
     if (row) {
-    row.status = "confirmado";
-    row.confirmado = true;
-    await row.save();
-  } else {
-    await sheet.addRow(data);
-  }
+      row.status = "confirmado";
+      row.confirmado = true;
+      await row.save();
+    } else {
+      await sheet.addRow(data);
+    }
 
-    res.json({ msg: "✅ Agendamento confirmado", agendamento: data });
+    res.json({ msg: "Agendamento confirmado!", agendamento: data });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: "❌ Erro interno" });
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
-// Listar agendamentos do cliente
+// ---------------- Reagendar ----------------
+app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { id } = req.params;
+    const { novaData, novoHorario } = req.body;
+    if (!novaData || !novoHorario) return res.status(400).json({ msg: "Nova data e horário obrigatórios" });
+
+    const { data: agendamento, error: errorGet } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .single();
+
+    if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    const { error: errorUpdate } = await supabase
+      .from("agendamentos")
+      .update({ status: "reagendado" })
+      .eq("id", id);
+    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
+
+    const livre = await horarioDisponivel(cliente, novaData, novoHorario);
+    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
+    const novoAgendamento = {
+      cliente,
+      nome: agendamento.nome,
+      email: agendamento.email,
+      telefone: agendamento.telefone,
+      data: novaData,
+      horario: novoHorario,
+      status: "pendente",
+      confirmado: false
+    };
+
+    const { data: novo, error: errorInsert } = await supabase
+      .from("agendamentos")
+      .insert([novoAgendamento])
+      .select()
+      .single();
+    if (errorInsert) return res.status(500).json({ msg: "Erro ao criar novo agendamento" });
+
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(novo));
+    const rows = await sheet.getRows();
+    for (const r of rows) if (r.id === id) await r.delete();
+    await sheet.addRow(novo);
+
+    res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Listar ----------------
 app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -295,7 +260,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .select("*")
       .eq("cliente", cliente);
-
     if (error) return res.status(500).json({ msg: "Erro Supabase" });
 
     res.json({ agendamentos: data });
@@ -306,5 +270,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
