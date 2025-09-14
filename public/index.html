@@ -511,29 +511,30 @@
 
                     // Confirmar
                     miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
-                        const novaData = miniForm.querySelector('input[type="date"]').value;
-                        const novoHorario = miniForm.querySelector('input[type="time"]').value;
-                        if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
+    const novaData = miniForm.querySelector('input[type="date"]').value;
+    const novoHorario = miniForm.querySelector('input[type="time"]').value;
+    if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
 
-                        try {
-                            const res = await fetch(`/reagendar/${cliente}/${a._rowNumber}`, {
-                         method: "POST",
-                         headers: { 
-                         "Authorization": `Bearer ${userToken}`,
-                          "Content-Type": "application/json"
-                   },
-                          body: JSON.stringify({ novaData, novoHorario })
-                              });
+    try {
+        const res = await fetch(`/reagendar/${cliente}/${a.id}`, {  // <-- use 'a.id' do Supabase
+            method: "POST",
+            headers: { 
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ novaData, novoHorario })
+        });
 
-                            if(res.ok){
-                                showToast("Agendamento reagendado!","success");
-                                listarAgendamentos();
-                            } else showToast("Erro ao reagendar","error");
-                        } catch(e){
-                            console.error(e);
-                            showToast("Erro ao reagendar","error");
-                        }
-                    });
+        if(res.ok){
+            showToast("Agendamento reagendado!","success");
+            listarAgendamentos();
+        } else showToast("Erro ao reagendar","error");
+    } catch(e){
+        console.error(e);
+        showToast("Erro ao reagendar","error");
+    }
+});
+
                 });
                 btnContainer.appendChild(reBtn);
                 feather.replace();
@@ -740,6 +741,7 @@
     </script>
 </body>
 </html>
+
 
 
 
