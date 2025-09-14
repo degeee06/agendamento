@@ -57,7 +57,6 @@ async function accessSpreadsheet(cliente) {
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
   return doc;
-  const sheet = doc.sheetsByIndex[0];
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
@@ -88,7 +87,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // Cria novo agendamento
     const novoAgendamento = {
       cliente,
       nome: Nome,
@@ -105,6 +103,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .insert([novoAgendamento])
       .select()
       .single();
+
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
     const doc = await accessSpreadsheet(cliente);
@@ -120,56 +119,29 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:rowNumber", async (req, res) => {
-    const { cliente, rowNumber } = req.params;
-    const { novaData, novoHorario } = req.body;
+  const { cliente, rowNumber } = req.params;
+  const { novaData, novoHorario } = req.body;
 
-    try {
-        const rows = await sheet.getRows();
-        const agendamento = rows.find(r => r._rowNumber == rowNumber && r.cliente === cliente);
+  try {
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    const rows = await sheet.getRows();
+    const agendamento = rows.find(r => r._rowNumber == rowNumber && r.cliente === cliente);
 
-        if(!agendamento) return res.status(404).json({ message: "Agendamento não encontrado" });
+    if(!agendamento) return res.status(404).json({ message: "Agendamento não encontrado" });
 
-        agendamento.data = novaData;
-        agendamento.horario = novoHorario;
-        await agendamento.save();
+    agendamento.data = novaData;
+    agendamento.horario = novoHorario;
+    await agendamento.save();
 
-        return res.json({ message: "Agendamento reagendado com sucesso!" });
-    } catch(e) {
-        console.error(e);
-        return res.status(500).json({ message: "Erro ao reagendar" });
-    }
+    return res.json({ message: "Agendamento reagendado com sucesso!" });
+  } catch(e) {
+    console.error(e);
+    return res.status(500).json({ message: "Erro ao reagendar" });
+  }
 });
-
-
-// Agendar novo
-app.post("/agendar/:cliente", async (req, res) => {
-    const { cliente } = req.params;
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-
-    try {
-        const rows = await sheet.getRows();
-
-        // Apenas cria, sem checagem de conflitos
-        await sheet.addRow({
-            cliente,
-            nome: Nome,
-            email: Email,
-            telefone: Telefone,
-            data: Data,
-            horario: Horario,
-            status: "pendente",
-            confirmado: false
-        });
-
-        return res.json({ message: "Agendamento criado com sucesso!" });
-    } catch(e) {
-        console.error(e);
-        return res.status(500).json({ message: "Erro ao agendar" });
-    }
-});
-
-
 
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -185,6 +157,7 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("cliente", cliente)
       .select()
       .single();
+
     if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
@@ -214,15 +187,7 @@ app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { data: agendamentos, error } = await supabase
-      .from("agendamentos")
-      .select("horario")
-      .eq("cliente", cliente)
-      .eq("data", req.params.data);
-    if (error) return res.status(500).json({ msg: "Erro Supabase" });
-
-    const ocupados = agendamentos.map(a => a.horario);
-    res.json({ ocupados });
+    res.json({ ocupados: [] }); // sempre retorna vazio para não bloquear horários
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "Erro interno" });
@@ -239,6 +204,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .select("*")
       .eq("cliente", cliente);
+
     if (error) return res.status(500).json({ msg: "Erro Supabase" });
 
     res.json({ agendamentos: data });
@@ -249,8 +215,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
