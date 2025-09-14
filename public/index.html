@@ -260,6 +260,14 @@
             </div>
         </div>
 
+        <!-- Tabs Semanais -->
+        <div id="semanasTabs" style="display:none;" class="flex gap-2 mb-4 overflow-x-auto pb-2" data-aos="fade-up">
+            <button data-semana="0" class="tab-semana active px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium whitespace-nowrap">Esta Semana</button>
+            <button data-semana="1" class="tab-semana px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Semana Passada</button>
+            <button data-semana="2" class="tab-semana px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">2 Semanas</button>
+            <button data-semana="3" class="tab-semana px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">3 Semanas</button>
+        </div>
+
         <!-- Tabs Dias da Semana -->
         <div id="diasTabs" style="display:none;" class="flex gap-2 mb-6 overflow-x-auto pb-2" data-aos="fade-up">
             <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium whitespace-nowrap">Segunda</button>
@@ -294,6 +302,7 @@
         let userToken = null;
         let agendamentosCache = [];
         let diaSelecionado = 1;
+        let semanaSelecionada = 0;
 
         const form = document.getElementById('agendamentoForm');
         const loginBtn = document.getElementById('loginBtn');
@@ -356,7 +365,11 @@
                             (filtroStatus ? a.status === filtroStatus : true))
                 .filter(a => {
                     const dia = new Date(`${a.data}T${a.horario}`).getDay();
-                    return dia === diaSelecionado;
+                    const dataAgendamento = new Date(`${a.data}T${a.horario}`);
+                    const hoje = new Date();
+                    const diffSemanas = Math.floor((hoje - dataAgendamento) / (7 * 24 * 60 * 60 * 1000));
+                    
+                    return dia === diaSelecionado && diffSemanas === semanaSelecionada;
                 })
                 .sort((a, b) => new Date(`${b.data}T${b.horario}`) - new Date(`${a.data}T${a.horario}`));
 
@@ -601,7 +614,10 @@ loginBtn.addEventListener('click', async () => {
         form.style.display = 'block';
 
         listarAgendamentos().then(() => {
-            // ------------------- Seleciona o dia atual -------------------
+            // Mostra tabs de semanas
+            document.getElementById('semanasTabs').style.display = 'flex';
+            
+            // Seleciona dia atual
             let hoje = new Date().getDay(); // 0 = Domingo ... 6 = Sábado
             if (hoje === 0) {
                 hoje = 1; // se for domingo, pula pra segunda
@@ -666,14 +682,26 @@ loginBtn.addEventListener('click', async () => {
 
         // ---------------- TABS ----------------
         function initTabsDias(){
-            const tabs=document.querySelectorAll(".tab-dia");
-            tabs.forEach(btn=>{
+            const tabsDias=document.querySelectorAll(".tab-dia");
+            tabsDias.forEach(btn=>{
                 btn.addEventListener("click",()=>{
-                    tabs.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabs.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
+                    tabsDias.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
+                    tabsDias.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
                     btn.classList.remove("bg-white/10", "hover:bg-white/20");
                     btn.classList.add("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active");
                     diaSelecionado=parseInt(btn.dataset.dia);
+                    renderAgendamentos();
+                });
+            });
+
+            const tabsSemanas=document.querySelectorAll(".tab-semana");
+            tabsSemanas.forEach(btn=>{
+                btn.addEventListener("click",()=>{
+                    tabsSemanas.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
+                    tabsSemanas.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
+                    btn.classList.remove("bg-white/10", "hover:bg-white/20");
+                    btn.classList.add("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active");
+                    semanaSelecionada=parseInt(btn.dataset.semana);
                     renderAgendamentos();
                 });
             });
@@ -778,7 +806,6 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
-
 
 
 
