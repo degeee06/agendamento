@@ -57,6 +57,7 @@ async function accessSpreadsheet(cliente) {
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
   return doc;
+  const sheet = doc.sheetsByIndex[0];
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
@@ -248,6 +249,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
