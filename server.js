@@ -69,15 +69,20 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 }
 
 // ---------------- Disponibilidade ----------------
-async function horarioDisponivel(cliente, data, horario) {
-  const { data: agendamentos, error } = await supabase
+async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
+  let query = supabase
     .from("agendamentos")
     .select("*")
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .eq("status", "pendente"); // só bloqueia horários ativos
+    .in("status", ["pendente", "confirmado"]);
+
+  if (ignoreId) query = query.not("id", "eq", ignoreId);
+
+  const { data: agendamentos, error } = await query;
   if (error) throw error;
+
   return agendamentos.length === 0;
 }
 
@@ -131,113 +136,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- Disponíveis ----------------
-app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { data: agendamentos, error } = await supabase
-      .from("agendamentos")
-      .select("horario")
-      .eq("cliente", cliente)
-      .eq("data", req.params.data);
-
-    if (error) return res.status(500).json({ msg: "Erro Supabase" });
-
-    const ocupados = agendamentos.map(a => a.horario);
-    res.json({ ocupados });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-
-// ---------------- Cancelar ----------------
-app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { id } = req.params;
-
-    // Busca agendamento
-    const { data: agendamento, error: errorGet } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("id", id)
-      .eq("cliente", cliente)
-      .single();
-
-    if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    // Atualiza status para cancelado
-    const { data, error: errorUpdate } = await supabase
-      .from("agendamentos")
-      .update({ status: "cancelado" })
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (errorUpdate) return res.status(500).json({ msg: "Erro ao cancelar agendamento" });
-
-    // Atualiza Google Sheets
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id == id);
-    if (row) {
-      row.status = "cancelado";
-      await row.save();
-    }
-
-    res.json({ msg: "Agendamento cancelado com sucesso!", agendamento: data });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-
-
-// ---------------- Confirmar ----------------
-app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { id } = req.params;
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .update({ status: "confirmado", confirmado: true })
-      .eq("id", id)
-      .eq("cliente", cliente)
-      .select()
-      .single();
-    if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
-    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(data));
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id === data.id);
-    if (row) {
-      row.status = "confirmado";
-      row.confirmado = true;
-      await row.save();
-    } else {
-      await sheet.addRow(data);
-    }
-
-    res.json({ msg: "Agendamento confirmado!", agendamento: data });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
@@ -254,14 +152,13 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("id", id)
       .eq("cliente", cliente)
       .single();
-
     if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     const { error: errorUpdate } = await supabase
       .from("agendamentos")
       .update({ status: "reagendado" })
       .eq("id", id);
-    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
+    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar agendamento original" });
 
     const livre = await horarioDisponivel(cliente, novaData, novoHorario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
@@ -288,7 +185,8 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novo));
     const rows = await sheet.getRows();
-    for (const r of rows) if (r.id === id) await r.delete();
+    const rowAntigo = rows.find(r => r.id == id);
+    if (rowAntigo) await rowAntigo.delete();
     await sheet.addRow(novo);
 
     res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
@@ -298,7 +196,104 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- Listar ----------------
+// ---------------- Cancelar ----------------
+app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { id } = req.params;
+    const { data: agendamento, error: errorGet } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .single();
+    if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    const { data, error: errorUpdate } = await supabase
+      .from("agendamentos")
+      .update({ status: "cancelado" })
+      .eq("id", id)
+      .select()
+      .single();
+    if (errorUpdate) return res.status(500).json({ msg: "Erro ao cancelar agendamento" });
+
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    const rows = await sheet.getRows();
+    const row = rows.find(r => r.id == id);
+    if (row) {
+      row.status = "cancelado";
+      await row.save();
+    }
+
+    res.json({ msg: "Agendamento cancelado com sucesso!", agendamento: data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Confirmar ----------------
+app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ status: "confirmado", confirmado: true })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
+    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(data));
+    const rows = await sheet.getRows();
+    const row = rows.find(r => r.id == data.id);
+    if (row) {
+      row.status = "confirmado";
+      row.confirmado = true;
+      await row.save();
+    } else {
+      await sheet.addRow(data);
+    }
+
+    res.json({ msg: "Agendamento confirmado!", agendamento: data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Disponíveis ----------------
+app.get("/disponiveis/:cliente/:data", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("horario")
+      .eq("cliente", cliente)
+      .eq("data", req.params.data);
+    if (error) return res.status(500).json({ msg: "Erro Supabase" });
+
+    const ocupados = agendamentos.map(a => a.horario);
+    res.json({ ocupados });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Meus Agendamentos ----------------
 app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
