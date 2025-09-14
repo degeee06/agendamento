@@ -76,16 +76,16 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .eq("status", "pendente");
+    .in("status", ["pendente", "confirmado"]); // só considera pendente/confirmado como ocupados
 
-  if (ignoreId) {
-    query = query.not("id", "eq", ignoreId);
-  }
+  if (ignoreId) query = query.not("id", "eq", ignoreId);
 
   const { data: agendamentos, error } = await query;
   if (error) throw error;
+
   return agendamentos.length === 0;
 }
+
 
 
 // ---------------- Rotas ----------------
@@ -331,5 +331,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
