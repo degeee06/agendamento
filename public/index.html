@@ -288,6 +288,8 @@ function renderAgendamentos(lista, cliente) {
   const container = document.getElementById("agendamentos");
   container.innerHTML = "";
 
+  console.log("Agendamentos recebidos:", lista); // 👈 debug
+
   lista.forEach(a => {
     const div = document.createElement("div");
     div.className = `p-4 rounded shadow mb-3 ${
@@ -316,62 +318,54 @@ function renderAgendamentos(lista, cliente) {
     container.appendChild(div);
   });
 
-  // Handler Confirmar
-  document.querySelectorAll(".confirmarBtn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      try {
-        const res = await fetch(`/confirmar/${cliente}/${id}`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${userToken}` }
-        });
-        const result = await res.json();
-        if (res.ok) {
-          showToast("✅ Agendamento confirmado!", "success");
-          listarAgendamentos();
-        } else {
-          showToast(result.msg || "Erro ao confirmar", "error");
-        }
-      } catch (e) {
-        console.error(e);
-        showToast("Erro ao confirmar", "error");
-      }
-    });
-  });
-
-  // Handler Reagendar
-  document.querySelectorAll(".reagendarBtn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const novaData = prompt("Informe a nova data (AAAA-MM-DD):");
-      const novoHorario = prompt("Informe o novo horário (HH:MM):");
-
-      if (!novaData || !novoHorario) return;
-
-      try {
-        const res = await fetch(`/reagendar/${cliente}/${id}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${userToken}`
-          },
-          body: JSON.stringify({ novaData, novoHorario })
-        });
-
-        const result = await res.json();
-        if (res.ok) {
-          showToast("✅ Reagendamento feito!", "success");
-          listarAgendamentos();
-        } else {
-          showToast(result.msg || "Erro ao reagendar", "error");
-        }
-      } catch (e) {
-        console.error(e);
-        showToast("Erro ao reagendar", "error");
-      }
-    });
-  });
+  // ✅ recria handlers depois de renderizar
+  document.querySelectorAll(".confirmarBtn").forEach(btn => { /* ... */ });
+  document.querySelectorAll(".reagendarBtn").forEach(btn => { /* ... */ });
 }
+
+
+ document.querySelectorAll(".confirmarBtn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.dataset.id;
+    const res = await fetch(`/confirmar/${cliente}/${id}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${userToken}` }
+    });
+    const result = await res.json();
+    if (res.ok) {
+      showToast("✅ Agendamento confirmado!", "success");
+      listarAgendamentos();
+    } else {
+      showToast(result.msg || "Erro ao confirmar", "error");
+    }
+  });
+});
+
+document.querySelectorAll(".reagendarBtn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.dataset.id;
+    const novaData = prompt("Informe a nova data (AAAA-MM-DD):");
+    const novoHorario = prompt("Informe o novo horário (HH:MM):");
+    if (!novaData || !novoHorario) return;
+
+    const res = await fetch(`/reagendar/${cliente}/${id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${userToken}`
+      },
+      body: JSON.stringify({ novaData, novoHorario })
+    });
+    const result = await res.json();
+    if (res.ok) {
+      showToast("✅ Reagendamento feito!", "success");
+      listarAgendamentos();
+    } else {
+      showToast(result.msg || "Erro ao reagendar", "error");
+    }
+  });
+});
+
 
 
   // Renderiza todos os itens normalmente
@@ -546,6 +540,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
