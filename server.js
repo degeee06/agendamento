@@ -187,9 +187,17 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novo));
     const rows = await sheet.getRows();
-    const rowAntigo = rows.find(r => r.id == id);
-    if (rowAntigo) await rowAntigo.delete();
-    await sheet.addRow(novo);
+const row = rows.find(r => r.id == id);
+if (row) {
+  row.data = novaData;
+  row.horario = novoHorario;
+  row.status = "pendente";
+  row.confirmado = false;
+  await row.save();
+} else {
+  await sheet.addRow(novo);
+}
+
 
     res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
   } catch (err) {
@@ -315,5 +323,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
