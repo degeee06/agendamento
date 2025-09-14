@@ -345,7 +345,7 @@
                     const dia = new Date(`${a.data}T${a.horario}`).getDay();
                     return dia === diaSelecionado;
                 })
-                .sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
+                .sort((a, b) => new Date(`${b.data}T${b.horario}`) - new Date(`${a.data}T${a.horario}`));
 
             if (filtrados.length === 0) {
                 meusAgendamentos.innerHTML = `
@@ -765,6 +765,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
