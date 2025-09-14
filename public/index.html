@@ -567,27 +567,35 @@
 
 
         // ---------------- LOGIN ----------------
-        loginBtn.addEventListener('click', async ()=>{
-            const email=document.getElementById('email').value;
-            const senha=document.getElementById('senha').value;
-            if(!email || !senha) {
-                showToast("Preencha email e senha", "warning");
-                return;
-            }
-            
-            try {
-                const { data, error } = await supabase.auth.signInWithPassword({email,password:senha});
-                if(error){ showToast(error.message,"error"); return; }
-                userToken=data.session.access_token;
-                loginSection.style.display='none';
-                form.style.display='block';
-                listarAgendamentos();
-                showToast("Login realizado com sucesso!", "success");
-            } catch(e) {
-                console.error(e);
-                showToast("Erro ao fazer login", "error");
-            }
-        });
+        loginBtn.addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+    if(!email || !senha) {
+        showToast("Preencha email e senha", "warning");
+        return;
+    }
+    
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+        if(error){ showToast(error.message,"error"); return; }
+
+        userToken = data.session.access_token;
+        loginSection.style.display = 'none';
+        form.style.display = 'block';
+
+        // ------------------- Seleciona o dia atual -------------------
+        const hoje = new Date();
+        diaSelecionado = hoje.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+        if(diaSelecionado === 1) diaSelecionado = 1; // Ajuste para segunda, se quiser ignorar domingo
+
+        listarAgendamentos(); // já renderiza com o dia atual
+        showToast("Login realizado com sucesso!", "success");
+    } catch(e) {
+        console.error(e);
+        showToast("Erro ao fazer login", "error");
+    }
+});
+
 
         // ---------------- AGENDAR ----------------
         form.addEventListener('submit', async (e)=>{
@@ -741,6 +749,7 @@
     </script>
 </body>
 </html>
+
 
 
 
