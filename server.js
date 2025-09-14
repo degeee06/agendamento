@@ -125,7 +125,7 @@ app.post("/reagendar/:cliente/:id", async (req, res) => {
   const { novaData, novoHorario } = req.body;
 
   try {
-    // Atualiza no Supabase
+    // Atualiza no Supabase (aceita qualquer data/horário, sem bloqueio)
     const { data: agendamento, error } = await supabase
       .from("agendamentos")
       .update({ data: novaData, horario: novoHorario })
@@ -147,6 +147,8 @@ app.post("/reagendar/:cliente/:id", async (req, res) => {
       row.data = novaData;
       row.horario = novoHorario;
       await row.save();
+    } else {
+      await sheet.addRow(agendamento); // se não existir no Sheets, cria
     }
 
     return res.json({ message: "Agendamento reagendado com sucesso!", agendamento });
@@ -155,6 +157,7 @@ app.post("/reagendar/:cliente/:id", async (req, res) => {
     return res.status(500).json({ message: "Erro interno ao reagendar" });
   }
 });
+
 
 
 // ---------------- Confirmar ----------------
@@ -229,4 +232,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
