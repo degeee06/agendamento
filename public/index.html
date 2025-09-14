@@ -231,8 +231,6 @@ function showToast(message, type = "success") {
   setTimeout(()=>{toast.classList.add("opacity-0","translate-x-5"); setTimeout(()=>{toast.remove(); activeToasts=activeToasts.filter(t=>t!==toast);},500);},3000);
 }
 
-// ---------------- RENDER AGENDAMENTOS ----------------
-// ---------------- RENDER AGENDAMENTOS ----------------
 function renderAgendamentos() {
   const filtroNome = searchInput.value.toLowerCase();
   const filtroStatus = statusFilter.value;
@@ -286,7 +284,7 @@ function renderAgendamentos() {
           });
           if (res.ok) {
             showToast("Agendamento confirmado!", "success");
-            renderAgendamentos(); // atualiza a lista
+            listarAgendamentos();
           } else showToast("Erro ao confirmar", "error");
         } catch (e) {
           console.error(e);
@@ -336,7 +334,7 @@ function renderAgendamentos() {
           });
           if(res.ok){
             showToast("Agendamento reagendado!","success");
-            renderAgendamentos();
+            listarAgendamentos();
           } else showToast("Erro ao reagendar","error");
         } catch(e){
           console.error(e);
@@ -361,7 +359,7 @@ function renderAgendamentos() {
         });
         if(res.ok){
           showToast("Agendamento cancelado!", "success");
-          renderAgendamentos(); // atualiza a lista
+          listarAgendamentos();
         } else {
           showToast("Erro ao cancelar", "error");
         }
@@ -377,65 +375,6 @@ function renderAgendamentos() {
   });
 }
 
-
-    // Reagendar
-    const reBtn = document.createElement("button");
-    reBtn.textContent = "Reagendar";
-    reBtn.className = "px-3 py-1 bg-yellow-500 rounded text-white";
-
-    reBtn.addEventListener("click", () => {
-      if(div.querySelector(".reagendar-form")) return; // evita duplicar form
-
-      const miniForm = document.createElement("div");
-      miniForm.className = "reagendar-form mt-2 flex flex-col gap-2 p-2 bg-white/10 rounded";
-
-      miniForm.innerHTML = `
-        <input type="date" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
-        <input type="time" class="p-2 rounded bg-white/20 border border-white/30 text-black" />
-        <div class="flex gap-2">
-          <button class="confirmar-mini bg-green-600 text-white px-2 py-1 rounded">Confirmar</button>
-          <button class="cancelar-mini bg-red-600 text-white px-2 py-1 rounded">Cancelar</button>
-        </div>
-      `;
-
-      div.appendChild(miniForm);
-
-      // Cancelar
-      miniForm.querySelector(".cancelar-mini").addEventListener("click", () => {
-        miniForm.remove();
-      });
-
-      // Confirmar
-      miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
-        const novaData = miniForm.querySelector('input[type="date"]').value;
-        const novoHorario = miniForm.querySelector('input[type="time"]').value;
-        if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
-
-        try {
-          const res = await fetch(`/reagendar/${cliente}/${a.id}`,{
-            method: "POST",
-            headers: {
-              "Authorization":`Bearer ${userToken}`,
-              "Content-Type":"application/json"
-            },
-            body: JSON.stringify({novaData, novoHorario})
-          });
-          if(res.ok){
-            showToast("Agendamento reagendado!","success");
-            listarAgendamentos();
-          } else showToast("Erro ao reagendar","error");
-        } catch(e){
-          console.error(e);
-          showToast("Erro ao reagendar","error");
-        }
-      });
-    });
-    btnContainer.appendChild(reBtn);
-
-    div.appendChild(btnContainer);
-    meusAgendamentos.appendChild(div);
-  });
-}
 
 
 // ---------------- LISTAR AGENDAMENTOS ----------------
@@ -541,6 +480,7 @@ exportPDFBtn.addEventListener("click", ()=>{
 AOS.init();
 feather.replace();
 </script>
+
 
 
 
