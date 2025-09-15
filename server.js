@@ -254,8 +254,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("id", id);
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
 
-    const livre = await horarioDisponivel(cliente, novaData, novoHorario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
 
     const novoAgendamento = {
       cliente,
@@ -309,5 +308,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
