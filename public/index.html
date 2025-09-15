@@ -677,7 +677,7 @@ loginBtn.addEventListener('click', async () => {
                     listarAgendamentos(); 
                 } else {
                     const errorData = await response.json();
-                    showToast(errorData.message || "Erro ao agendar", "error");
+                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
                 }
             } catch(err){ 
                 console.error(err); 
@@ -826,6 +826,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
