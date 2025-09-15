@@ -126,7 +126,7 @@ app.post("/reagendar/:cliente/:id", async (req, res) => {
   const { novaData, novoHorario } = req.body;
 
   try {
-    // Atualiza no Supabase (aceita qualquer data/horário, sem bloqueio)
+    // Atualiza no Supabase
     const { data: agendamento, error } = await supabase
       .from("agendamentos")
       .update({ data: novaData, horario: novoHorario })
@@ -141,18 +141,19 @@ app.post("/reagendar/:cliente/:id", async (req, res) => {
     // Atualiza no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    // Busca a linha pelo ID de forma segura
-const rows = await sheet.getRows({ limit: 0 }); // 0 = pega todas, mas você pode limitar se quiser
-const row = rows.find(r => String(r.id) === String(data.id));
+    const rows = await sheet.getRows();
 
-if (row) {
-  row.status = data.status;       // "confirmado" ou "cancelado"
-  row.confirmado = data.confirmado;
-  await row.save();
-} else {
-  // Cria a linha no Sheets com todos os campos
-  await sheet.addRow(data);
-}
+    // Comparar como string para evitar mismatch de tipo
+    const row = rows.find(r => String(r.id) === String(agendamento.id));
+
+    if (row) {
+      row.data = novaData;
+      row.horario = novoHorario;
+      await row.save();
+    } else {
+      await ensureDynamicHeaders(sheet, Object.keys(agendamento));
+      await sheet.addRow(agendamento);
+    }
 
     return res.json({ message: "Agendamento reagendado com sucesso!", agendamento });
   } catch (e) {
@@ -160,6 +161,7 @@ if (row) {
     return res.status(500).json({ message: "Erro interno ao reagendar" });
   }
 });
+
 
 // ---------------- Cancelar ----------------
 app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -273,6 +275,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
