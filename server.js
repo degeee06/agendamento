@@ -45,19 +45,21 @@ async function authMiddleware(req, res, next) {
   if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
   req.user = data.user;
-  req.clienteId = data.user.user_metadata.cliente_id;
+  req.clienteId = data.user.user_metadata?.cliente_id; // garante que não quebre se não existir
   if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
   next();
 }
 
 // ---------------- Google Sheets ----------------
-async function accessSpreadsheet(cliente) {
-  const SPREADSHEET_ID = planilhasClientes[cliente];
-  const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
-  await doc.useServiceAccountAuth(creds);
-  await doc.loadInfo();
-  return doc;
+async function ensureDynamicHeaders(sheet, newKeys) {
+  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
+  const currentHeaders = sheet.headerValues || [];
+  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+  if (headersToAdd.length > 0) {
+    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
+  }
 }
+
 
 async function ensureDynamicHeaders(sheet, newKeys) {
   await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
@@ -108,8 +110,12 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(data));
-    await sheet.addRow(data);
+
+    // Garantir que 'id' esteja no header
+    await ensureDynamicHeaders(sheet, [...Object.keys(data), "id"]);
+
+    // Salvar no Google Sheets incluindo o id
+    await sheet.addRow({ ...data, id: data.id });
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
 
@@ -270,5 +276,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
