@@ -113,9 +113,14 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
+  console.error("❌ Erro no /reagendar:");
+  console.error("Cliente:", req.params.cliente);
+  console.error("ID:", req.params.id);
+  console.error("Body:", req.body);
+  console.error("Stack:", err.stack || err);
+  res.status(500).json({ msg: "Erro interno", detalhe: err.message });
+}
+
 });
 
 // ---------------- Disponíveis ----------------
@@ -295,4 +300,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
