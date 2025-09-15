@@ -176,7 +176,6 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
 }
 await sheet.addRow(novo);
 
-    }
 
     res.json({ msg: "Agendamento confirmado!", agendamento: data });
   } catch (err) {
@@ -303,6 +302,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
