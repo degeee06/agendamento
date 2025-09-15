@@ -70,21 +70,21 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 
 // ---------------- Disponibilidade ----------------
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  // Checa todos os agendamentos ativos (status diferente de cancelado)
   let query = supabase
     .from("agendamentos")
     .select("*")
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .not("status", "eq", "cancelado");
+    .not("status", "eq", "cancelado"); // bloqueia pendente e confirmado, libera cancelado
 
-  if (ignoreId) query = query.not("id", "eq", ignoreId);
+  if (ignoreId) query = query.not("id", "eq", ignoreId); // ignora próprio ID para reagendamento
 
   const { data: agendamentos, error } = await query;
   if (error) throw error;
   return agendamentos.length === 0;
 }
+
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -107,6 +107,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
 
     const { data, error } = await supabase
       .from("agendamentos")
@@ -230,8 +231,9 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     // Checa se novo horário está livre, ignorando o próprio ID
-    const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+   const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
+   if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
 
     // Atualiza o agendamento existente
     const { data: novo, error: errorUpdate } = await supabase
@@ -289,3 +291,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
