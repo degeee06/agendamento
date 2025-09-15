@@ -68,18 +68,7 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
-// ---------------- Disponibilidade ----------------
-async function horarioDisponivel(cliente, data, horario) {
-  const { data: agendamentos, error } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", cliente)
-    .eq("data", data)
-    .eq("horario", horario)
-    .eq("status", "pendente"); // só bloqueia horários ativos
-  if (error) throw error;
-  return agendamentos.length === 0;
-}
+
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -100,8 +89,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const livre = await horarioDisponivel(cliente, Data, Horario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     const { data, error } = await supabase
       .from("agendamentos")
@@ -255,8 +242,6 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("id", id);
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
 
-    const livre = await horarioDisponivel(cliente, novaData, novoHorario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     const novoAgendamento = {
       cliente,
@@ -310,3 +295,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
