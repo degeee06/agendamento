@@ -68,22 +68,22 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
+
 // ---------------- Disponibilidade ----------------
-async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  let query = supabase
+async function horarioDisponivel(cliente, data, horario) {
+  const { data: agendamentos, error } = await supabase
     .from("agendamentos")
     .select("*")
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .not("status", "eq", "cancelado"); // bloqueia pendente e confirmado, libera cancelado
+    .neq("status", "cancelado"); // só bloqueia horários não cancelados
 
-  if (ignoreId) query = query.not("id", "eq", ignoreId); // ignora próprio ID para reagendamento
-
-  const { data: agendamentos, error } = await query;
   if (error) throw error;
-  return agendamentos.length === 0;
+
+  return agendamentos.length === 0; // se não houver agendamento ativo, horário livre
 }
+
 
 
 // ---------------- Rotas ----------------
@@ -291,4 +291,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
