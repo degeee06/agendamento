@@ -379,7 +379,11 @@
                                dataAgendamento < new Date(hoje.setHours(0,0,0,0));
                     }
                 })
-                .sort((a, b) => new Date(`${b.data}T${b.horario}`) - new Date(`${a.data}T${a.horario}`));
+                .sort((a,b) => {
+  const dateA = new Date(`${a.data}T${a.horario}`);
+  const dateB = new Date(`${b.data}T${b.horario}`);
+  return dateA - dateB;
+});
 
             if (filtrados.length === 0) {
                 meusAgendamentos.innerHTML = `
@@ -822,6 +826,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
