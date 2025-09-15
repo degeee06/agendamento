@@ -79,46 +79,46 @@ app.get("/:cliente", (req, res) => {
 });
 
 // ---------------- Agendar ----------------
-app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
+app.post("/reagendar/:cliente/:id", async (req, res) => {
+  const { cliente, id } = req.params;
+  const { novaData, novoHorario } = req.body;
+
   try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
-
-    const novoAgendamento = {
-      cliente,
-      nome: Nome,
-      email: Email,
-      telefone: Telefone,
-      data: Data,
-      horario: Horario,
-      status: "pendente",
-      confirmado: false
-    };
-
-    const { data, error } = await supabase
+    // Atualiza no Supabase
+    const { data: agendamento, error } = await supabase
       .from("agendamentos")
-      .insert([novoAgendamento])
+      .update({ Data: novaData, Horario: novoHorario }) // <-- atenção aos nomes exatos
+      .eq("id", id)
+      .eq("cliente", cliente)
       .select()
       .single();
 
-    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+    if (error) return res.status(500).json({ message: "Erro ao atualizar Supabase" });
+    if (!agendamento) return res.status(404).json({ message: "Agendamento não encontrado" });
 
+    // Atualiza no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(data));
-    await sheet.addRow(data);
+    const rows = await sheet.getRows();
 
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
+    const row = rows.find(r => String(r.id) === String(agendamento.id));
 
-  } catch (err) {
-    console.error("Erro interno na rota /agendar:", err);
-    res.status(500).json({ msg: "Erro interno" });
+    if (row) {
+      row.Data = novaData;
+      row.Horario = novoHorario;
+      await row.save();
+    } else {
+      await ensureDynamicHeaders(sheet, Object.keys(agendamento));
+      await sheet.addRow(agendamento);
+    }
+
+    return res.json({ message: "Agendamento reagendado com sucesso!", agendamento });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Erro interno ao reagendar" });
   }
 });
+
 
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", async (req, res) => {
@@ -275,6 +275,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
