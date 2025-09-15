@@ -642,39 +642,45 @@ loginBtn.addEventListener('click', async () => {
 
 
 
-        // ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+       // ---------------- AGENDAR ----------------
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const formData = new FormData(form);
+  const dataToSend = {};
+  formData.forEach((v, k) => dataToSend[k.toLowerCase()] = v); // força minúsculo
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
+  // Verifica campos obrigatórios
+  if (!dataToSend.nome || !dataToSend.email || !dataToSend.telefone || !dataToSend.data || !dataToSend.horario) {
+    showToast("Preencha todos os campos", "warning");
+    return;
+  }
 
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Erro ao agendar", "error");
-                }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
-            }
-        });
+  const cliente = localStorage.getItem("cliente_id");
+  const userToken = localStorage.getItem("token");
+
+  try {
+    const response = await fetch(`/agendar/${cliente}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${userToken}`
+      },
+      body: JSON.stringify(dataToSend)
+    });
+
+    if (response.ok) {
+      showToast("Agendado com sucesso!", "success");
+      form.reset();
+      listarAgendamentos();
+    } else {
+      const errorData = await response.json();
+      showToast(errorData.msg || "Erro ao agendar", "error");
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Erro ao enviar agendamento", "error");
+  }
+});
 
 
 
@@ -808,6 +814,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
