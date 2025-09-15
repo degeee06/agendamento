@@ -85,41 +85,44 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
+    // desestrutura com minúsculo, pois é assim que o frontend envia
     const { nome, email, telefone, data, horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
+    if (!nome || !email || !telefone || !data || !horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
     const novoAgendamento = {
       cliente,
-      nome: Nome,
-      email: Email,
-      telefone: Telefone,
-      data: Data,
-      horario: Horario,
+      nome,
+      email,
+      telefone,
+      data,
+      horario,
       status: "pendente",
       confirmado: false
     };
 
-    const { data, error } = await supabase
+    // renomeia para não conflitar
+    const { data: insertData, error: insertError } = await supabase
       .from("agendamentos")
       .insert([novoAgendamento])
       .select()
       .single();
 
-    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+    if (insertError) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(data));
-    await sheet.addRow(data);
+    await ensureDynamicHeaders(sheet, Object.keys(insertData));
+    await sheet.addRow(insertData);
 
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: insertData });
 
   } catch (err) {
     console.error("Erro interno na rota /agendar:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", async (req, res) => {
@@ -272,6 +275,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
