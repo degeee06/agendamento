@@ -239,6 +239,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     const { novaData, novoHorario } = req.body;
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Nova data e horário obrigatórios" });
 
+    // Busca o agendamento original
     const { data: agendamento, error: errorGet } = await supabase
       .from("agendamentos")
       .select("*")
@@ -248,14 +249,14 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
 
     if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
+    // Marca o original como reagendado
     const { error: errorUpdate } = await supabase
       .from("agendamentos")
       .update({ status: "reagendado" })
       .eq("id", id);
-    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
+    if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar agendamento original" });
 
-
-
+    // Cria o novo agendamento no mesmo horário (sem verificar disponibilidade)
     const novoAgendamento = {
       cliente,
       nome: agendamento.nome,
@@ -274,6 +275,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .single();
     if (errorInsert) return res.status(500).json({ msg: "Erro ao criar novo agendamento" });
 
+    // Atualiza Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novo));
@@ -308,6 +310,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
