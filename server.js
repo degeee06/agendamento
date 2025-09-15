@@ -109,21 +109,32 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
 
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente,
-        nome: Nome,
-        email: Email,
-        telefone: Telefone,
-        data: Data,
-        horario: Horario,
-        status: "pendente",
-        confirmado: false
-      }])
-      .select()
-      .single();
-    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+    // Remove qualquer agendamento cancelado no mesmo horário e data
+await supabase
+  .from("agendamentos")
+  .delete()
+  .eq("cliente", cliente)
+  .eq("data", Data)
+  .eq("horario", Horario)
+  .eq("status", "cancelado");
+
+// Agora insere o novo agendamento
+const { data, error } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente,
+    nome: Nome,
+    email: Email,
+    telefone: Telefone,
+    data: Data,
+    horario: Horario,
+    status: "pendente",
+    confirmado: false
+  }])
+  .select()
+  .single();
+
+if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
@@ -291,5 +302,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
