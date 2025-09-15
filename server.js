@@ -158,17 +158,22 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(data));
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id === data.id);
-    if (row) {
-      row.status = "confirmado";
-      row.confirmado = true;
-      await row.save();
-    } else {
-      await sheet.addRow(data);
-    }
+const sheet = doc.sheetsByIndex[0];
+await ensureDynamicHeaders(sheet, Object.keys(novo));
+
+try {
+  const rows = await sheet.getRows();
+  const row = rows.find(r => String(r.id) === String(id));
+  if (row) {
+    await row.delete();
+  }
+} catch (e) {
+  console.error("⚠️ Erro ao atualizar Google Sheets no reagendamento:", e.message);
+}
+
+// Sempre adiciona o novo, mesmo se não achou/deletou o antigo
+await sheet.addRow(novo);
+
 
     res.json({ msg: "Agendamento confirmado!", agendamento: data });
   } catch (err) {
@@ -296,3 +301,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
