@@ -276,11 +276,22 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     if (errorInsert) return res.status(500).json({ msg: "Erro ao criar novo agendamento" });
 
     const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(novo));
-    const rows = await sheet.getRows();
-    for (const r of rows) if (r.id === id) await r.delete();
-    await sheet.addRow(novo);
+const sheet = doc.sheetsByIndex[0];
+await ensureDynamicHeaders(sheet, Object.keys(novo));
+
+try {
+  const rows = await sheet.getRows();
+  const row = rows.find(r => String(r.id) === String(id));
+  if (row) {
+    await row.delete();
+  }
+} catch (e) {
+  console.error("⚠️ Erro ao atualizar Google Sheets no reagendamento:", e.message);
+}
+
+// Sempre adiciona o novo, mesmo se não achou/deletou o antigo
+await sheet.addRow(novo);
+
 
     res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
   } catch (err) {
@@ -309,4 +320,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
