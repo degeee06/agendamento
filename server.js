@@ -41,33 +41,14 @@ async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-  email: emailInput.value,
-  password: passwordInput.value
-});
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
-if (error) {
-  alert("Erro no login: " + error.message);
-  return;
+  req.user = data.user;
+  req.clienteId = data.user.user_metadata.cliente_id;
+  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
+  next();
 }
-
-const userToken = data.session.access_token; // ⚠️ este é o token que vai no header
-
-const response = await fetch(`/agendar/${cliente}`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${userToken}` // ⚠️ aqui vai o token do login
-  },
-  body: JSON.stringify({
-    Nome: form.Nome.value,
-    Email: form.Email.value,
-    Telefone: form.Telefone.value,
-    Data: form.Data.value,
-    Horario: form.Horario.value
-  })
-});
-
 
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet(cliente) {
@@ -102,44 +83,41 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    // desestrutura com minúsculo, pois é assim que o frontend envia
-    const { nome, email, telefone, data, horario } = req.body;
-    if (!nome || !email || !telefone || !data || !horario)
+    const { Nome, Email, Telefone, Data, Horario } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
     const novoAgendamento = {
       cliente,
-      nome,
-      email,
-      telefone,
-      data,
-      horario,
+      nome: Nome,
+      email: Email,
+      telefone: Telefone,
+      data: Data,
+      horario: Horario,
       status: "pendente",
       confirmado: false
     };
 
-    // renomeia para não conflitar
-    const { data: insertData, error: insertError } = await supabase
+    const { data, error } = await supabase
       .from("agendamentos")
       .insert([novoAgendamento])
       .select()
       .single();
 
-    if (insertError) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(insertData));
-    await sheet.addRow(insertData);
+    await ensureDynamicHeaders(sheet, Object.keys(data));
+    await sheet.addRow(data);
 
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: insertData });
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
 
   } catch (err) {
     console.error("Erro interno na rota /agendar:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", async (req, res) => {
@@ -292,10 +270,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
 
 
