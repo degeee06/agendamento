@@ -643,38 +643,37 @@ loginBtn.addEventListener('click', async () => {
 
 
         // ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+        form.addEventListener("submit", async (e) => {
+  e.preventDefault();
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
+  const nome = form.Nome.value;
+  const email = form.Email.value;
+  const telefone = form.Telefone.value;
+  const data = form.Data.value;
+  const horario = form.Horario.value;
 
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Erro ao agendar", "error");
-                }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
-            }
-        });
+  const token = localStorage.getItem("token"); // pega token salvo no login
+  const clienteId = localStorage.getItem("cliente_id"); // precisa bater com o backend
+
+  const res = await fetch(`/agendar/${clienteId}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}` // 🔑 aqui estava faltando
+    },
+    body: JSON.stringify({ nome, email, telefone, data, horario })
+  });
+
+  const result = await res.json();
+  if (res.ok) {
+    alert(result.msg);
+    form.reset();
+    listarAgendamentos(); // atualiza lista
+  } else {
+    alert(result.msg || "Erro ao agendar");
+  }
+});
+
 
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
@@ -806,6 +805,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
