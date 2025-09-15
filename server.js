@@ -61,15 +61,6 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 }
 
 
-async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
-  const currentHeaders = sheet.headerValues || [];
-  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
-  if (headersToAdd.length > 0) {
-    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
-  }
-}
-
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
 
@@ -276,6 +267,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
