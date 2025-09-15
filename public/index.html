@@ -409,7 +409,7 @@
                             <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
                             <span class="font-medium">${a.horario}</span>
                         </div>
-                        <span class="text-sm px-3 py-1 rounded-full ${a.status === 'confirmado' ? 'status-confirmado' : a.status === 'pendente' ? 'status-pendente' : a.status === 'reagendado' ? 'status-reagendado' : 'status-cancelado'}">
+                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
                             ${a.status}
                         </span>
                     </div>
