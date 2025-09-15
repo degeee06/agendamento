@@ -240,12 +240,12 @@
                         <i data-feather="filter" class="w-5 h-5 text-gray-400"></i>
                     </div>
                     <select id="statusFilter" 
-        class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none input-field">
-    <option value="" class="text-black">Todos os status</option>
-    <option value="pendente" class="text-black">Pendente</option>
-    <option value="confirmado" class="text-black">Confirmado</option>
-    <option value="cancelado" class="text-black">Cancelado</option>
-</select>
+                            class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none input-field">
+                        <option value="">Todos os status</option>
+                        <option value="pendente">Pendente</option>
+                        <option value="confirmado">Confirmado</option>
+                        <option value="cancelado">Cancelado</option>
+                    </select>
                 </div>
                 <div class="flex gap-2">
                     <button id="exportCSVBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2">
@@ -409,7 +409,7 @@
                             <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
                             <span class="font-medium">${a.horario}</span>
                         </div>
-                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
+                        <span class="text-sm px-3 py-1 rounded-full ${a.status === 'confirmado' ? 'status-confirmado' : a.status === 'pendente' ? 'status-pendente' : a.status === 'reagendado' ? 'status-reagendado' : 'status-cancelado'}">
                             ${a.status}
                         </span>
                     </div>
@@ -826,7 +826,6 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
-
 
 
 
