@@ -105,37 +105,38 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
+    // Verifica se há horários ocupados (não cancelados)
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-
     // Remove qualquer agendamento cancelado no mesmo horário e data
-await supabase
-  .from("agendamentos")
-  .delete()
-  .eq("cliente", cliente)
-  .eq("data", Data)
-  .eq("horario", Horario)
-  .eq("status", "cancelado");
+    await supabase
+      .from("agendamentos")
+      .delete()
+      .eq("cliente", cliente)
+      .eq("data", Data)
+      .eq("horario", Horario)
+      .eq("status", "cancelado");
 
-// Agora insere o novo agendamento
-const { data, error } = await supabase
-  .from("agendamentos")
-  .insert([{
-    cliente,
-    nome: Nome,
-    email: Email,
-    telefone: Telefone,
-    data: Data,
-    horario: Horario,
-    status: "pendente",
-    confirmado: false
-  }])
-  .select()
-  .single();
+    // Insere o novo agendamento
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente,
+        nome: Nome,
+        email: Email,
+        telefone: Telefone,
+        data: Data,
+        horario: Horario,
+        status: "pendente",
+        confirmado: false
+      }])
+      .select()
+      .single();
 
-if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
+    // Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
@@ -302,5 +303,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
