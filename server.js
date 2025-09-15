@@ -230,6 +230,7 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
 });
 
 // ---------------- Reagendar ----------------
+// ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -256,7 +257,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("id", id);
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar agendamento original" });
 
-    // Cria o novo agendamento no mesmo horário (sem verificar disponibilidade)
+    // Cria o novo agendamento SEM verificar disponibilidade
     const novoAgendamento = {
       cliente,
       nome: agendamento.nome,
@@ -280,7 +281,8 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novo));
     const rows = await sheet.getRows();
-    for (const r of rows) if (r.id === id) await r.delete();
+    // Remove o antigo apenas do Google Sheets
+    for (const r of rows) if (r.id == id) await r.delete();
     await sheet.addRow(novo);
 
     res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
@@ -289,6 +291,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ---------------- Listar ----------------
 app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
@@ -310,6 +313,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
