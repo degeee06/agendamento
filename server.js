@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
+
 );
 
 // ---------------- Clientes e planilhas ----------------
@@ -140,16 +141,18 @@ app.post("/reagendar/:cliente/:id", async (req, res) => {
     // Atualiza no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id == id); // procura pelo mesmo ID do Supabase
+    // Busca a linha pelo ID de forma segura
+const rows = await sheet.getRows({ limit: 0 }); // 0 = pega todas, mas você pode limitar se quiser
+const row = rows.find(r => String(r.id) === String(data.id));
 
-    if (row) {
-      row.data = novaData;
-      row.horario = novoHorario;
-      await row.save();
-    } else {
-      await sheet.addRow(agendamento); // se não existir no Sheets, cria
-    }
+if (row) {
+  row.status = data.status;       // "confirmado" ou "cancelado"
+  row.confirmado = data.confirmado;
+  await row.save();
+} else {
+  // Cria a linha no Sheets com todos os campos
+  await sheet.addRow(data);
+}
 
     return res.json({ message: "Agendamento reagendado com sucesso!", agendamento });
   } catch (e) {
@@ -270,5 +273,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
