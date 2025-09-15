@@ -235,18 +235,19 @@
                     </div>
                 </div>
                 <div class="w-full md:w-48 relative">
-                    <label for="statusFilter" class="sr-only">Status</label>
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i data-feather="filter" class="w-5 h-5 text-gray-400"></i>
-                    </div>
-                    <select id="statusFilter" 
-                            class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none input-field">
-                        <option value="">Todos os status</option>
-                        <option value="pendente">Pendente</option>
-                        <option value="confirmado">Confirmado</option>
-                        <option value="cancelado">Cancelado</option>
-                    </select>
-                </div>
+    <label for="statusFilter" class="sr-only">Status</label>
+    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <i data-feather="filter" class="w-5 h-5 text-gray-300"></i>
+    </div>
+    <select id="statusFilter" 
+        class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/20 border border-white/20 text-gray-200 focus:outline-none input-field">
+        <option value="">Todos os status</option>
+        <option value="pendente">Pendente</option>
+        <option value="confirmado">Confirmado</option>
+        <option value="cancelado">Cancelado</option>
+    </select>
+</div>
+
                 <div class="flex gap-2">
                     <button id="exportCSVBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2">
                         <i data-feather="download" class="w-5 h-5"></i>
@@ -826,6 +827,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
