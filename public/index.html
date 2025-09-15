@@ -652,27 +652,35 @@ loginBtn.addEventListener('click', async () => {
   const data = form.Data.value;
   const horario = form.Horario.value;
 
-  const token = localStorage.getItem("token"); // pega token salvo no login
-  const clienteId = localStorage.getItem("cliente_id"); // precisa bater com o backend
+  // token e cliente_id já devem ter sido salvos no login
+  const token = localStorage.getItem("token");
+  const clienteId = localStorage.getItem("cliente_id");
 
   const res = await fetch(`/agendar/${clienteId}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}` // 🔑 aqui estava faltando
+      "Authorization": `Bearer ${token}` // 🔑 obrigatório
     },
-    body: JSON.stringify({ nome, email, telefone, data, horario })
+    body: JSON.stringify({
+      nome,      // precisa estar em minúsculo
+      email,
+      telefone,
+      data,
+      horario
+    })
   });
 
   const result = await res.json();
   if (res.ok) {
     alert(result.msg);
     form.reset();
-    listarAgendamentos(); // atualiza lista
+    listarAgendamentos();
   } else {
     alert(result.msg || "Erro ao agendar");
   }
 });
+
 
 
         // ---------------- FILTROS ----------------
@@ -805,6 +813,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
