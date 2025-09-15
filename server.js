@@ -41,15 +41,32 @@ async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
 
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
+  const { data, error } = await supabase.auth.signInWithPassword({
+  email: emailInput.value,
+  password: passwordInput.value
+});
 
-  req.user = data.user;
-  req.clienteId = data.user.user_metadata.cliente_id;
-  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
-  next();
+if (error) {
+  alert("Erro no login: " + error.message);
+  return;
 }
 
+const userToken = data.session.access_token; // ⚠️ este é o token que vai no header
+
+const response = await fetch(`/agendar/${cliente}`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${userToken}` // ⚠️ aqui vai o token do login
+  },
+  body: JSON.stringify({
+    Nome: form.Nome.value,
+    Email: form.Email.value,
+    Telefone: form.Telefone.value,
+    Data: form.Data.value,
+    Horario: form.Horario.value
+  })
+});
 
 
 // ---------------- Google Sheets ----------------
@@ -275,6 +292,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
