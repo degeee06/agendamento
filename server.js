@@ -113,14 +113,9 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
   } catch (err) {
-  console.error("❌ Erro no /reagendar:");
-  console.error("Cliente:", req.params.cliente);
-  console.error("ID:", req.params.id);
-  console.error("Body:", req.body);
-  console.error("Stack:", err.stack || err);
-  res.status(500).json({ msg: "Erro interno", detalhe: err.message });
-}
-
+    console.error(err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
 });
 
 // ---------------- Disponíveis ----------------
@@ -165,17 +160,15 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
-    try {
-  const rows = await sheet.getRows();
-  const row = rows.find(r => String(r.id) === String(id));
-  if (row) {
-    await row.delete();
-  }
-} catch (e) {
-  console.error("⚠️ Erro ao atualizar Google Sheets no reagendamento:", e.message);
-}
-await sheet.addRow(novo);
-
+    const rows = await sheet.getRows();
+    const row = rows.find(r => r.id === data.id);
+    if (row) {
+      row.status = "confirmado";
+      row.confirmado = true;
+      await row.save();
+    } else {
+      await sheet.addRow(data);
+    }
 
     res.json({ msg: "Agendamento confirmado!", agendamento: data });
   } catch (err) {
@@ -250,6 +243,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao atualizar original" });
 
 
+
     const novoAgendamento = {
       cliente,
       nome: agendamento.nome,
@@ -302,7 +296,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
