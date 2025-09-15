@@ -68,7 +68,6 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
-
 // ---------------- Disponibilidade ----------------
 async function horarioDisponivel(cliente, data, horario) {
   const { data: agendamentos, error } = await supabase
@@ -83,8 +82,6 @@ async function horarioDisponivel(cliente, data, horario) {
 
   return agendamentos.length === 0; // se não houver agendamento ativo, horário livre
 }
-
-
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -105,7 +102,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // Verifica se há horários ocupados (não cancelados)
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
@@ -118,7 +114,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    // Insere o novo agendamento
+    // Agora insere o novo agendamento
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -136,7 +132,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    // Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
@@ -163,6 +158,7 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("cliente", cliente)
       .select()
       .single();
+
     if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
@@ -243,9 +239,8 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
     if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     // Checa se novo horário está livre, ignorando o próprio ID
-   const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
-   if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
-
+    const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
+    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     // Atualiza o agendamento existente
     const { data: novo, error: errorUpdate } = await supabase
@@ -303,6 +298,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
