@@ -50,38 +50,6 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ---------------- Middleware Free/VIP ----------------
-async function planoMiddleware(req, res, next) {
-  const email = req.user.email;
-
-  const { data: user, error } = await supabase
-    .from("users")
-    .select("plano, vip_valid_until")
-    .eq("email", email)
-    .single();
-
-  if (error || !user) {
-    req.plano = "free";
-  } else {
-    if (
-      user.plano === "vip" &&
-      user.vip_valid_until &&
-      new Date(user.vip_valid_until) < new Date()
-    ) {
-      await supabase
-        .from("users")
-        .update({ plano: "free", vip_valid_until: null })
-        .eq("email", email);
-
-      req.plano = "free";
-    } else {
-      req.plano = user.plano;
-    }
-  }
-
-  next();
-}
-
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet(cliente) {
   const SPREADSHEET_ID = planilhasClientes[cliente];
@@ -100,22 +68,23 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
+
 // ---------------- Disponibilidade ----------------
-async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  let query = supabase
+async function horarioDisponivel(cliente, data, horario) {
+  const { data: agendamentos, error } = await supabase
     .from("agendamentos")
     .select("*")
     .eq("cliente", cliente)
     .eq("data", data)
     .eq("horario", horario)
-    .neq("status", "cancelado");
+    .neq("status", "cancelado"); // só bloqueia horários não cancelados
 
-  if (ignoreId) query = query.neq("id", ignoreId);
-
-  const { data: agendamentos, error } = await query;
   if (error) throw error;
-  return agendamentos.length === 0;
+
+  return agendamentos.length === 0; // se não houver agendamento ativo, horário livre
 }
+
+
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
@@ -127,7 +96,7 @@ app.get("/:cliente", (req, res) => {
 });
 
 // ---------------- Agendar ----------------
-app.post("/agendar/:cliente", authMiddleware, planoMiddleware, async (req, res) => {
+app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
@@ -136,48 +105,36 @@ app.post("/agendar/:cliente", authMiddleware, planoMiddleware, async (req, res) 
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // Limite para free
-    if (req.plano === "free") {
-      const { data: agendamentos, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", Email)
-        .gte("data", new Date().toISOString().split("T")[0])
-        .neq("status", "cancelado");
-
-      if (error) return res.status(500).json({ msg: "Erro Supabase" });
-
-      if (agendamentos.length >= 1)
-        return res.status(403).json({ msg: "Plano free permite apenas 1 agendamento ativo" });
-    }
-
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    await supabase
-      .from("agendamentos")
-      .delete()
-      .eq("cliente", cliente)
-      .eq("data", Data)
-      .eq("horario", Horario)
-      .eq("status", "cancelado");
 
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente,
-        nome: Nome,
-        email: Email,
-        telefone: Telefone,
-        data: Data,
-        horario: Horario,
-        status: "pendente",
-        confirmado: false
-      }])
-      .select()
-      .single();
+    // Remove qualquer agendamento cancelado no mesmo horário e data
+await supabase
+  .from("agendamentos")
+  .delete()
+  .eq("cliente", cliente)
+  .eq("data", Data)
+  .eq("horario", Horario)
+  .eq("status", "cancelado");
 
-    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+// Agora insere o novo agendamento
+const { data, error } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente,
+    nome: Nome,
+    email: Email,
+    telefone: Telefone,
+    data: Data,
+    horario: Horario,
+    status: "pendente",
+    confirmado: false
+  }])
+  .select()
+  .single();
+
+if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
@@ -284,9 +241,12 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
 
     if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+    // Checa se novo horário está livre, ignorando o próprio ID
+   const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
+   if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
+
+    // Atualiza o agendamento existente
     const { data: novo, error: errorUpdate } = await supabase
       .from("agendamentos")
       .update({
@@ -332,7 +292,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .select("*")
       .eq("cliente", cliente);
-    if (error) return res.status(500).json({ msg: "Erro interno Supabase" });
+    if (error) return res.status(500).json({ msg: "Erro Supabase" });
 
     res.json({ agendamentos: data });
   } catch (err) {
@@ -342,3 +302,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
+
