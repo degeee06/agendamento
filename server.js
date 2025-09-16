@@ -226,20 +226,21 @@ if (!isPremium) {
   .select("id")
   .eq("cliente", cliente)
   .eq("data", dataNormalizada)
-  .eq("email", emailNormalizado) // 🔹 limita por usuário
-  .neq("status", "cancelado");
+  .eq("email", emailNormalizado)
+  .in("status", ["pendente", "confirmado"]); // ✅ só conta válidos
 
 
-  if (errorAgend) {
-    console.error("Erro ao buscar agendamentos:", errorAgend);
-    return res.status(500).json({ msg: "Erro interno ao validar limite" });
-  }
+if (errorAgend) {
+  console.error("Erro ao buscar agendamentos:", errorAgend);
+  return res.status(500).json({ msg: "Erro interno ao validar limite" });
+}
 
-  if (agendamentosHoje && agendamentosHoje.length >= 3) {
-    return res
-      .status(400)
-      .json({ msg: "Limite de 3 agendamentos por dia para este cliente no plano free" });
-  }
+if ((agendamentosHoje?.length || 0) >= 3) {
+  return res
+    .status(400)
+    .json({ msg: "Você já atingiu o limite de 3 agendamentos por dia no plano free" });
+ }
+
 }
 
     // 🔹 Checa se horário está disponível
@@ -469,6 +470,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
