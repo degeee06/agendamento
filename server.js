@@ -173,6 +173,7 @@ app.post("/webhook/mercadopago", async (req, res) => {
 });
 
 // ---------------- Agendar ----------------
+// ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -185,11 +186,15 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         .status(400)
         .json({ msg: "Todos os campos obrigatórios" });
 
+    // Normaliza email e data
+    const emailNormalizado = Email.toLowerCase().trim();
+    const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
+
     // Verifica pagamento ativo
     const { data: pagamento } = await supabase
       .from("pagamentos")
       .select("*")
-      .eq("email", Email)
+      .eq("email", emailNormalizado)
       .eq("status", "approved")
       .gte("valid_until", new Date())
       .single();
@@ -197,32 +202,35 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const isPremium = !!pagamento;
 
     // Limite para free
-if (!isPremium) {
-  const dataFormatada = new Date(Data).toISOString().split("T")[0];
+    if (!isPremium) {
+      const { data: agendamentosHoje, error: errorAgend } = await supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("cliente", cliente)
+        .eq("email", emailNormalizado)
+        .eq("data", dataNormalizada)
+        .neq("status", "cancelado");
 
-  const { data: agendamentosHoje, error: errorAgend } = await supabase
-    .from("agendamentos")
-    .select("id")
-    .eq("cliente", cliente)
-    .eq("email", Email)
-    .eq("data", dataFormatada)   // sempre YYYY-MM-DD
-    .neq("status", "cancelado");
+      if (errorAgend) {
+        console.error("Erro ao buscar agendamentos:", errorAgend);
+        return res.status(500).json({ msg: "Erro interno ao validar limite" });
+      }
 
-  if (errorAgend) {
-    console.error("Erro ao buscar agendamentos:", errorAgend);
-    return res.status(500).json({ msg: "Erro interno ao validar limite" });
-  }
+      console.log("Debug limite free:", {
+        recebido: Data,
+        normalizado: dataNormalizada,
+        encontrados: agendamentosHoje?.length,
+      });
 
-  if (agendamentosHoje && agendamentosHoje.length >= 3) {
-    return res
-      .status(400)
-      .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-  }
-}
-
+      if (agendamentosHoje && agendamentosHoje.length >= 3) {
+        return res
+          .status(400)
+          .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
+      }
+    }
 
     // Checa disponibilidade do horário
-    const livre = await horarioDisponivel(cliente, Data, Horario);
+    const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     // Remove agendamento cancelado no mesmo horário
@@ -230,7 +238,7 @@ if (!isPremium) {
       .from("agendamentos")
       .delete()
       .eq("cliente", cliente)
-      .eq("data", Data)
+      .eq("data", dataNormalizada)
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
@@ -241,9 +249,9 @@ if (!isPremium) {
         {
           cliente,
           nome: Nome,
-          email: Email,
+          email: emailNormalizado,
           telefone: Telefone,
-          data: Data,
+          data: dataNormalizada,
           horario: Horario,
           status: isPremium ? "confirmado" : "pendente",
           confirmado: isPremium,
@@ -260,14 +268,14 @@ if (!isPremium) {
       const pagamentoMP = await mercadopago.payment.create({
         transaction_amount: 0.01, // valor real, altere para produção
         description: `Agendamento ${data.id} - ${Nome}`,
-        payment_method_id: "pix", // pode trocar para "card" ou "boleto"
-        payer: { email: Email },
+        payment_method_id: "pix",
+        payer: { email: emailNormalizado },
       });
 
       await supabase.from("pagamentos").upsert([
         {
           id: pagamentoMP.response.id,
-          email: Email,
+          email: emailNormalizado,
           amount: pagamentoMP.response.transaction_amount,
           status: pagamentoMP.response.status,
           valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -276,7 +284,7 @@ if (!isPremium) {
     }
 
     // Salva no Google Sheets
-   const doc = await accessSpreadsheet(cliente);
+    const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
     await sheet.addRow(data);
@@ -290,6 +298,7 @@ if (!isPremium) {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -446,6 +455,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
