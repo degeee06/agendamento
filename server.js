@@ -11,7 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 // ---------------- Inicializa MercadoPago ----------------
-const mp = mercadopago;
+mercadopago.configure({
+  access_token: process.env.MP_ACCESS_TOKEN, // seu token de produção ou teste
+});
 
 // ---------------- Supabase ----------------
 const supabase = createClient(
@@ -132,15 +134,15 @@ app.post("/create-pix", async (req, res) => {
       payer: { email },
     };
 
-    const payment = await mp.payment.create(paymentData);
+    const payment = await mercadopago.payment.create(paymentData);
 
     // Salva pagamento no Supabase
     await supabase.from("pagamentos").upsert([{
-      id: payment.body.id,
+      id: payment.body.id.toString(),
       email,
       amount: payment.body.transaction_amount,
       status: payment.body.status,
-      valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000),
     }]);
 
     res.json({
@@ -153,6 +155,7 @@ app.post("/create-pix", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ---------------- Webhook MercadoPago ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -434,4 +437,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
