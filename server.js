@@ -10,6 +10,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 // ---------------- MercadoPago ----------------
+import pkg from 'mercadopago';
+const mercadopago = pkg;
 mercadopago.configurations.setAccessToken(process.env.MP_ACCESS_TOKEN);
 
 // ---------------- Supabase ----------------
@@ -261,3 +263,4 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 // (mantém suas rotas existentes, sem alteração, pois já funcionam)
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
