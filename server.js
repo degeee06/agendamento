@@ -198,27 +198,25 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     // Limite para free
 if (!isPremium) {
-  const inicio = `${Data}T00:00:00`;
-  const fim = `${Data}T23:59:59`;
-
   const { data: agendamentosHoje, error: errorAgend } = await supabase
-  .from("agendamentos")
-  .select("id")
-  .eq("cliente", cliente)   // garante cliente certo
-  .eq("email", Email)       // garante usuário certo
-  .eq("data", Data)         // compara com DATE direto
-  .neq("status", "cancelado");
+    .from("agendamentos")
+    .select("id")
+    .eq("cliente", cliente)   // garante cliente certo
+    .eq("email", Email)       // garante usuário certo
+    .eq("data", Data)         // compara com DATE direto
+    .neq("status", "cancelado");
 
-if (errorAgend) {
-  console.error("Erro ao buscar agendamentos:", errorAgend);
-  return res.status(500).json({ msg: "Erro interno ao validar limite" });
-}
+  if (errorAgend) {
+    console.error("Erro ao buscar agendamentos:", errorAgend);
+    return res.status(500).json({ msg: "Erro interno ao validar limite" });
+  }
 
-if (agendamentosHoje && agendamentosHoje.length >= 3) {
-  return res
-    .status(400)
-    .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-}
+  if (agendamentosHoje && agendamentosHoje.length >= 3) {
+    return res
+      .status(400)
+      .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
+  }
+} // ← FECHA aqui o if (!isPremium)
 
 
     // Checa disponibilidade do horário
@@ -276,7 +274,7 @@ if (agendamentosHoje && agendamentosHoje.length >= 3) {
     }
 
     // Salva no Google Sheets
-    const doc = await accessSpreadsheet(cliente);
+   const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
     await sheet.addRow(data);
@@ -446,5 +444,6 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
