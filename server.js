@@ -4,16 +4,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
-import mercadopago from "mercadopago";
+import MercadoPago from "mercadopago";
 import cors from "cors";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---------------- Inicializa MercadoPago v2 ----------------
-const mp = new mercadopago.MercadoPago({
-  access_token: process.env.MP_ACCESS_TOKEN,
-});
+// ---------------- Inicializa MercadoPago ----------------
+const mp = new MercadoPago({ access_token: process.env.MP_ACCESS_TOKEN });
 
 // ---------------- Supabase ----------------
 const supabase = createClient(
@@ -115,7 +113,7 @@ app.post("/webhook/mercadopago", async (req, res) => {
         email,
         amount: payment.transaction_amount,
         status,
-        valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000) // válido por 1 dia
+        valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
       }]);
 
     res.status(200).send("OK");
@@ -127,18 +125,16 @@ app.post("/webhook/mercadopago", async (req, res) => {
 
 // ---------------- Criar Pagamento PIX ----------------
 app.post("/create_payment", async (req, res) => {
-  const { email, amount, paymentMethod } = req.body;
+  const { email, amount } = req.body;
 
   try {
-    const paymentData = {
+    const payment = await mp.payment.create({
       transaction_amount: amount,
-      description: 'Agendamento',
+      description: "Agendamento",
       payer: { email },
-      payment_method_id: paymentMethod === 'pix' ? 'pix' : 'card',
-      installments: 1,
-    };
+      payment_method_id: "pix"
+    });
 
-    const payment = await mp.payment.create(paymentData);
     res.status(201).json(payment.response);
   } catch (error) {
     console.error("Erro ao criar pagamento MP:", error);
@@ -211,17 +207,17 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       const pagamentoMP = await mp.payment.create({
         transaction_amount: 0.01,
         description: `Agendamento ${data.id} - ${Nome}`,
-        payment_method_id: "pix",
         payer: { email: Email },
+        payment_method_id: "pix"
       });
 
       await supabase
         .from("pagamentos")
         .upsert([{
-          id: pagamentoMP.body.id,
+          id: pagamentoMP.response.id,
           email: Email,
-          amount: pagamentoMP.body.transaction_amount,
-          status: pagamentoMP.body.status,
+          amount: pagamentoMP.response.transaction_amount,
+          status: pagamentoMP.response.status,
           valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
         }]);
     }
@@ -394,6 +390,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
