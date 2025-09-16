@@ -10,9 +10,10 @@ import cors from "cors";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---------------- Inicializa MercadoPago ----------------
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN, // seu token de produção ou teste
+// ---------------- Inicializa MercadoPago (SDK 2.x) ----------------
+const mp = new mercadopago.MercadoPago({
+  accessToken: process.env.MP_ACCESS_TOKEN,
+  locale: 'pt-BR'
 });
 
 // ---------------- Supabase ----------------
@@ -134,9 +135,8 @@ app.post("/create-pix", async (req, res) => {
       payer: { email },
     };
 
-    const payment = await mercadopago.payment.create(paymentData);
+    const payment = await mp.payment.create(paymentData);
 
-    // Salva pagamento no Supabase
     await supabase.from("pagamentos").upsert([{
       id: payment.body.id.toString(),
       email,
@@ -156,14 +156,13 @@ app.post("/create-pix", async (req, res) => {
   }
 });
 
-
 // ---------------- Webhook MercadoPago ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
   try {
     const { id, type } = req.body;
     if (type !== "payment") return res.status(200).send("Ignorado");
 
-    const payment = await mercadopago.payment.findById(id);
+    const payment = await mp.payment.findById(id);
 
     await supabase
       .from("pagamentos")
@@ -181,7 +180,6 @@ app.post("/webhook/mercadopago", async (req, res) => {
     res.sendStatus(500);
   }
 });
-
 
 // ---------------- Agendamento ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
@@ -261,7 +259,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       await supabase
         .from("pagamentos")
         .upsert([{
-          id: pagamentoMP.body.id,
+          id: pagamentoMP.body.id.toString(),
           email: Email,
           amount: pagamentoMP.body.transaction_amount,
           status: pagamentoMP.body.status,
@@ -437,5 +435,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
