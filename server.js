@@ -6,14 +6,14 @@ import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
 import mercadopago from "mercadopago";
 import cors from "cors";
+import 'dotenv/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---------------- Inicializa MercadoPago (SDK 2.x) ----------------
-const mp = new mercadopago.MercadoPago({
-  accessToken: process.env.MP_ACCESS_TOKEN,
-  locale: 'pt-BR'
+// ---------------- Inicializa MercadoPago ----------------
+mercadopago.configure({
+  access_token: process.env.MP_ACCESS_TOKEN,
 });
 
 // ---------------- Supabase ----------------
@@ -123,38 +123,45 @@ app.get("/check-vip/:email", async (req, res) => {
   }
 });
 
-// ---------------- Criar PIX ----------------
-app.post("/create-pix", async (req, res) => {
-  try {
-    const { amount, email, description } = req.body;
+// ---------------- Criar PIX ou cartão ----------------
+app.post("/create_payment", async (req, res) => {
+  const { token, email, amount, paymentMethod } = req.body;
 
+  try {
     const paymentData = {
-      transaction_amount: Number(amount),
-      description: description || "Pagamento VIP",
-      payment_method_id: "pix",
-      payer: { email },
+      transaction_amount: amount,
+      description: 'Pagamento Flutter',
+      installments: 1,
+      payer: { email: email },
     };
 
-    const payment = await mp.payment.create(paymentData);
+    if (paymentMethod === 'card') {
+      paymentData.token = token;
+      paymentData.payment_method_id = 'master';
+    }
 
+    if (paymentMethod === 'pix') {
+      paymentData.payment_method_id = 'pix';
+    }
+
+    const payment = await mercadopago.payment.create(paymentData);
+
+    // Salva no Supabase
     await supabase.from("pagamentos").upsert([{
-      id: payment.body.id.toString(),
+      id: payment.response.id.toString(),
       email,
-      amount: payment.body.transaction_amount,
-      status: payment.body.status,
+      amount: payment.response.transaction_amount,
+      status: payment.response.status,
       valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000),
     }]);
 
-    res.json({
-      qr_code: payment.body.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: payment.body.point_of_interaction.transaction_data.qr_code_base64,
-      id: payment.body.id.toString(),
-    });
-  } catch (err) {
-    console.error("Erro ao criar PIX:", err);
-    res.status(500).json({ error: err.message });
+    res.status(201).json(payment.response);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: error.message });
   }
 });
+
 
 // ---------------- Webhook MercadoPago ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -435,3 +442,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
