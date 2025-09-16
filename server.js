@@ -201,19 +201,23 @@ if (!isPremium) {
   const inicio = `${Data}T00:00:00`;
   const fim = `${Data}T23:59:59`;
 
-  const { data: agendamentosHoje } = await supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("email", Email)
-    .gte("data", inicio)
-    .lte("data", fim)
-    .neq("status", "cancelado");
+  const { data: agendamentosHoje, error: errorAgend } = await supabase
+  .from("agendamentos")
+  .select("id")
+  .eq("cliente", cliente)   // garante cliente certo
+  .eq("email", Email)       // garante usuário certo
+  .eq("data", Data)         // compara com DATE direto
+  .neq("status", "cancelado");
 
-  if (agendamentosHoje.length >= 3) {
-    return res
-      .status(400)
-      .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-  }
+if (errorAgend) {
+  console.error("Erro ao buscar agendamentos:", errorAgend);
+  return res.status(500).json({ msg: "Erro interno ao validar limite" });
+}
+
+if (agendamentosHoje && agendamentosHoje.length >= 3) {
+  return res
+    .status(400)
+    .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
 }
 
 
@@ -442,4 +446,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
