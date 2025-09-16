@@ -20,12 +20,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ---------------- Clientes e planilhas ----------------
-const planilhasClientes = {
-  cliente1: process.env.ID_PLANILHA_CLIENTE1,
-  cliente2: process.env.ID_PLANILHA_CLIENTE2,
-};
-const clientesValidos = Object.keys(planilhasClientes);
+
 
 // ---------------- Google Service Account ----------------
 let creds;
@@ -59,13 +54,23 @@ async function authMiddleware(req, res, next) {
 }
 
 // ---------------- Google Sheets ----------------
-async function accessSpreadsheet(cliente) {
-  const SPREADSHEET_ID = planilhasClientes[cliente];
-  const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
+async function accessSpreadsheet(clienteId) {
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("spreadsheet_id")
+    .eq("id", clienteId)
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Cliente ${clienteId} não encontrado no Supabase`);
+  }
+
+  const doc = new GoogleSpreadsheet(data.spreadsheet_id);
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
   return doc;
 }
+
 
 async function ensureDynamicHeaders(sheet, newKeys) {
   await sheet
@@ -77,6 +82,7 @@ async function ensureDynamicHeaders(sheet, newKeys) {
     await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
   }
 }
+
 
 // ---------------- Disponibilidade ----------------
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
@@ -99,12 +105,23 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.send("Servidor rodando"));
 
-app.get("/:cliente", (req, res) => {
+app.get("/:cliente", async (req, res) => {
   const cliente = req.params.cliente;
-  if (!clientesValidos.includes(cliente))
+
+  // verifica se cliente existe no Supabase
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("id")
+    .eq("id", cliente)
+    .single();
+
+  if (error || !data) {
     return res.status(404).send("Cliente não encontrado");
+  }
+
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
 
 // ---------------- Webhook MercadoPago ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
@@ -450,6 +467,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
