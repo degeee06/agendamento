@@ -5,17 +5,9 @@ import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
 import mercadopago from "mercadopago";
-import cors from "cors";
-import 'dotenv/config';
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
-
-// ---------------- MercadoPago ----------------
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN
-});
-
+mercadopago.configure({ access_token: process.env.MP_ACCESS_TOKEN });
 // ---------------- Supabase ----------------
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -40,7 +32,6 @@ try {
 
 // ---------------- App ----------------
 const app = express();
-app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -108,54 +99,17 @@ app.get("/:cliente", (req, res) => {
 app.post("/webhook/mercadopago", async (req, res) => {
   try {
     const payment = req.body;
-    const { id, status, payer } = payment;
+    const { email, status } = payment;
 
-    // Atualiza ou insere pagamento
-    await supabase.from("pagamentos").upsert([{
-      id,
-      email: payer.email,
-      amount: payment.transaction_amount,
-      status,
-      valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
-    }]);
-
-    // Se pagamento aprovado, confirma agendamento automaticamente
-    if (status === "approved") {
-      const { data: agendamento } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", payer.email)
-        .eq("status", "pendente")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (agendamento) {
-        const { data: updated } = await supabase
-          .from("agendamentos")
-          .update({ status: "confirmado", confirmado: true, payment_id: id })
-          .eq("id", agendamento.id)
-          .select()
-          .single();
-
-        // Atualiza Google Sheets
-        if (updated) {
-          const doc = await accessSpreadsheet(agendamento.cliente);
-          const sheet = doc.sheetsByIndex[0];
-          await ensureDynamicHeaders(sheet, Object.keys(updated));
-          const rows = await sheet.getRows();
-          const row = rows.find(r => r.id == updated.id);
-          if (row) {
-            row.status = "confirmado";
-            row.confirmado = true;
-            row.payment_id = id;
-            await row.save();
-          } else {
-            await sheet.addRow(updated);
-          }
-        }
-      }
-    }
+    await supabase
+      .from("pagamentos")
+      .upsert([{
+        id: payment.id,
+        email,
+        amount: payment.transaction_amount,
+        status,
+        valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000) // válido por 1 dia
+      }]);
 
     res.status(200).send("OK");
   } catch (err) {
@@ -164,7 +118,7 @@ app.post("/webhook/mercadopago", async (req, res) => {
   }
 });
 
-// ---------------- Agendar ----------------
+// ---------------- Agendar com limite para free e pagamento teste ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -230,22 +184,24 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    // Cria pagamento real via MercadoPago (1 centavo para teste)
+    // ---------------- Pagamento teste MercadoPago ----------------
     if (!isPremium) {
       const pagamentoMP = await mercadopago.payment.create({
-        transaction_amount: 0.01, // valor real, altere para produção
+        transaction_amount: 0.01, // valor de teste
         description: `Agendamento ${data.id} - ${Nome}`,
-        payment_method_id: "pix", // ou "card"
-        payer: { email: Email }
+        payment_method_id: "pix", // ou "bolbradesco", "card", etc.
+        payer: {
+          email: Email
+        }
       });
 
       await supabase
         .from("pagamentos")
         .upsert([{
-          id: pagamentoMP.response.id,
+          id: pagamentoMP.body.id,
           email: Email,
-          amount: pagamentoMP.response.transaction_amount,
-          status: pagamentoMP.response.status,
+          amount: pagamentoMP.body.transaction_amount,
+          status: pagamentoMP.body.status,
           valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
         }]);
     }
@@ -262,6 +218,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
