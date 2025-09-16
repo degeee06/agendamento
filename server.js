@@ -221,12 +221,14 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     // 🔹 Checa limite se for free
     // 🔹 Checa limite se for free
 if (!isPremium) {
-  const { data: agendamentosHoje, error: errorAgend } = await supabase
-    .from("agendamentos")
-    .select("id")
-    .eq("cliente", cliente)
-    .eq("data", dataNormalizada)
-    .neq("status", "cancelado");
+ const { data: agendamentosHoje, error: errorAgend } = await supabase
+  .from("agendamentos")
+  .select("id")
+  .eq("cliente", cliente)
+  .eq("data", dataNormalizada)
+  .eq("email", emailNormalizado) // 🔹 limita por usuário
+  .neq("status", "cancelado");
+
 
   if (errorAgend) {
     console.error("Erro ao buscar agendamentos:", errorAgend);
@@ -467,6 +469,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
