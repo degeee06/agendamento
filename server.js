@@ -6,7 +6,6 @@ import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
 import mercadopago from "mercadopago";
 import cors from "cors";
-import 'dotenv/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -439,3 +438,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
