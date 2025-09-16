@@ -157,25 +157,28 @@ app.post("/create-pix", async (req, res) => {
 // ---------------- Webhook MercadoPago ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
   try {
-    const payment = req.body;
-    const { email, status } = payment;
+    const { id, type } = req.body;
+    if (type !== "payment") return res.status(200).send("Ignorado");
+
+    const payment = await mercadopago.payment.findById(id);
 
     await supabase
       .from("pagamentos")
       .upsert([{
-        id: payment.id,
-        email,
-        amount: payment.transaction_amount,
-        status,
-        valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        id: payment.body.id.toString(),
+        email: payment.body.payer.email,
+        amount: payment.body.transaction_amount,
+        status: payment.body.status,
+        valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000),
       }]);
 
-    res.status(200).send("OK");
+    res.sendStatus(200);
   } catch (err) {
     console.error("Erro webhook MP:", err);
-    res.status(500).send("Erro interno");
+    res.sendStatus(500);
   }
 });
+
 
 // ---------------- Agendamento ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
@@ -431,3 +434,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
