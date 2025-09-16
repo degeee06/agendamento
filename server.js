@@ -5,9 +5,13 @@ import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
 import mercadopago from "mercadopago";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
+
+// --------- MercadoPago ----------
 mercadopago.configure({ access_token: process.env.MP_ACCESS_TOKEN });
+
 // ---------------- Supabase ----------------
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -375,3 +379,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
