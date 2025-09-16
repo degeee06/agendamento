@@ -8,7 +8,10 @@ import pkg from "mercadopago";
 import cors from "cors";
 
 const mercadopago = pkg;
-mercadopago.configurations.setAccessToken(process.env.MP_ACCESS_TOKEN);
+mercadopago.configure({
+  access_token: process.env.MP_ACCESS_TOKEN,
+});
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -217,11 +220,11 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     // Se não for premium, cria pagamento teste PIX
     if (!isPremium) {
       const pagamentoMP = await mercadopago.payment.create({
-        transaction_amount: 0.01,
-        description: `Agendamento ${data.id} - ${Nome}`,
-        payment_method_id: "pix",
-        payer: { email: Email },
-      });
+  transaction_amount: 0.01,
+  description: `Agendamento ${data.id} - ${Nome}`,
+  payment_method_id: "pix",
+  payer: { email: Email },
+});
 
       await supabase
         .from("pagamentos")
@@ -248,3 +251,4 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
