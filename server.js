@@ -101,30 +101,45 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ---------------- Pagamento PIX ----------------
+
+// ---------------- Criar PIX ----------------
 app.post("/create-pix", async (req, res) => {
-  const { amount, description, email } = req.body;
   try {
-    const result = await payment.create({
-      body: {
-        transaction_amount: Number(amount),
-        description: description || "Pagamento PIX",
-        payment_method_id: "pix",
-        payer: { email: email || "teste@cliente.com" }
-      }
-    });
+    const { email, amount } = req.body;
+
+    const paymentData = {
+      transaction_amount: Number(amount),
+      description: "Pagamento de agendamento",
+      payment_method_id: "pix",
+      payer: { email },
+    };
+
+    const result = await payment.create({ body: paymentData });
+
+    // Salvar no Supabase
+    const { error } = await supabase.from("pagamentos").insert([{
+      id: result.id,
+      email: email,
+      amount: amount,
+      status: result.status, // geralmente "pending"
+      valid_until: result.date_of_expiration
+    }]);
+
+    if (error) console.error("Erro ao salvar pagamento:", error);
 
     res.json({
       id: result.id,
-      status: result.status,
+      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
       qr_code: result.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64
+      status: result.status
     });
+
   } catch (err) {
-    console.error("Erro Mercado Pago:", err);
-    res.status(500).json({ error: err.message });
+    console.error("Erro ao criar PIX:", err);
+    res.status(500).json({ error: "Erro ao criar PIX" });
   }
 });
+
 
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
@@ -326,5 +341,41 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
+// ---------------- Webhook Mercado Pago ----------------
+app.post("/webhook-mp", async (req, res) => {
+  try {
+    const { type, data } = req.body;
+
+    if (type === "payment") {
+      const result = await payment.get({ id: data.id });
+
+      // Atualiza status na tabela de pagamentos
+      const { error } = await supabase
+        .from("pagamentos")
+        .update({ status: result.status })
+        .eq("id", result.id);
+
+      if (error) console.error("Erro ao atualizar pagamento:", error);
+
+      // Se aprovado, pode também atualizar tabela de agendamentos
+      if (result.status === "approved") {
+        await supabase
+          .from("agendamentos")
+          .update({ status: "confirmado", confirmado: true })
+          .eq("payment_id", result.id);
+
+        console.log("Pagamento aprovado e agendamento confirmado:", result.id);
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Erro no webhook:", err);
+    res.sendStatus(500);
+  }
+});
+
+
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
