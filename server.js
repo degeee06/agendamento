@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
-import mercadopago from "mercadopago";
+import mercadopago from 'mercadopago';
 import cors from "cors";
 
 
@@ -12,9 +12,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 // ---------------- Inicializa MercadoPago ----------------
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN,
+const mp = new mercadopago.MercadoPago({
+  access_token: process.env.MP_ACCESS_TOKEN
 });
+
 
 // ---------------- Supabase ----------------
 const supabase = createClient(
@@ -215,12 +216,12 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     // ---------------- Pagamento teste PIX ----------------
     if (!isPremium) {
-      const pagamentoMP = await mercadopago.payment.create({
-        transaction_amount: 0.01, // valor de teste
-        description: `Agendamento ${data.id} - ${Nome}`,
-        payment_method_id: "pix",
-        payer: { email: Email },
-      });
+      const pagamentoMP = await mp.payment.create({
+  transaction_amount: 0.01,
+  description: `Agendamento ${data.id} - ${Nome}`,
+  payment_method_id: 'pix',
+  payer: { email: Email }
+});
 
       await supabase
         .from("pagamentos")
@@ -403,6 +404,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
