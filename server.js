@@ -4,18 +4,16 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
-import mercadopago from 'mercadopago';
+import mercadopago from "mercadopago";
 import cors from "cors";
-
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---------------- Inicializa MercadoPago ----------------
+// ---------------- Inicializa MercadoPago v2 ----------------
 const mp = new mercadopago.MercadoPago({
-  access_token: process.env.MP_ACCESS_TOKEN
+  access_token: process.env.MP_ACCESS_TOKEN,
 });
-
 
 // ---------------- Supabase ----------------
 const supabase = createClient(
@@ -140,7 +138,7 @@ app.post("/create_payment", async (req, res) => {
       installments: 1,
     };
 
-    const payment = await mercadopago.payment.create(paymentData);
+    const payment = await mp.payment.create(paymentData);
     res.status(201).json(payment.response);
   } catch (error) {
     console.error("Erro ao criar pagamento MP:", error);
@@ -158,7 +156,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // Verifica pagamento ativo
     const { data: pagamento } = await supabase
       .from("pagamentos")
       .select("*")
@@ -169,7 +166,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     const isPremium = !!pagamento;
 
-    // Limite para free
     if (!isPremium) {
       const { data: agendamentosHoje } = await supabase
         .from("agendamentos")
@@ -183,11 +179,9 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       }
     }
 
-    // Checa disponibilidade do horário
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    // Remove agendamento cancelado no mesmo horário
     await supabase
       .from("agendamentos")
       .delete()
@@ -196,7 +190,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    // Insere novo agendamento
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -214,14 +207,13 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
 
-    // ---------------- Pagamento teste PIX ----------------
     if (!isPremium) {
       const pagamentoMP = await mp.payment.create({
-  transaction_amount: 0.01,
-  description: `Agendamento ${data.id} - ${Nome}`,
-  payment_method_id: 'pix',
-  payer: { email: Email }
-});
+        transaction_amount: 0.01,
+        description: `Agendamento ${data.id} - ${Nome}`,
+        payment_method_id: "pix",
+        payer: { email: Email },
+      });
 
       await supabase
         .from("pagamentos")
@@ -234,7 +226,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         }]);
     }
 
-    // Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
@@ -246,7 +237,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 
 
 // ---------------- Confirmar ----------------
@@ -404,6 +394,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
