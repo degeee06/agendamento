@@ -319,6 +319,10 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
     if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
+    // Normaliza data para manter sheets consistentes
+    data.email = data.email?.toLowerCase().trim();
+    data.data = new Date(data.data).toISOString().split("T")[0];
+
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
@@ -339,6 +343,7 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   }
 });
 
+
 // ---------------- Cancelar ----------------
 app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
@@ -355,6 +360,10 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
 
     if (error) return res.status(500).json({ msg: "Erro ao cancelar agendamento" });
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Normaliza data/email
+    data.email = data.email?.toLowerCase().trim();
+    data.data = new Date(data.data).toISOString().split("T")[0];
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
@@ -376,6 +385,7 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
   }
 });
 
+
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
@@ -395,14 +405,17 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
 
     if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
+    // Normaliza data
+    const dataNormalizada = new Date(novaData).toISOString().split("T")[0];
+
     // Checa se novo horário está livre
-    const livre = await horarioDisponivel(cliente, novaData, novoHorario, id);
+    const livre = await horarioDisponivel(cliente, dataNormalizada, novoHorario, id);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     const { data: novo, error: errorUpdate } = await supabase
       .from("agendamentos")
       .update({
-        data: novaData,
+        data: dataNormalizada,
         horario: novoHorario,
         status: "pendente",
         confirmado: false
@@ -412,6 +425,9 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .single();
 
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao reagendar" });
+
+    // Normaliza email também
+    novo.email = novo.email?.toLowerCase().trim();
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
@@ -435,6 +451,7 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
   }
 });
 
+
 // ---------------- Listar ----------------
 app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -455,6 +472,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
