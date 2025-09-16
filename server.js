@@ -172,7 +172,7 @@ app.post("/webhook/mercadopago", async (req, res) => {
   }
 });
 
-// ---------------- Agendar ----------------
+
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -222,12 +222,13 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         encontrados: agendamentosHoje?.length,
       });
 
-      if (agendamentosHoje && agendamentosHoje.length >= 3) {
-        return res
-          .status(400)
-          .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-      }
-    }
+     if (agendamentosHoje && agendamentosHoje.length >= 3) {
+  console.log("🚫 BLOQUEADO por limite diário (free).");
+  return res
+    .status(400)
+    .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
+}
+
 
     // Checa disponibilidade do horário
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
@@ -472,6 +473,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
