@@ -11,9 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
 // ---------------- Inicializa MercadoPago ----------------
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN,
-});
+const mp = mercadopago;
 
 // ---------------- Supabase ----------------
 const supabase = createClient(
@@ -24,6 +22,7 @@ const supabase = createClient(
 // ---------------- Clientes e planilhas ----------------
 const planilhasClientes = {
   cliente1: process.env.ID_PLANILHA_CLIENTE1,
+  cliente2: process.env.ID_PLANILHA_CLIENTE2,
 };
 const clientesValidos = Object.keys(planilhasClientes);
 
@@ -101,7 +100,27 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ---------------- PIX ----------------
+// ---------------- VIP ----------------
+app.get("/check-vip/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    const { data: pagamento } = await supabase
+      .from("pagamentos")
+      .select("*")
+      .eq("email", email)
+      .eq("status", "approved")
+      .gte("valid_until", new Date())
+      .single();
+
+    const vip = !!pagamento;
+    res.json({ vip });
+  } catch (err) {
+    console.error("Erro ao verificar VIP:", err);
+    res.status(500).json({ vip: false });
+  }
+});
+
+// ---------------- Criar PIX ----------------
 app.post("/create-pix", async (req, res) => {
   try {
     const { amount, email, description } = req.body;
@@ -113,7 +132,7 @@ app.post("/create-pix", async (req, res) => {
       payer: { email },
     };
 
-    const payment = await mercadopago.payment.create(paymentData);
+    const payment = await mp.payment.create(paymentData);
 
     // Salva pagamento no Supabase
     await supabase.from("pagamentos").upsert([{
@@ -135,7 +154,7 @@ app.post("/create-pix", async (req, res) => {
   }
 });
 
-// ---------------- Webhook PIX ----------------
+// ---------------- Webhook MercadoPago ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
   try {
     const payment = req.body;
@@ -412,5 +431,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
