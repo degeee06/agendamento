@@ -142,18 +142,22 @@ app.post("/create-pix", async (req, res) => {
 
 
 // ---------------- Agendar ----------------
+// ---------------- Agendar com PIX ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (req.clienteId !== cliente)
+      return res.status(403).json({ msg: "Acesso negado" });
 
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
+    const { Nome, Email, Telefone, Data, Horario, Amount } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario || !Amount)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
+    // Verifica se o horário está livre
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
+    // Remove agendamentos cancelados no mesmo horário
     await supabase
       .from("agendamentos")
       .delete()
@@ -162,7 +166,29 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    const { data, error } = await supabase
+    // 1️⃣ Cria pagamento PIX no Mercado Pago
+    const paymentData = {
+      transaction_amount: Number(Amount),
+      description: `Agendamento de ${Nome}`,
+      payment_method_id: "pix",
+      payer: { email: Email },
+    };
+
+    const result = await payment.create({ body: paymentData });
+
+    // 2️⃣ Salva pagamento na tabela 'pagamentos'
+    const { error: errorPag } = await supabase.from("pagamentos").insert([{
+      id: result.id,
+      email: Email,
+      amount: Amount,
+      status: result.status,
+      valid_until: result.date_of_expiration
+    }]);
+
+    if (errorPag) console.error("Erro ao salvar pagamento:", errorPag);
+
+    // 3️⃣ Cria o agendamento no Supabase com payment_id
+    const { data: agendamento, error: errorAg } = await supabase
       .from("agendamentos")
       .insert([{
         cliente,
@@ -172,24 +198,38 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         data: Data,
         horario: Horario,
         status: "pendente",
-        confirmado: false
+        confirmado: false,
+        payment_id: result.id
       }])
       .select()
       .single();
 
-    if (error) return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
+    if (errorAg) return res.status(500).json({ msg: "Erro ao salvar agendamento" });
 
+    // 4️⃣ Salva também no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(data));
-    await sheet.addRow(data);
+    await ensureDynamicHeaders(sheet, Object.keys(agendamento));
+    await sheet.addRow(agendamento);
 
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: data });
+    // 5️⃣ Retorna QR Code PIX + dados do agendamento
+    res.json({
+      msg: "Agendamento criado, PIX gerado!",
+      agendamento,
+      pix: {
+        id: result.id,
+        qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+        qr_code: result.point_of_interaction.transaction_data.qr_code,
+        status: result.status
+      }
+    });
+
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao agendar com PIX:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -379,3 +419,4 @@ app.post("/webhook-mp", async (req, res) => {
 
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
