@@ -219,26 +219,26 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const isPremium = !!pagamento;
 
     // 🔹 Checa limite se for free
-    if (!isPremium) {
-      const { data: agendamentosHoje, error: errorAgend } = await supabase
-        .from("agendamentos")
-        .select("id")
-        .eq("cliente", cliente)
-        .eq("email", emailNormalizado)
-        .eq("data", dataNormalizada)
-        .neq("status", "cancelado");
+    // 🔹 Checa limite se for free
+if (!isPremium) {
+  const { data: agendamentosHoje, error: errorAgend } = await supabase
+    .from("agendamentos")
+    .select("id")
+    .eq("cliente", cliente)
+    .eq("data", dataNormalizada)
+    .neq("status", "cancelado");
 
-      if (errorAgend) {
-        console.error("Erro ao buscar agendamentos:", errorAgend);
-        return res.status(500).json({ msg: "Erro interno ao validar limite" });
-      }
+  if (errorAgend) {
+    console.error("Erro ao buscar agendamentos:", errorAgend);
+    return res.status(500).json({ msg: "Erro interno ao validar limite" });
+  }
 
-      if (agendamentosHoje && agendamentosHoje.length >= 3) {
-        return res
-          .status(400)
-          .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-      }
-    }
+  if (agendamentosHoje && agendamentosHoje.length >= 3) {
+    return res
+      .status(400)
+      .json({ msg: "Limite de 3 agendamentos por dia para este cliente no plano free" });
+  }
+}
 
     // 🔹 Checa se horário está disponível
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
@@ -467,6 +467,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
