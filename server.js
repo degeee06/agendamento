@@ -5,16 +5,16 @@ import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
 import mercadopago from "mercadopago";
-
-const mp = new mercadopago.SDK({
-  access_token: process.env.MP_ACCESS_TOKEN
-});
-
-
+import cors from "cors";
+import 'dotenv/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
+// ---------------- MercadoPago ----------------
+mercadopago.configure({
+  access_token: process.env.MP_ACCESS_TOKEN
+});
 
 // ---------------- Supabase ----------------
 const supabase = createClient(
@@ -40,6 +40,7 @@ try {
 
 // ---------------- App ----------------
 const app = express();
+app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -231,21 +232,20 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     // Cria pagamento real via MercadoPago (1 centavo para teste)
     if (!isPremium) {
-      const pagamentoMP = await mp.payment.create({
-  transaction_amount: 0.01,
-  description: `Agendamento ${data.id} - ${Nome}`,
-  payment_method_id: "pix",
-  payer: { email: Email }
-});
-
+      const pagamentoMP = await mercadopago.payment.create({
+        transaction_amount: 0.01, // valor real, altere para produção
+        description: `Agendamento ${data.id} - ${Nome}`,
+        payment_method_id: "pix", // ou "card"
+        payer: { email: Email }
+      });
 
       await supabase
         .from("pagamentos")
         .upsert([{
-          id: pagamentoMP.body.id,
+          id: pagamentoMP.response.id,
           email: Email,
-          amount: pagamentoMP.body.transaction_amount,
-          status: pagamentoMP.body.status,
+          amount: pagamentoMP.response.transaction_amount,
+          status: pagamentoMP.response.status,
           valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
         }]);
     }
@@ -262,7 +262,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -419,5 +418,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
-
