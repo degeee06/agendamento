@@ -24,7 +24,6 @@ const supabase = createClient(
 // ---------------- Clientes e planilhas ----------------
 const planilhasClientes = {
   cliente1: process.env.ID_PLANILHA_CLIENTE1,
-  cliente2: process.env.ID_PLANILHA_CLIENTE2,
 };
 const clientesValidos = Object.keys(planilhasClientes);
 
@@ -102,66 +101,41 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ---------------- VIP ----------------
-app.get("/check-vip/:email", async (req, res) => {
+// ---------------- PIX ----------------
+app.post("/create-pix", async (req, res) => {
   try {
-    const email = req.params.email;
-    const { data: pagamento } = await supabase
-      .from("pagamentos")
-      .select("*")
-      .eq("email", email)
-      .eq("status", "approved")
-      .gte("valid_until", new Date())
-      .single();
+    const { amount, email, description } = req.body;
 
-    const vip = !!pagamento;
-    res.json({ vip });
-  } catch (err) {
-    console.error("Erro ao verificar VIP:", err);
-    res.status(500).json({ vip: false });
-  }
-});
-
-// ---------------- Criar pagamento (PIX ou cartão) ----------------
-app.post("/create_payment", async (req, res) => {
-  const { token, email, amount, paymentMethod } = req.body;
-
-  try {
     const paymentData = {
       transaction_amount: Number(amount),
-      description: "Pagamento Agendamento",
-      installments: 1,
+      description: description || "Pagamento VIP",
+      payment_method_id: "pix",
       payer: { email },
     };
-
-    if (paymentMethod === "card") {
-      paymentData.token = token;
-      paymentData.payment_method_id = "master";
-    }
-
-    if (paymentMethod === "pix") {
-      paymentData.payment_method_id = "pix";
-    }
 
     const payment = await mercadopago.payment.create(paymentData);
 
     // Salva pagamento no Supabase
     await supabase.from("pagamentos").upsert([{
-      id: payment.response.id.toString(),
+      id: payment.body.id,
       email,
-      amount: payment.response.transaction_amount,
-      status: payment.response.status,
-      valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      amount: payment.body.transaction_amount,
+      status: payment.body.status,
+      valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
     }]);
 
-    res.status(201).json(payment.response);
+    res.json({
+      qr_code: payment.body.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: payment.body.point_of_interaction.transaction_data.qr_code_base64,
+      id: payment.body.id.toString(),
+    });
   } catch (err) {
-    console.error("Erro ao criar pagamento:", err);
-    res.status(400).json({ error: err.message });
+    console.error("Erro ao criar PIX:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ---------------- Webhook MercadoPago ----------------
+// ---------------- Webhook PIX ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
   try {
     const payment = req.body;
@@ -438,4 +412,5 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
