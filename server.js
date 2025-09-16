@@ -177,20 +177,20 @@ app.post("/webhook/mercadopago", async (req, res) => {
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente)
+    if (req.clienteId !== cliente) {
       return res.status(403).json({ msg: "Acesso negado" });
+    }
 
     const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
-      return res
-        .status(400)
-        .json({ msg: "Todos os campos obrigatórios" });
+    if (!Nome || !Email || !Telefone || !Data || !Horario) {
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+    }
 
     // Normaliza email e data
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
 
-    // Verifica pagamento ativo
+    // 🔹 Verifica se já é premium
     const { data: pagamento } = await supabase
       .from("pagamentos")
       .select("*")
@@ -201,7 +201,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     const isPremium = !!pagamento;
 
-    // Limite para free
+    // 🔹 Checa limite se for free
     if (!isPremium) {
       const { data: agendamentosHoje, error: errorAgend } = await supabase
         .from("agendamentos")
@@ -216,25 +216,20 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         return res.status(500).json({ msg: "Erro interno ao validar limite" });
       }
 
-      console.log("Debug limite free:", {
-        recebido: Data,
-        normalizado: dataNormalizada,
-        encontrados: agendamentosHoje?.length,
-      });
+      if (agendamentosHoje && agendamentosHoje.length >= 3) {
+        return res
+          .status(400)
+          .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
+      }
+    }
 
-     if (agendamentosHoje && agendamentosHoje.length >= 3) {
-  console.log("🚫 BLOQUEADO por limite diário (free).");
-  return res
-    .status(400)
-    .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-}
-
-
-    // Checa disponibilidade do horário
+    // 🔹 Checa se horário está disponível
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+    if (!livre) {
+      return res.status(400).json({ msg: "Horário indisponível" });
+    }
 
-    // Remove agendamento cancelado no mesmo horário
+    // 🔹 Remove agendamento cancelado no mesmo horário (se existir)
     await supabase
       .from("agendamentos")
       .delete()
@@ -243,8 +238,8 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    // Insere novo agendamento
-    const { data, error } = await supabase
+    // 🔹 Insere novo agendamento
+    const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([
         {
@@ -261,41 +256,23 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .select()
       .single();
 
-    if (error)
-      return res.status(500).json({ msg: "Erro ao salvar no Supabase" });
-
-    // Cria pagamento real via MercadoPago (1 centavo para teste)
-    if (!isPremium) {
-      const pagamentoMP = await mercadopago.payment.create({
-        transaction_amount: 0.01, // valor real, altere para produção
-        description: `Agendamento ${data.id} - ${Nome}`,
-        payment_method_id: "pix",
-        payer: { email: emailNormalizado },
-      });
-
-      await supabase.from("pagamentos").upsert([
-        {
-          id: pagamentoMP.response.id,
-          email: emailNormalizado,
-          amount: pagamentoMP.response.transaction_amount,
-          status: pagamentoMP.response.status,
-          valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-      ]);
+    if (error) {
+      console.error("Erro ao salvar no Supabase:", error);
+      return res.status(500).json({ msg: "Erro ao salvar agendamento" });
     }
 
-    // Salva no Google Sheets
+    // 🔹 Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(data));
-    await sheet.addRow(data);
+    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+    await sheet.addRow(novoAgendamento);
 
     res.json({
       msg: "Agendamento realizado com sucesso!",
-      agendamento: data,
+      agendamento: novoAgendamento,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Erro no /agendar:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
@@ -473,6 +450,7 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
