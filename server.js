@@ -1,10 +1,11 @@
 import express from "express";
 import bodyParser from "body-parser";
+import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
-import fetch from "node-fetch";
+import mercadopago from "mercadopago";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -31,8 +32,16 @@ try {
   process.exit(1);
 }
 
+// ---------------- Mercado Pago ----------------
+const { MercadoPagoConfig, Payment } = mercadopago;
+const mp = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN
+});
+const payment = new Payment(mp);
+
 // ---------------- App ----------------
 const app = express();
+app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -49,23 +58,6 @@ async function authMiddleware(req, res, next) {
   req.clienteId = data.user.user_metadata.cliente_id;
   if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
   next();
-}
-
-// ---------------- Middleware VIP/Free ----------------
-async function planoMiddleware(req, res, next) {
-  const email = req.user.email;
-
-  try {
-    // Consulta backend Mercado Pago
-    const resp = await fetch(`${process.env.MERCADOPAGO_BACKEND}/is-vip/${email}`);
-    const data = await resp.json();
-    req.plano = data.vip ? "vip" : "free";
-    next();
-  } catch (err) {
-    console.error("Erro ao checar VIP:", err);
-    req.plano = "free";
-    next();
-  }
 }
 
 // ---------------- Google Sheets ----------------
@@ -87,7 +79,7 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 }
 
 // ---------------- Disponibilidade ----------------
-async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
+async function horarioDisponivel(cliente, data, horario) {
   const { data: agendamentos, error } = await supabase
     .from("agendamentos")
     .select("*")
@@ -97,8 +89,6 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
     .neq("status", "cancelado");
 
   if (error) throw error;
-
-  if (ignoreId) return agendamentos.every(a => a.id !== ignoreId);
   return agendamentos.length === 0;
 }
 
@@ -108,11 +98,36 @@ app.get("/", (req, res) => res.send("Servidor rodando"));
 app.get("/:cliente", (req, res) => {
   const cliente = req.params.cliente;
   if (!clientesValidos.includes(cliente)) return res.status(404).send("Cliente não encontrado");
-  res.sendFile(path.join(__dirname, "public/index.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ---------------- Pagamento PIX ----------------
+app.post("/create-pix", async (req, res) => {
+  const { amount, description, email } = req.body;
+  try {
+    const result = await payment.create({
+      body: {
+        transaction_amount: Number(amount),
+        description: description || "Pagamento PIX",
+        payment_method_id: "pix",
+        payer: { email: email || "teste@cliente.com" }
+      }
+    });
+
+    res.json({
+      id: result.id,
+      status: result.status,
+      qr_code: result.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64
+    });
+  } catch (err) {
+    console.error("Erro Mercado Pago:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------------- Agendar ----------------
-app.post("/agendar/:cliente", authMiddleware, planoMiddleware, async (req, res) => {
+app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
@@ -121,22 +136,9 @@ app.post("/agendar/:cliente", authMiddleware, planoMiddleware, async (req, res) 
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // ---------------- Verifica limite free ----------------
-    if (req.plano === "free") {
-      const { data: ags, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", Email)
-        .neq("status", "cancelado");
-
-      if (error) return res.status(500).json({ msg: "Erro ao checar agendamentos" });
-      if (ags.length >= 1) return res.status(403).json({ msg: "Usuário free só pode 1 agendamento ativo" });
-    }
-
     const livre = await horarioDisponivel(cliente, Data, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    // Remove qualquer agendamento cancelado no mesmo horário e data
     await supabase
       .from("agendamentos")
       .delete()
@@ -145,7 +147,6 @@ app.post("/agendar/:cliente", authMiddleware, planoMiddleware, async (req, res) 
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    // Insere o novo agendamento
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -283,7 +284,6 @@ app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("id", id)
       .select()
       .single();
-
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao reagendar" });
 
     const doc = await accessSpreadsheet(cliente);
