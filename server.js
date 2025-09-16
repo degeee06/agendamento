@@ -197,20 +197,25 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const isPremium = !!pagamento;
 
     // Limite para free
-    if (!isPremium) {
-      const { data: agendamentosHoje } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", Email)
-        .eq("data", Data)
-        .neq("status", "cancelado");
+if (!isPremium) {
+  const inicio = `${Data}T00:00:00`;
+  const fim = `${Data}T23:59:59`;
 
-      if (agendamentosHoje.length >= 3) {
-        return res
-          .status(400)
-          .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-      }
-    }
+  const { data: agendamentosHoje } = await supabase
+    .from("agendamentos")
+    .select("*")
+    .eq("email", Email)
+    .gte("data", inicio)
+    .lte("data", fim)
+    .neq("status", "cancelado");
+
+  if (agendamentosHoje.length >= 3) {
+    return res
+      .status(400)
+      .json({ msg: "Limite de 3 agendamentos por dia para plano free" });
+  }
+}
+
 
     // Checa disponibilidade do horário
     const livre = await horarioDisponivel(cliente, Data, Horario);
@@ -437,3 +442,4 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
