@@ -123,30 +123,30 @@ app.get("/check-vip/:email", async (req, res) => {
   }
 });
 
-// ---------------- Criar PIX ou cartão ----------------
+// ---------------- Criar pagamento (PIX ou cartão) ----------------
 app.post("/create_payment", async (req, res) => {
   const { token, email, amount, paymentMethod } = req.body;
 
   try {
     const paymentData = {
-      transaction_amount: amount,
-      description: 'Pagamento Flutter',
+      transaction_amount: Number(amount),
+      description: "Pagamento Agendamento",
       installments: 1,
-      payer: { email: email },
+      payer: { email },
     };
 
-    if (paymentMethod === 'card') {
+    if (paymentMethod === "card") {
       paymentData.token = token;
-      paymentData.payment_method_id = 'master';
+      paymentData.payment_method_id = "master";
     }
 
-    if (paymentMethod === 'pix') {
-      paymentData.payment_method_id = 'pix';
+    if (paymentMethod === "pix") {
+      paymentData.payment_method_id = "pix";
     }
 
     const payment = await mercadopago.payment.create(paymentData);
 
-    // Salva no Supabase
+    // Salva pagamento no Supabase
     await supabase.from("pagamentos").upsert([{
       id: payment.response.id.toString(),
       email,
@@ -156,35 +156,32 @@ app.post("/create_payment", async (req, res) => {
     }]);
 
     res.status(201).json(payment.response);
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ error: error.message });
+  } catch (err) {
+    console.error("Erro ao criar pagamento:", err);
+    res.status(400).json({ error: err.message });
   }
 });
-
 
 // ---------------- Webhook MercadoPago ----------------
 app.post("/webhook/mercadopago", async (req, res) => {
   try {
-    const { id, type } = req.body;
-    if (type !== "payment") return res.status(200).send("Ignorado");
-
-    const payment = await mp.payment.findById(id);
+    const payment = req.body;
+    const { email, status } = payment;
 
     await supabase
       .from("pagamentos")
       .upsert([{
-        id: payment.body.id.toString(),
-        email: payment.body.payer.email,
-        amount: payment.body.transaction_amount,
-        status: payment.body.status,
-        valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        id: payment.id,
+        email,
+        amount: payment.transaction_amount,
+        status,
+        valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
       }]);
 
-    res.sendStatus(200);
+    res.status(200).send("OK");
   } catch (err) {
     console.error("Erro webhook MP:", err);
-    res.sendStatus(500);
+    res.status(500).send("Erro interno");
   }
 });
 
@@ -266,7 +263,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       await supabase
         .from("pagamentos")
         .upsert([{
-          id: pagamentoMP.body.id.toString(),
+          id: pagamentoMP.body.id,
           email: Email,
           amount: pagamentoMP.body.transaction_amount,
           status: pagamentoMP.body.status,
@@ -442,4 +439,3 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-
