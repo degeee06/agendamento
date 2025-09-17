@@ -88,6 +88,25 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   return agendamentos.length === 0;
 }
 
+// ---------------- Função VIP ----------------
+async function checkVip(email) {
+  try {
+    const { data, error } = await supabase
+      .from("pagamentos")
+      .select("status, valid_until")
+      .eq("email", email.toLowerCase().trim())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    if (error || !data) return false;
+    return ["approved", "paid"].includes(data.status.toLowerCase()) &&
+           data.valid_until && new Date(data.valid_until) > new Date();
+  } catch (e) {
+    console.error("Erro ao verificar VIP:", e);
+    return false;
+  }
+}
+
 // ---------------- Rotas Frontend ----------------
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
 app.get("/:cliente", async (req, res) => {
@@ -96,27 +115,6 @@ app.get("/:cliente", async (req, res) => {
   if (error || !data) return res.status(404).send("Cliente não encontrado");
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
-
-// ---------------- Função VIP ----------------
-async function checkVip(email) {
-  try {
-    const { data, error } = await supabase
-      .from("pagamentos")
-      .select("status, valid_until")
-      .eq("email", email)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error || !data) return false;
-
-    return (["approved", "paid"].includes(data.status.toLowerCase())) &&
-           data.valid_until && new Date(data.valid_until) > new Date();
-  } catch (e) {
-    console.error("Erro ao verificar VIP:", e);
-    return false;
-  }
-}
 
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
@@ -141,7 +139,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         .eq("data", dataNormalizada)
         .eq("email", emailNormalizado)
         .in("status", ["pendente", "confirmado"]);
-
       if (error) return res.status(500).json({ msg: "Erro interno ao validar limite" });
       if ((agendamentosHoje?.length || 0) >= 3)
         return res.status(402).json({ 
@@ -153,6 +150,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
+    // Remove agendamento cancelado no mesmo horário
     await supabase
       .from("agendamentos")
       .delete()
@@ -178,10 +176,11 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     if (insertError) return res.status(500).json({ msg: "Erro ao salvar agendamento" });
 
+    // Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-    await sheet.addRow(novoAgendamento);
+    await sheet.addRow(novoAgendamento); // sempre adiciona, não usa r.id
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
   } catch (err) {
@@ -193,9 +192,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 // ---------------- Confirmar ----------------
 app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
-    const cliente = req.params.cliente;
-    const { id } = req.params;
-
+    const { cliente, id } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const { data, error } = await supabase
@@ -205,26 +202,13 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("cliente", cliente)
       .select()
       .single();
+    if (error || !data) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
 
-    if (error) return res.status(500).json({ msg: "Erro ao confirmar agendamento" });
-    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    // Normaliza data para manter sheets consistentes
-    data.email = data.email?.toLowerCase().trim();
-    data.data = new Date(data.data).toISOString().split("T")[0];
-
+    // Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id === data.id);
-    if (row) {
-      row.status = "confirmado";
-      row.confirmado = true;
-      await row.save();
-    } else {
-      await sheet.addRow(data);
-    }
+    await sheet.addRow(data); // sempre adiciona no sheets
 
     res.json({ msg: "Agendamento confirmado!", agendamento: data });
   } catch (err) {
@@ -232,7 +216,6 @@ app.post("/confirmar/:cliente/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 
 // ---------------- Cancelar ----------------
 app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
@@ -247,92 +230,52 @@ app.post("/cancelar/:cliente/:id", authMiddleware, async (req, res) => {
       .eq("cliente", cliente)
       .select()
       .single();
-
-    if (error) return res.status(500).json({ msg: "Erro ao cancelar agendamento" });
-    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    // Normaliza data/email
-    data.email = data.email?.toLowerCase().trim();
-    data.data = new Date(data.data).toISOString().split("T")[0];
+    if (error || !data) return res.status(500).json({ msg: "Erro ao cancelar agendamento" });
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(data));
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id == data.id);
-    if (row) {
-      row.status = "cancelado";
-      row.confirmado = false;
-      await row.save();
-    } else {
-      await sheet.addRow(data);
-    }
+    await sheet.addRow(data);
 
     res.json({ msg: "Agendamento cancelado!", agendamento: data });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: "Erro interno ao cancelar" });
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 
 // ---------------- Reagendar ----------------
 app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
-    const cliente = req.params.cliente;
-    const { id } = req.params;
+    const { cliente, id } = req.params;
     const { novaData, novoHorario } = req.body;
-
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Nova data e horário obrigatórios" });
 
-    const { data: agendamento, error: errorGet } = await supabase
+    const { data: agendamento, error } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("id", id)
       .eq("cliente", cliente)
       .single();
+    if (error || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    if (errorGet || !agendamento) return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    // Normaliza data
     const dataNormalizada = new Date(novaData).toISOString().split("T")[0];
-
-    // Checa se novo horário está livre
     const livre = await horarioDisponivel(cliente, dataNormalizada, novoHorario, id);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
     const { data: novo, error: errorUpdate } = await supabase
       .from("agendamentos")
-      .update({
-        data: dataNormalizada,
-        horario: novoHorario,
-        status: "pendente",
-        confirmado: false
-      })
+      .update({ data: dataNormalizada, horario: novoHorario, status: "pendente", confirmado: false })
       .eq("id", id)
       .select()
       .single();
-
     if (errorUpdate) return res.status(500).json({ msg: "Erro ao reagendar" });
-
-    // Normaliza email também
-    novo.email = novo.email?.toLowerCase().trim();
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novo));
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id === novo.id);
-    if (row) {
-      row.data = novo.data;
-      row.horario = novo.horario;
-      row.status = novo.status;
-      row.confirmado = novo.confirmado;
-      await row.save();
-    } else {
-      await sheet.addRow(novo);
-    }
+    await sheet.addRow(novo);
 
     res.json({ msg: "Reagendamento realizado com sucesso!", agendamento: novo });
   } catch (err) {
@@ -347,95 +290,13 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente);
+    const { data, error } = await supabase.from("agendamentos").select("*").eq("cliente", cliente);
     if (error) return res.status(500).json({ msg: "Erro Supabase" });
 
     res.json({ agendamentos: data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "Erro interno" });
-  }
-});
-// ---------------- Criar PIX ----------------
-app.post("/create-pix", authMiddleware, async (req, res) => {
-  try {
-    const { email, amount = 10.0, description = "Assinatura VIP ilimitada" } = req.body;
-    if (!email) return res.status(400).json({ msg: "Email obrigatório" });
-
-    const emailNormalizado = email.toLowerCase().trim();
-    const result = await mpPayment.create({
-      body: {
-        transaction_amount: Number(amount),
-        description,
-        payment_method_id: "pix",
-        payer: { email: emailNormalizado },
-      },
-    });
-
-    await supabase.from("pagamentos").upsert(
-      [{ id: result.id, email: emailNormalizado, amount: Number(amount), status: "pending" }],
-      { onConflict: ["id"] }
-    );
-
-    res.json({
-      msg: "Pagamento PIX criado",
-      id: result.id,
-      qr_code: result.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
-    });
-  } catch (err) {
-    console.error("Erro ao criar PIX:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// ---------------- Webhook PIX (Produção) ----------------
-app.post("/webhook", async (req, res) => {
-  try {
-    const paymentId = req.body?.data?.id || req.query["data.id"];
-    if (!paymentId) return res.sendStatus(400);
-
-    const paymentDetails = await mpPayment.get({ id: paymentId });
-    const status = paymentDetails.status;
-    let valid_until = null;
-
-    if (["approved", "paid"].includes(status.toLowerCase())) {
-      const vipExpires = new Date();
-      vipExpires.setDate(vipExpires.getDate() + 30);
-      valid_until = vipExpires.toISOString();
-
-      const { data: pagamento } = await supabase
-        .from("pagamentos")
-        .select("email")
-        .eq("id", paymentId)
-        .single();
-
-      if (pagamento?.email) {
-        const { error } = await supabase
-          .from("clientes")
-          .update({ is_vip: true, vip_valid_until: valid_until })
-          .eq("email", pagamento.email);
-
-        if (error) console.error("Erro ao atualizar VIP:", error.message);
-        else console.log(`Cliente ${pagamento.email} agora é VIP até ${valid_until}`);
-      }
-    }
-
-    const { error: updateError } = await supabase
-      .from("pagamentos")
-      .update({ status, valid_until })
-      .eq("id", paymentId);
-
-    if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
-    else console.log(`Pagamento ${paymentId} atualizado: status=${status}`);
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Erro no webhook:", err.message);
-    res.sendStatus(500);
   }
 });
 
