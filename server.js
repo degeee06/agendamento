@@ -137,47 +137,54 @@ app.post("/webhook", async (req, res) => {
     const paymentId = req.body?.data?.id || req.query["data.id"];
     if (!paymentId) return res.sendStatus(400);
 
+    // Busca os detalhes do pagamento no Mercado Pago
     const paymentDetails = await mpPayment.get({ id: paymentId });
-    const status = paymentDetails.status;
+    const status = paymentDetails.status.toLowerCase();
     let valid_until = null;
 
-    if (["approved", "paid"].includes(status.toLowerCase())) {
+    if (["approved", "paid"].includes(status)) {
+      // Define validade VIP por 30 dias
       const vipExpires = new Date();
       vipExpires.setDate(vipExpires.getDate() + 30);
       valid_until = vipExpires.toISOString();
 
-      // Atualiza VIP do cliente relacionado
-      const { data: pagamento } = await supabase
+      // Pega email e cliente_id do pagamento no Supabase
+      const { data: pagamento, error: pagamentoError } = await supabase
         .from("pagamentos")
         .select("email")
         .eq("id", paymentId)
         .single();
 
-      if (pagamento?.email) {
-        const { error } = await supabase
+      if (pagamentoError) {
+        console.error("Erro ao buscar pagamento:", pagamentoError.message);
+      } else if (pagamento?.email) {
+        // Atualiza VIP do cliente no Supabase
+        const { error: updateClienteError } = await supabase
           .from("clientes")
           .update({ is_vip: true, vip_valid_until: valid_until })
           .eq("email", pagamento.email);
 
-        if (error) console.error("Erro ao atualizar VIP:", error.message);
+        if (updateClienteError) console.error("Erro ao atualizar VIP:", updateClienteError.message);
         else console.log(`Cliente ${pagamento.email} agora é VIP até ${valid_until}`);
       }
     }
 
-    const { error: updateError } = await supabase
+    // Atualiza status do pagamento no Supabase
+    const { error: updatePaymentError } = await supabase
       .from("pagamentos")
       .update({ status, valid_until })
       .eq("id", paymentId);
 
-    if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
+    if (updatePaymentError) console.error("Erro ao atualizar pagamento:", updatePaymentError.message);
     else console.log(`Pagamento ${paymentId} atualizado: status=${status}`);
 
     res.sendStatus(200);
   } catch (err) {
-    console.error("Erro no webhook:", err.message);
+    console.error("Erro no webhook:", err);
     res.sendStatus(500);
   }
 });
+
 
 
 
@@ -325,6 +332,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
