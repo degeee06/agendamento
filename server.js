@@ -464,7 +464,48 @@ app.get("/meus-agendamentos/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------- Criar PIX ----------------
+app.post("/criar-pix/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Acesso negado" });
+    }
+
+    const { valor, descricao } = req.body;
+    if (!valor || !descricao) {
+      return res.status(400).json({ msg: "Valor e descrição obrigatórios" });
+    }
+
+    const payment_data = {
+      transaction_amount: Number(valor),
+      description: descricao,
+      payment_method_id: "pix",
+      payer: {
+        email: req.user.email,
+        first_name: req.user.user_metadata.nome || "Cliente",
+      },
+    };
+
+    const payment = await mercadopago.payment.create(payment_data);
+
+    res.json({
+      id: payment.response.id,
+      status: payment.response.status,
+      qr_code: payment.response.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64:
+        payment.response.point_of_interaction.transaction_data.qr_code_base64,
+    });
+  } catch (err) {
+    console.error("Erro ao criar PIX:", err);
+    res.status(500).json({ msg: "Erro ao criar PIX" });
+  }
+});
+
+
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
