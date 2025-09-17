@@ -200,7 +200,7 @@ async function checkVip(email) {
   }
 }
 
-// ---------------- Rota de agendamento ----------------
+// ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -216,56 +216,31 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
 
-    // 🔹 Checa VIP
+    // 🔹 Checa se usuário é VIP
     const isVip = await checkVip(emailNormalizado);
 
-    // 🔹 Limite free: máximo 3 agendamentos
-    const { data: agendamentosHoje, error: agendamentoError } = await supabase
-      .from("agendamentos")
-      .select("id")
-      .eq("cliente", cliente)
-      .eq("data", dataNormalizada)
-      .eq("email", emailNormalizado)
-      .in("status", ["pendente", "confirmado"]);
+    // 🔹 Checa limite free (3 agendamentos)
+    if (!isVip) {
+      const { data: agendamentosHoje, error: agendamentoError } = await supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("cliente", cliente)
+        .eq("data", dataNormalizada)
+        .eq("email", emailNormalizado)
+        .in("status", ["pendente", "confirmado"]);
 
-    if (agendamentoError) {
-      console.error("Erro ao buscar agendamentos:", agendamentoError);
-      return res.status(500).json({ msg: "Erro interno ao validar limite" });
-    }
-
-    if (!isVip && (agendamentosHoje?.length || 0) >= 3) {
-      // Cria pagamento PIX para desbloquear VIP
-      const result = await mpPayment.create({
-        body: {
-          transaction_amount: 10.0, // valor da assinatura VIP
-          description: "Assinatura VIP ilimitada",
-          payment_method_id: "pix",
-          payer: { email: emailNormalizado },
-        },
-      });
-
-      // Atualiza os agendamentos pendentes com payment_id
-      if (agendamentosHoje.length > 0) {
-        await supabase
-          .from("agendamentos")
-          .update({ payment_id: result.id })
-          .in("id", agendamentosHoje.map(a => a.id));
+      if (agendamentoError) {
+        console.error("Erro ao buscar agendamentos:", agendamentoError);
+        return res.status(500).json({ msg: "Erro interno ao validar limite" });
       }
 
-      // Insere pagamento na tabela pagamentos
-      await supabase.from("pagamentos").upsert(
-        [{ id: result.id, email: emailNormalizado, amount: 10.0, status: "pending" }],
-        { onConflict: ["id"] }
-      );
-
-      return res.status(402).json({
-        msg: "Você atingiu o limite de 3 agendamentos. Efetue o pagamento VIP para desbloquear ilimitado.",
-        pix: {
-          id: result.id,
-          qr_code: result.point_of_interaction.transaction_data.qr_code,
-          qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
-        },
-      });
+      if ((agendamentosHoje?.length || 0) >= 3) {
+        // Retorna instrução para pagamento PIX
+        return res.status(402).json({ 
+          msg: "Você atingiu o limite de 3 agendamentos. Efetue o pagamento VIP para desbloquear ilimitado.",
+          needPayment: true
+        });
+      }
     }
 
     // 🔹 Checa se horário está disponível
@@ -318,6 +293,42 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------- Cria PIX ----------------
+app.post("/create-pix", authMiddleware, async (req, res) => {
+  try {
+    const { email, amount = 10.0, description = "Assinatura VIP ilimitada" } = req.body;
+    if (!email) return res.status(400).json({ msg: "Email obrigatório" });
+
+    const emailNormalizado = email.toLowerCase().trim();
+
+    const result = await mpPayment.create({
+      body: {
+        transaction_amount: Number(amount),
+        description,
+        payment_method_id: "pix",
+        payer: { email: emailNormalizado },
+      },
+    });
+
+    // Salva pagamento no Supabase
+    await supabase.from("pagamentos").upsert(
+      [{ id: result.id, email: emailNormalizado, amount: Number(amount), status: "pending" }],
+      { onConflict: ["id"] }
+    );
+
+    res.json({
+      msg: "Pagamento PIX criado",
+      id: result.id,
+      qr_code: result.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+    });
+  } catch (err) {
+    console.error("Erro ao criar PIX:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
