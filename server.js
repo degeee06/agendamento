@@ -185,24 +185,22 @@ app.post("/webhook", async (req, res) => {
 async function checkVip(email) {
   try {
     const { data, error } = await supabase
-      .from("clientes")
-      .select("is_vip, vip_valid_until")
+      .from("pagamentos")
+      .select("status, valid_until")
       .eq("email", email)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (error || !data) return false;
 
-    // Verifica se o VIP ainda está válido
-    if (data.is_vip && data.vip_valid_until) {
-      return new Date(data.vip_valid_until) > new Date();
-    }
-    return false;
+    return (data.status.toLowerCase() === "approved" || data.status.toLowerCase() === "paid") &&
+           data.valid_until && new Date(data.valid_until) > new Date();
   } catch (e) {
     console.error("Erro ao verificar VIP:", e);
     return false;
   }
 }
-
 
 
 
@@ -223,29 +221,74 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
 
+    // 🔹 Checa VIP pelo pagamento aprovado
+    async function checkVip(email) {
+      try {
+        const { data, error } = await supabase
+          .from("pagamentos")
+          .select("status, valid_until")
+          .eq("email", email)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (error || !data) return false;
+
+        return (["approved", "paid"].includes(data.status.toLowerCase())) &&
+               data.valid_until && new Date(data.valid_until) > new Date();
+      } catch (e) {
+        console.error("Erro ao verificar VIP:", e);
+        return false;
+      }
+    }
 
     const isVip = await checkVip(emailNormalizado);
 
     // 🔹 Checa limite free (3 agendamentos)
-    if (!isVip) {
-      const { data: agendamentosHoje, error } = await supabase
+    const { data: agendamentosHoje, error: agendamentoError } = await supabase
+      .from("agendamentos")
+      .select("id")
+      .eq("cliente", cliente)
+      .eq("data", dataNormalizada)
+      .eq("email", emailNormalizado)
+      .in("status", ["pendente", "confirmado"]);
+
+    if (agendamentoError) {
+      console.error("Erro ao buscar agendamentos:", agendamentoError);
+      return res.status(500).json({ msg: "Erro interno ao validar limite" });
+    }
+
+    if (!isVip && (agendamentosHoje?.length || 0) >= 3) {
+      // Cria pagamento PIX para desbloquear VIP
+      const result = await mpPayment.create({
+        body: {
+          transaction_amount: 10.0, // valor da assinatura VIP
+          description: "Assinatura VIP ilimitada",
+          payment_method_id: "pix",
+          payer: { email: emailNormalizado },
+        },
+      });
+
+      // Atualiza os agendamentos pendentes com payment_id
+      await supabase
         .from("agendamentos")
-        .select("id")
-        .eq("cliente", cliente)
-        .eq("data", dataNormalizada)
-        .eq("email", emailNormalizado)
-        .in("status", ["pendente", "confirmado"]);
+        .update({ payment_id: result.id })
+        .in("id", agendamentosHoje.map(a => a.id));
 
-      if (error) {
-        console.error("Erro ao buscar agendamentos:", error);
-        return res.status(500).json({ msg: "Erro interno ao validar limite" });
-      }
+      // Insere pagamento na tabela pagamentos
+      await supabase.from("pagamentos").upsert(
+        [{ id: result.id, email: emailNormalizado, amount: 10.0, status: "pending" }],
+        { onConflict: ["id"] }
+      );
 
-      if ((agendamentosHoje?.length || 0) >= 3) {
-        return res.status(402).json({
-          msg: "Você atingiu o limite de 3 agendamentos. Efetue o pagamento VIP para desbloquear ilimitado.",
-        });
-      }
+      return res.status(402).json({
+        msg: "Você atingiu o limite de 3 agendamentos. Efetue o pagamento VIP para desbloquear ilimitado.",
+        pix: {
+          id: result.id,
+          qr_code: result.point_of_interaction.transaction_data.qr_code,
+          qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+        },
+      });
     }
 
     // 🔹 Checa se horário está disponível
@@ -299,8 +342,10 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 });
 
 
+
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
