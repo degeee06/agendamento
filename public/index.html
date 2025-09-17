@@ -1,172 +1,210 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Agendamentos</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <title>PIX Mercado Pago Produção</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 420px;
+      margin: 40px auto;
+      text-align: center;
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    input, button {
+      padding: 12px;
+      margin: 10px 0;
+      width: 100%;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      background: #0077cc;
+      color: white;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+    button:hover { background: #005fa3; }
+    #qr img {
+      margin-top: 20px;
+      max-width: 280px;
+      border: 4px solid #0077cc;
+      border-radius: 12px;
+    }
+    #pixCode {
+      margin-top: 12px;
+      word-wrap: break-word;
+      font-size: 14px;
+      color: #333;
+      background: #eee;
+      padding: 10px;
+      border-radius: 6px;
+    }
+    #status {
+      margin-top: 20px;
+      font-weight: bold;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    #status.pending { color: #d48806; background: #fff7e6; }
+    #status.approved { color: #389e0d; background: #f6ffed; }
+    #status.rejected { color: #cf1322; background: #fff1f0; }
+    #copiar {
+      margin-top: 10px;
+      display: none;
+      background: #28a745;
+    }
+    #copiar.copiado { background: #218838; }
+    #vipNotice {
+      margin-top: 20px;
+      padding: 12px;
+      background: #fffbe6;
+      border: 1px solid #ffe58f;
+      border-radius: 8px;
+      display: none;
+      font-weight: bold;
+      color: #d48806;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 p-6">
-  <h1 class="text-3xl font-bold mb-6 text-center">Meus Agendamentos</h1>
+<body>
+  <h1>Gerar PIX Produção</h1>
 
-  <!-- Formulário -->
-  <div id="form-agendamento" class="mb-6 p-6 bg-white rounded shadow max-w-md mx-auto">
-    <input id="nome" placeholder="Nome" class="border p-2 mb-2 w-full rounded"/>
-    <input id="email" placeholder="Email" class="border p-2 mb-2 w-full rounded"/>
-    <input id="telefone" placeholder="Telefone" class="border p-2 mb-2 w-full rounded"/>
-    <input id="data" type="date" class="border p-2 mb-2 w-full rounded"/>
-    <input id="horario" type="time" class="border p-2 mb-2 w-full rounded"/>
-    <button id="btn-agendar" class="bg-blue-500 text-white px-4 py-2 rounded w-full">Agendar</button>
-  </div>
+  <input type="number" id="amount" placeholder="Valor (R$)" step="0.01" min="1" />
+  <button onclick="gerarPix()">Gerar QR Code PIX</button>
 
-  <!-- Lista -->
-  <div id="agendamentos-list" class="max-w-xl mx-auto space-y-4"></div>
+  <div id="vipNotice">Você atingiu o limite de agendamentos gratuitos! Faça upgrade VIP para agendar mais.</div>
 
-  <!-- Modal Reagendar -->
-  <div id="modal-reagendar" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center hidden">
-    <div class="bg-white p-6 rounded shadow w-80">
-      <h2 class="text-xl font-bold mb-4">Reagendar</h2>
-      <input id="novaData" type="date" class="border p-2 mb-2 w-full rounded"/>
-      <input id="novoHorario" type="time" class="border p-2 mb-4 w-full rounded"/>
-      <div class="flex justify-end space-x-2">
-        <button id="cancel-reagendar" class="px-4 py-2 rounded border">Cancelar</button>
-        <button id="confirm-reagendar" class="px-4 py-2 bg-green-500 text-white rounded">Confirmar</button>
-      </div>
-    </div>
-  </div>
+  <div id="qr"></div>
+  <p id="pixCode"></p>
+  <p id="status"></p>
+  <button id="copiar" onclick="copiarPix()">Copiar Código PIX</button>
 
   <script>
+    const customerEmail = "amorimmm60@gmail.com"; // email real do cliente
+    let currentPaymentId = null;
+    let statusInterval = null;
+    let canSchedule = true;
     let cliente = null;
-    let userToken = null;
-    let agendamentoParaReagendar = null;
 
-    // pega cliente da URL (/cliente123)
+    // pega o cliente da URL → ex: /cliente1/
     function getClienteFromPath() {
       const parts = window.location.pathname.split("/");
-      return parts[1] || null;
+      return parts[1] || "cliente1"; // fallback
     }
 
-    // obtém token do localStorage (setado no login via backend)
-    function getToken() {
-      return localStorage.getItem("token");
-    }
-
-    async function fetchAgendamentos() {
-      const res = await fetch(`/meus-agendamentos/${cliente}`, {
-        headers: { Authorization: `Bearer ${userToken}` }
-      });
-      const data = await res.json();
-      renderAgendamentos(data.agendamentos || []);
-    }
-
-    function renderAgendamentos(agendamentos) {
-      const container = document.getElementById("agendamentos-list");
-      container.innerHTML = "";
-      agendamentos.forEach(a => {
-        const div = document.createElement("div");
-        div.className = "p-4 bg-white rounded shadow flex justify-between items-center";
-        div.innerHTML = `
-          <div>
-            <strong>${a.nome}</strong> | ${a.email || ""} | ${a.telefone || ""}<br/>
-            ${a.data} às ${a.horario} | Status: ${a.status}
-          </div>
-          <div class="space-x-2">
-            ${a.status !== "confirmado" ? `<button onclick="confirmar('${a.id}')" class="bg-green-500 text-white px-2 py-1 rounded">Confirmar</button>` : ""}
-            ${a.status !== "cancelado" ? `<button onclick="cancelar('${a.id}')" class="bg-red-500 text-white px-2 py-1 rounded">Cancelar</button>` : ""}
-            <button onclick="abrirReagendar('${a.id}')" class="bg-yellow-500 text-white px-2 py-1 rounded">Reagendar</button>
-          </div>
-        `;
-        container.appendChild(div);
-      });
-    }
-
-    async function agendar() {
-      const agendamento = {
-        nome: document.getElementById("nome").value,
-        email: document.getElementById("email").value,
-        telefone: document.getElementById("telefone").value,
-        data: document.getElementById("data").value,
-        horario: document.getElementById("horario").value
-      };
-
-      const res = await fetch(`/agendar/${cliente}`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userToken}`
-        },
-        body: JSON.stringify(agendamento)
-      });
-      const data = await res.json();
-      alert(data.msg);
-      fetchAgendamentos();
-    }
-
-    async function cancelar(id) {
-      const res = await fetch(`/cancelar/${cliente}/${id}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${userToken}` }
-      });
-      const data = await res.json();
-      alert(data.msg);
-      fetchAgendamentos();
-    }
-
-    async function confirmar(id) {
-      const res = await fetch(`/confirmar/${cliente}/${id}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${userToken}` }
-      });
-      const data = await res.json();
-      alert(data.msg);
-      fetchAgendamentos();
-    }
-
-    function abrirReagendar(id) {
-      agendamentoParaReagendar = id;
-      document.getElementById("modal-reagendar").classList.remove("hidden");
-    }
-
-    document.getElementById("cancel-reagendar").addEventListener("click", () => {
-      document.getElementById("modal-reagendar").classList.add("hidden");
-    });
-
-    document.getElementById("confirm-reagendar").addEventListener("click", async () => {
-      const novaData = document.getElementById("novaData").value;
-      const novoHorario = document.getElementById("novoHorario").value;
-      if (!novaData || !novoHorario) { alert("Preencha data e horário"); return; }
-
-      const res = await fetch(`/reagendar/${cliente}/${agendamentoParaReagendar}`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userToken}` 
-        },
-        body: JSON.stringify({ novaData, novoHorario })
-      });
-
-      const data = await res.json();
-      alert(data.msg);
-      document.getElementById("modal-reagendar").classList.add("hidden");
-      fetchAgendamentos();
-    });
-
-    document.getElementById("btn-agendar").addEventListener("click", agendar);
-
-    // inicialização
-    (async () => {
-      cliente = getClienteFromPath();
-      userToken = getToken();
-      if (!cliente) {
-        alert("Cliente não encontrado na URL");
-        return;
+    async function agendar(dataAgendamento) {
+      if (!canSchedule) {
+        alert("Você precisa pagar o VIP para agendar mais.");
+        return gerarPix(); // abre PIX automaticamente
       }
-      if (!userToken) {
-        alert("Token não encontrado. Faça login antes.");
-        return;
+
+      try {
+        const res = await fetch(`/agendar/${cliente}`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("token") 
+          },
+          body: JSON.stringify(dataAgendamento)
+        });
+
+        const result = await res.json();
+        if (!res.ok) {
+          if (result.msg && result.msg.includes("Limite de 3 agendamentos")) {
+            document.getElementById("vipNotice").style.display = "block";
+            canSchedule = false;
+            return gerarPix();
+          }
+          return alert(result.msg || "Erro ao agendar");
+        }
+
+        alert("Agendamento realizado com sucesso!");
+      } catch (err) {
+        alert("Erro ao agendar: " + err.message);
       }
-      fetchAgendamentos();
-    })();
+    }
+
+    async function gerarPix() {
+      const amount = parseFloat(document.getElementById("amount").value) || 0.01;
+      try {
+        const res = await fetch("/create-pix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount, description: "Pagamento VIP", email: customerEmail })
+        });
+
+        const data = await res.json();
+        if (data.error) return alert("Erro: " + data.error);
+
+        currentPaymentId = data.id;
+        document.getElementById("qr").innerHTML = `<img src="data:image/png;base64,${data.qr_code_base64}" alt="QR Code PIX"/>`;
+        document.getElementById("pixCode").innerText = data.qr_code;
+        document.getElementById("copiar").style.display = "inline-block";
+
+        if (statusInterval) clearInterval(statusInterval);
+        setStatus("pending", "Aguardando pagamento... ⏳");
+
+        statusInterval = setInterval(checkStatus, 4000);
+      } catch (err) {
+        alert("Erro ao gerar PIX: " + err.message);
+      }
+    }
+
+    async function checkStatus() {
+      if (!currentPaymentId) return;
+
+      try {
+        const res = await fetch(`/status-pix/${currentPaymentId}`);
+        const data = await res.json();
+
+        if (data.status === "approved" || data.status === "paid") {
+          setStatus("approved", "Pagamento aprovado ✅");
+          clearInterval(statusInterval);
+          canSchedule = true; 
+          document.getElementById("vipNotice").style.display = "none";
+          alert("VIP ativo! Você pode continuar agendando.");
+        } else if (data.status === "rejected") {
+          setStatus("rejected", "Pagamento recusado ❌");
+          clearInterval(statusInterval);
+        } else {
+          setStatus("pending", "Aguardando pagamento... ⏳");
+        }
+      } catch (err) {
+        console.error("Erro ao checar status:", err);
+      }
+    }
+
+    function setStatus(className, text) {
+      const statusEl = document.getElementById("status");
+      statusEl.className = className || "";
+      statusEl.innerText = text || "";
+    }
+
+    function copiarPix() {
+      const button = document.getElementById("copiar");
+      navigator.clipboard.writeText(document.getElementById("pixCode").innerText)
+        .then(() => {
+          button.innerText = "Copiado! ✅";
+          button.classList.add("copiado");
+          setTimeout(() => {
+            button.innerText = "Copiar Código PIX";
+            button.classList.remove("copiado");
+          }, 2000);
+        })
+        .catch(() => alert("Falha ao copiar."));
+    }
+
+    // inicializa cliente
+    cliente = getClienteFromPath();
   </script>
 </body>
 </html>
