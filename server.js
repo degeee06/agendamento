@@ -256,6 +256,118 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+// ---------------- Função auxiliar para atualizar linha no Sheets ----------------
+async function updateRowInSheet(sheet, rowId, updatedData) {
+  await sheet.loadHeaderRow();
+  await sheet.loadCells(); // Carrega células
+  const rows = await sheet.getRows();
+  const row = rows.find(r => r.id === rowId); // Assume que 'id' é coluna no Sheets
+  if (row) {
+    Object.keys(updatedData).forEach(key => {
+      if (sheet.headerValues.includes(key)) {
+        row[key] = updatedData[key];
+      }
+    });
+    await row.save();
+  } else {
+    // Se não existir, adiciona como nova linha
+    await ensureDynamicHeaders(sheet, Object.keys(updatedData));
+    await sheet.addRow(updatedData);
+  }
+}
+
+// ---------------- Confirmar agendamento ----------------
+app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ confirmado: true, status: "confirmado" })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+
+    if (error || !data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Atualiza Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await updateRowInSheet(sheet, id, data);
+
+    res.json({ msg: "Agendamento confirmado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao confirmar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Cancelar agendamento ----------------
+app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ status: "cancelado", confirmado: false })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+
+    if (error || !data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Atualiza Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await updateRowInSheet(sheet, id, data);
+
+    res.json({ msg: "Agendamento cancelado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao cancelar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Reagendar agendamento ----------------
+app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    const { novaData, novoHorario } = req.body;
+
+    if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    // Verifica se horário está disponível
+    const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
+    if (!disponivel) return res.status(400).json({ msg: "Horário indisponível" });
+
+    // Atualiza agendamento
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ data: novaData, horario: novoHorario })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+
+    if (error || !data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Atualiza Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await updateRowInSheet(sheet, id, data);
+
+    res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao reagendar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
