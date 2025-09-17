@@ -15,8 +15,7 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-      
-  
+
         .glass-card {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(16px);
@@ -24,84 +23,31 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
-        
-        .scrollbar-hide::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .animate-fade-in {
-            animation: fadeIn 0.3s ease-out forwards;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .input-field {
-            transition: all 0.3s ease;
-        }
-        
-        .input-field:focus {
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
-        }
-        
-        .status-pendente {
-    color: #fbbf24;
-    background-color: rgba(251, 191, 36, 0.15);
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 600;
-}
 
-.status-confirmado {
-    color: #34d399;
-    background-color: rgba(52, 211, 153, 0.15);
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 600;
-}
+        .scrollbar-hide::-webkit-scrollbar { width: 6px; }
+        .scrollbar-hide::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
+        .scrollbar-hide::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+        .scrollbar-hide::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
-.status-cancelado {
-    color: #f87171;
-    background-color: rgba(248, 113, 113, 0.15);
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 600;
-}
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
 
-        
-        .tab-dia.active {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        
-        .agendamento-card {
-            transition: all 0.3s ease;
-        }
-        
-        .agendamento-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
+        .input-field { transition: all 0.3s ease; }
+        .input-field:focus { box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3); }
+
+        .status-pendente { color: #fbbf24; background-color: rgba(251, 191, 36, 0.15); padding: 2px 6px; border-radius: 6px; font-weight: 600; }
+        .status-confirmado { color: #34d399; background-color: rgba(52, 211, 153, 0.15); padding: 2px 6px; border-radius: 6px; font-weight: 600; }
+        .status-cancelado { color: #f87171; background-color: rgba(248, 113, 113, 0.15); padding: 2px 6px; border-radius: 6px; font-weight: 600; }
+
+        .tab-dia.active { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+
+        .agendamento-card { transition: all 0.3s ease; }
+        .agendamento-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
-        <!-- Header with animated gradient -->
+        <!-- Header -->
         <header class="text-center mb-12" data-aos="fade-down">
             <h1 class="text-4xl md:text-5xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
                 Agendamento
@@ -144,10 +90,15 @@
                     <i data-feather="log-in" class="w-5 h-5"></i>
                     Entrar
                 </button>
+                <!-- PIX Button -->
+                <button type="button" onclick="gerarPix()" 
+                    class="w-full bg-yellow-500 py-3 rounded-lg mt-4 text-white font-medium hover:opacity-90">
+                    Pagar com PIX
+                </button>
             </div>
         </div>
 
-        <!-- Appointment Form (Hidden Initially) -->
+        <!-- Appointment Form -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
             <div class="flex items-center justify-center mb-6">
                 <div class="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg">
@@ -156,6 +107,7 @@
             </div>
             <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl mx-auto">
+                <!-- Left Fields -->
                 <div class="space-y-5">
                     <div>
                         <label for="Nome" class="block mb-2 text-sm font-medium opacity-80">Nome Completo</label>
@@ -178,6 +130,7 @@
                         </div>
                     </div>
                 </div>
+                <!-- Right Fields -->
                 <div class="space-y-5">
                     <div>
                         <label for="Telefone" class="block mb-2 text-sm font-medium opacity-80">Telefone</label>
@@ -259,7 +212,8 @@
                 </div>
             </div>
         </div>
-
+  <!-- Toast Container (sempre dentro do body, de preferência no final) -->
+    <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
         <!-- Tabs Dias da Semana -->
         <div id="diasTabs" style="display:none;" class="flex gap-2 mb-6 overflow-x-auto pb-2" data-aos="fade-up">
             <div class="flex gap-2">
@@ -288,8 +242,52 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+    <script>
+    // Função para criar toast
+    function showToast(message, type = "info") {
+        const toast = document.createElement("div");
+        toast.textContent = message;
+        toast.className = `
+            px-4 py-2 rounded shadow-lg text-white
+            ${type === "success" ? "bg-green-500" : ""}
+            ${type === "error" ? "bg-red-500" : ""}
+            ${type === "info" ? "bg-blue-500" : ""}
+            animate-fade-in
+        `;
+        document.getElementById("toast-container").appendChild(toast);
+
+        // Remove toast depois de 3s
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    async function gerarPix() {
+        const valor = 50;
+        const descricao = "Agendamento de teste";
+
+        try {
+            const res = await fetch("/criar-pix", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ valor, descricao }),
+            });
+
+            const data = await res.json();
+
+            const qrImg = document.createElement("img");
+            qrImg.src = `data:image/png;base64,${data.qr_code_base64}`;
+            qrImg.className = "mx-auto my-4";
+            document.getElementById("agendamentoForm").appendChild(qrImg);
+
+            showToast("PIX gerado! Faça o pagamento.", "success");
+        } catch (err) {
+            console.error(err);
+            showToast("Erro ao gerar PIX", "error");
+        }
+    }
+</script>
+
 
     <script type="module">
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -826,6 +824,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
