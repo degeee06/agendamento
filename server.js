@@ -185,7 +185,6 @@ app.post("/webhook/mercadopago", async (req, res) => {
 });
 
 
-// ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -198,7 +197,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
     }
 
-    // Normaliza email e data
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
 
@@ -213,38 +211,11 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     const isPremium = !!pagamento;
 
-    // 🔹 Checa limite se for free
-    // 🔹 Checa limite se for free
-if (!isPremium) {
- const { data: agendamentosHoje, error: errorAgend } = await supabase
-  .from("agendamentos")
-  .select("id")
-  .eq("cliente", cliente)
-  .eq("data", dataNormalizada)
-  .eq("email", emailNormalizado)
-  .in("status", ["pendente", "confirmado"]); // ✅ só conta válidos
-
-
-if (errorAgend) {
-  console.error("Erro ao buscar agendamentos:", errorAgend);
-  return res.status(500).json({ msg: "Erro interno ao validar limite" });
-}
-
-if ((agendamentosHoje?.length || 0) >= 3) {
-  return res
-    .status(400)
-    .json({ msg: "Você já atingiu o limite de 3 agendamentos por dia no plano free" });
- }
-
-}
-
     // 🔹 Checa se horário está disponível
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
-    if (!livre) {
-      return res.status(400).json({ msg: "Horário indisponível" });
-    }
+    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    // 🔹 Remove agendamento cancelado no mesmo horário (se existir)
+    // 🔹 Remove agendamento cancelado no mesmo horário
     await supabase
       .from("agendamentos")
       .delete()
@@ -252,6 +223,53 @@ if ((agendamentosHoje?.length || 0) >= 3) {
       .eq("data", dataNormalizada)
       .eq("horario", Horario)
       .eq("status", "cancelado");
+
+    let status = "pendente";
+    let confirmado = false;
+
+    if (isPremium) {
+      status = "confirmado";
+      confirmado = true;
+    } else {
+      // 🔹 Conta agendamentos free do usuário no dia
+      const { data: agendamentosHoje, error: errorAgend } = await supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("cliente", cliente)
+        .eq("data", dataNormalizada)
+        .eq("email", emailNormalizado)
+        .in("status", ["pendente", "confirmado"]);
+
+      if (errorAgend) {
+        console.error("Erro ao buscar agendamentos:", errorAgend);
+        return res.status(500).json({ msg: "Erro interno ao validar limite" });
+      }
+
+      if ((agendamentosHoje?.length || 0) >= 3) {
+        // 🔹 Gerar PIX automático se atingir limite
+        const payment_data = {
+          transaction_amount: 10, // Aqui você define o valor do plano ou extra
+          description: "Plano Premium ou Extra para liberar agendamento",
+          payment_method_id: "pix",
+          payer: {
+            email: emailNormalizado,
+            first_name: Nome,
+          },
+        };
+
+        const payment = await mercadopago.payment.create(payment_data);
+
+        return res.status(400).json({
+          msg: "Você atingiu o limite de 3 agendamentos free. Faça o pagamento para liberar mais.",
+          pix: {
+            id: payment.response.id,
+            status: payment.response.status,
+            qr_code: payment.response.point_of_interaction.transaction_data.qr_code,
+            qr_code_base64: payment.response.point_of_interaction.transaction_data.qr_code_base64,
+          },
+        });
+      }
+    }
 
     // 🔹 Insere novo agendamento
     const { data: novoAgendamento, error } = await supabase
@@ -264,8 +282,8 @@ if ((agendamentosHoje?.length || 0) >= 3) {
           telefone: Telefone,
           data: dataNormalizada,
           horario: Horario,
-          status: isPremium ? "confirmado" : "pendente",
-          confirmado: isPremium,
+          status,
+          confirmado,
         },
       ])
       .select()
@@ -285,12 +303,14 @@ if ((agendamentosHoje?.length || 0) >= 3) {
     res.json({
       msg: "Agendamento realizado com sucesso!",
       agendamento: novoAgendamento,
+      isPremium,
     });
   } catch (err) {
     console.error("Erro no /agendar:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 
 // ---------------- Confirmar ----------------
@@ -505,6 +525,7 @@ app.post("/criar-pix/:cliente", authMiddleware, async (req, res) => {
 
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
