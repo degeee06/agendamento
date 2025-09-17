@@ -1,211 +1,261 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>PIX Mercado Pago Produção</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 420px;
-      margin: 40px auto;
-      text-align: center;
-      background: #f9f9f9;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    input, button {
-      padding: 12px;
-      margin: 10px 0;
-      width: 100%;
-      font-size: 16px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-    }
-    button {
-      cursor: pointer;
-      border: none;
-      background: #0077cc;
-      color: white;
-      font-weight: bold;
-      transition: 0.2s;
-    }
-    button:hover {
-      background: #005fa3;
-    }
-    #qr img {
-      margin-top: 20px;
-      max-width: 280px;
-      border: 4px solid #0077cc;
-      border-radius: 12px;
-    }
-    #pixCode {
-      margin-top: 12px;
-      word-wrap: break-word;
-      font-size: 14px;
-      color: #333;
-      background: #eee;
-      padding: 10px;
-      border-radius: 6px;
-    }
-    #status {
-      margin-top: 20px;
-      font-weight: bold;
-      font-size: 16px;
-      padding: 10px;
-      border-radius: 6px;
-      display: inline-block;
-    }
-    #status.pending {
-      color: #d48806;
-      background: #fff7e6;
-    }
-    #status.approved {
-      color: #389e0d;
-      background: #f6ffed;
-    }
-    #status.rejected {
-      color: #cf1322;
-      background: #fff1f0;
-    }
-    #copiar {
-      margin-top: 10px;
-      display: none;
-      background: #28a745;
-    }
-    #copiar.copiado {
-      background: #218838;
-    }
-    #vipNotice {
-      margin-top: 20px;
-      padding: 12px;
-      background: #fffbe6;
-      border: 1px solid #ffe58f;
-      border-radius: 8px;
-      display: none;
-      font-weight: bold;
-      color: #d48806;
-    }
-  </style>
-</head>
-<body>
-  <h1>Gerar PIX Produção</h1>
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
+import { MercadoPagoConfig, Payment } from "mercadopago";
+import { GoogleSpreadsheet } from "google-spreadsheet";
 
-  <input type="number" id="amount" placeholder="Valor (R$)" step="0.01" min="1" />
-  <button onclick="gerarPix()">Gerar QR Code PIX</button>
+// ---------------- Variáveis ----------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PORT = process.env.PORT || 3000;
 
-  <div id="vipNotice">Você atingiu o limite de agendamentos gratuitos! Faça upgrade VIP para agendar mais.</div>
+// ---------------- App ----------------
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-  <div id="qr"></div>
-  <p id="pixCode"></p>
-  <p id="status"></p>
-  <button id="copiar" onclick="copiarPix()">Copiar Código PIX</button>
+// ---------------- Supabase ----------------
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-  <script>
-    const customerEmail = "amorimmm60@gmail.com"; // email real do cliente
-    let currentPaymentId = null;
-    let statusInterval = null;
-    let canSchedule = true;
+// ---------------- Mercado Pago ----------------
+const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+const mpPayment = new Payment(mpClient);
 
-    async function agendar(dataAgendamento) {
-      if (!canSchedule) {
-        alert("Você precisa pagar o VIP para agendar mais.");
-        return gerarPix(); // abre PIX automaticamente
-      }
+// ---------------- Google Sheets ----------------
+let creds;
+try {
+  creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+} catch (e) {
+  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
+  process.exit(1);
+}
 
-      try {
-        const res = await fetch("/agendar/cliente1", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + localStorage.getItem("token") },
-          body: JSON.stringify(dataAgendamento)
+async function accessSpreadsheet(clienteId) {
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("spreadsheet_id")
+    .eq("id", clienteId)
+    .single();
+  if (error || !data) throw new Error(`Cliente ${clienteId} não encontrado`);
+  const doc = new GoogleSpreadsheet(data.spreadsheet_id);
+  await doc.useServiceAccountAuth(creds);
+  await doc.loadInfo();
+  return doc;
+}
+
+async function ensureDynamicHeaders(sheet, newKeys) {
+  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
+  const currentHeaders = sheet.headerValues || [];
+  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+  if (headersToAdd.length > 0) {
+    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
+  }
+}
+
+// ---------------- Middleware Auth ----------------
+async function authMiddleware(req, res, next) {
+  const token = req.headers["authorization"]?.split("Bearer ")[1];
+  if (!token) return res.status(401).json({ msg: "Token não enviado" });
+
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
+
+  req.user = data.user;
+  req.clienteId = data.user.user_metadata.cliente_id;
+  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
+  next();
+}
+
+// ---------------- Verifica disponibilidade ----------------
+async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
+  let query = supabase
+    .from("agendamentos")
+    .select("*")
+    .eq("cliente", cliente)
+    .eq("data", data)
+    .eq("horario", horario)
+    .neq("status", "cancelado");
+
+  if (ignoreId) query = query.neq("id", ignoreId);
+  const { data: agendamentos, error } = await query;
+  if (error) throw error;
+  return agendamentos.length === 0;
+}
+
+// ---------------- Rotas ----------------
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
+
+app.get("/:cliente", async (req, res) => {
+  const cliente = req.params.cliente;
+  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
+  if (error || !data) return res.status(404).send("Cliente não encontrado");
+  res.sendFile(path.join(__dirname, "public/index.html"));
+});
+
+// ---------------- Cria PIX ----------------
+app.post("/create-pix", async (req, res) => {
+  const { amount, description, email } = req.body;
+  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
+
+  try {
+    const result = await mpPayment.create({
+      body: {
+        transaction_amount: Number(amount),
+        description: description || "Pagamento VIP",
+        payment_method_id: "pix",
+        payer: { email },
+      },
+    });
+
+    await supabase.from("pagamentos").upsert(
+      [{ id: result.id, email, amount: Number(amount), status: "pending", valid_until: null }],
+      { onConflict: ["id"] }
+    );
+
+    res.json({
+      id: result.id,
+      status: result.status,
+      qr_code: result.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------- Webhook Mercado Pago ----------------
+app.post("/webhook", async (req, res) => {
+  try {
+    const paymentId = req.body?.data?.id || req.query["data.id"];
+    if (!paymentId) return res.sendStatus(400);
+
+    const paymentDetails = await mpPayment.get({ id: paymentId });
+    const status = paymentDetails.status;
+    let valid_until = null;
+
+    if (["approved", "paid"].includes(status.toLowerCase())) {
+      const vipExpires = new Date();
+      vipExpires.setDate(vipExpires.getDate() + 30);
+      valid_until = vipExpires.toISOString();
+    }
+
+    const { error: updateError } = await supabase
+      .from("pagamentos")
+      .update({ status, valid_until })
+      .eq("id", paymentId);
+
+    if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
+    else console.log(`Pagamento ${paymentId} atualizado: status=${status}`);
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Erro no webhook:", err.message);
+    res.sendStatus(500);
+  }
+});
+
+// ---------------- Checa VIP ----------------
+async function checkVip(email) {
+  const now = new Date();
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .select("valid_until")
+    .eq("email", email.toLowerCase().trim())
+    .eq("status", "approved")
+    .gt("valid_until", now.toISOString())
+    .order("valid_until", { ascending: false })
+    .limit(1)
+    .single();
+
+  return !!data;
+}
+
+// ---------------- Agendar ----------------
+app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { Nome, Email, Telefone, Data, Horario } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario)
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+
+    const emailNormalizado = Email.toLowerCase().trim();
+    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
+
+    // 🔹 Checa VIP
+    const isVip = await checkVip(emailNormalizado);
+
+    // 🔹 Checa limite free (3 agendamentos)
+    if (!isVip) {
+      const { data: agendamentosHoje, error } = await supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("cliente", cliente)
+        .eq("data", dataNormalizada)
+        .eq("email", emailNormalizado)
+        .in("status", ["pendente", "confirmado"]);
+
+      if (error) return res.status(500).json({ msg: "Erro ao validar limite" });
+
+      if ((agendamentosHoje?.length || 0) >= 3) {
+        return res.status(402).json({
+          msg: "Você atingiu o limite de 3 agendamentos por dia. Efetue o pagamento VIP para continuar.",
         });
-
-        const result = await res.json();
-        if (!res.ok) {
-          if (result.msg && result.msg.includes("Limite de 3 agendamentos")) {
-            // Mostra aviso VIP e abre PIX automaticamente
-            document.getElementById("vipNotice").style.display = "block";
-            canSchedule = false;
-            return gerarPix();
-          }
-          return alert(result.msg || "Erro ao agendar");
-        }
-
-        alert("Agendamento realizado com sucesso!");
-      } catch (err) {
-        alert("Erro ao agendar: " + err.message);
       }
     }
 
-    async function gerarPix() {
-      const amount = parseFloat(document.getElementById("amount").value) || 0.01;
-      try {
-        const res = await fetch("/create-pix", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount, description: "Pagamento VIP", email: customerEmail })
-        });
+    // 🔹 Checa se horário está disponível
+    const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
+    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-        const data = await res.json();
-        if (data.error) return alert("Erro: " + data.error);
+    // 🔹 Remove agendamento cancelado no mesmo horário
+    await supabase
+      .from("agendamentos")
+      .delete()
+      .eq("cliente", cliente)
+      .eq("data", dataNormalizada)
+      .eq("horario", Horario)
+      .eq("status", "cancelado");
 
-        currentPaymentId = data.id;
-        document.getElementById("qr").innerHTML = `<img src="data:image/png;base64,${data.qr_code_base64}" alt="QR Code PIX"/>`;
-        document.getElementById("pixCode").innerText = data.qr_code;
-        document.getElementById("copiar").style.display = "inline-block";
+    // 🔹 Insere novo agendamento
+    const { data: novoAgendamento, error: insertError } = await supabase
+      .from("agendamentos")
+      .insert([
+        {
+          cliente,
+          nome: Nome,
+          email: emailNormalizado,
+          telefone: Telefone,
+          data: dataNormalizada,
+          horario: Horario,
+          status: isVip ? "confirmado" : "pendente",
+          confirmado: isVip,
+        },
+      ])
+      .select()
+      .single();
 
-        if (statusInterval) clearInterval(statusInterval);
-        setStatus("pending", "Aguardando pagamento... ⏳");
+    if (insertError) return res.status(500).json({ msg: "Erro ao salvar agendamento" });
 
-        statusInterval = setInterval(checkStatus, 4000);
-      } catch (err) {
-        alert("Erro ao gerar PIX: " + err.message);
-      }
-    }
+    // 🔹 Salva no Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+    await sheet.addRow(novoAgendamento);
 
-    async function checkStatus() {
-      if (!currentPaymentId) return;
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+  } catch (err) {
+    console.error("Erro no /agendar:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
 
-      try {
-        const res = await fetch(`/status-pix/${currentPaymentId}`);
-        const data = await res.json();
-
-        if (data.status === "approved" || data.status === "paid") {
-          setStatus("approved", "Pagamento aprovado ✅");
-          clearInterval(statusInterval);
-          canSchedule = true; // agora o usuário pode agendar novamente
-          document.getElementById("vipNotice").style.display = "none";
-          alert("VIP ativo! Você pode continuar agendando.");
-        } else if (data.status === "rejected") {
-          setStatus("rejected", "Pagamento recusado ❌");
-          clearInterval(statusInterval);
-        } else {
-          setStatus("pending", "Aguardando pagamento... ⏳");
-        }
-      } catch (err) {
-        console.error("Erro ao checar status:", err);
-      }
-    }
-
-    function setStatus(className, text) {
-      const statusEl = document.getElementById("status");
-      statusEl.className = className || "";
-      statusEl.innerText = text || "";
-    }
-
-    function copiarPix() {
-      const button = document.getElementById("copiar");
-      navigator.clipboard.writeText(document.getElementById("pixCode").innerText)
-        .then(() => {
-          button.innerText = "Copiado! ✅";
-          button.classList.add("copiado");
-          setTimeout(() => {
-            button.innerText = "Copiar Código PIX";
-            button.classList.remove("copiado");
-          }, 2000);
-        })
-        .catch(() => alert("Falha ao copiar."));
-    }
-  </script>
-</body>
-</html>
+// ---------------- Servidor ----------------
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
