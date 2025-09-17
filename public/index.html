@@ -2,41 +2,56 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Teste PIX</title>
+  <title>Agendamento VIP - PIX</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background-color: #f9f9f9;
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 50px;
-      background-color: #f2f2f2;
     }
+
+    h1 {
+      color: #333;
+    }
+
     label {
       margin-top: 10px;
     }
+
     input {
-      padding: 5px;
+      padding: 8px;
       margin-bottom: 10px;
+      width: 250px;
     }
+
     button {
       padding: 10px 20px;
       cursor: pointer;
       margin-top: 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
     }
+
     #qr-container img {
       margin-top: 20px;
       width: 250px;
       height: 250px;
     }
+
     #status {
       margin-top: 20px;
       font-weight: bold;
+      color: #555;
     }
   </style>
 </head>
 <body>
-  <h1>Teste PIX</h1>
+  <h1>Pagamento VIP via PIX</h1>
 
   <label for="email">E-mail:</label>
   <input type="email" id="email" placeholder="exemplo@email.com" required>
@@ -56,6 +71,7 @@
     const btn = document.getElementById('criarPix');
     const statusDiv = document.getElementById('status');
     const qrContainer = document.getElementById('qr-container');
+    let pollingInterval = null;
 
     btn.addEventListener('click', async () => {
       const email = document.getElementById('email').value.trim();
@@ -79,14 +95,34 @@
 
         const data = await response.json();
 
-        if (response.ok) {
-          statusDiv.textContent = `PIX criado! Status: ${data.status}`;
-          const img = document.createElement("img");
-          img.src = `data:image/png;base64,${data.qr_code_base64}`;
-          qrContainer.appendChild(img);
-        } else {
+        if (!response.ok) {
           statusDiv.textContent = `Erro: ${data.error || data.msg || JSON.stringify(data)}`;
+          return;
         }
+
+        statusDiv.textContent = `PIX criado! Status: ${data.status}`;
+        const img = document.createElement("img");
+        img.src = `data:image/png;base64,${data.qr_code_base64}`;
+        qrContainer.appendChild(img);
+
+        // Começa a verificar o status
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(async () => {
+          try {
+            const statusResp = await fetch(`/check-pix-status/${data.id}`);
+            const statusData = await statusResp.json();
+
+            statusDiv.textContent = `Status atual: ${statusData.status}`;
+
+            if (["approved", "paid"].includes(statusData.status.toLowerCase())) {
+              clearInterval(pollingInterval);
+              statusDiv.textContent = "Pagamento confirmado! VIP ativo.";
+            }
+          } catch (err) {
+            console.error("Erro ao verificar status:", err);
+          }
+        }, 5000); // verifica a cada 5 segundos
+
       } catch (err) {
         statusDiv.textContent = `Erro ao criar PIX: ${err.message}`;
       }
