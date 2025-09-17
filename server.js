@@ -131,6 +131,7 @@ app.post("/create-pix", async (req, res) => {
 });
 
 // ---------------- Webhook Mercado Pago ----------------
+// ---------------- Webhook Mercado Pago ----------------
 app.post("/webhook", async (req, res) => {
   try {
     const paymentId = req.body?.data?.id || req.query["data.id"];
@@ -144,6 +145,23 @@ app.post("/webhook", async (req, res) => {
       const vipExpires = new Date();
       vipExpires.setDate(vipExpires.getDate() + 30);
       valid_until = vipExpires.toISOString();
+
+      // Atualiza VIP do cliente relacionado
+      const { data: pagamento } = await supabase
+        .from("pagamentos")
+        .select("email")
+        .eq("id", paymentId)
+        .single();
+
+      if (pagamento?.email) {
+        const { error } = await supabase
+          .from("clientes")
+          .update({ is_vip: true, vip_valid_until: valid_until })
+          .eq("email", pagamento.email);
+
+        if (error) console.error("Erro ao atualizar VIP:", error.message);
+        else console.log(`Cliente ${pagamento.email} agora é VIP até ${valid_until}`);
+      }
     }
 
     const { error: updateError } = await supabase
@@ -153,6 +171,7 @@ app.post("/webhook", async (req, res) => {
 
     if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
     else console.log(`Pagamento ${paymentId} atualizado: status=${status}`);
+
     res.sendStatus(200);
   } catch (err) {
     console.error("Erro no webhook:", err.message);
@@ -162,18 +181,28 @@ app.post("/webhook", async (req, res) => {
 
 
 
-// ---------------- Checa VIP ----------------
+
 async function checkVip(email) {
   try {
-    const response = await fetch(`https://mercadopago-backend-fsux.onrender.com/check-vip/${email}`);
-    if (!response.ok) return false;
-    const data = await response.json();
-    return data.vip === true;
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("is_vip, vip_valid_until")
+      .eq("email", email)
+      .single();
+
+    if (error || !data) return false;
+
+    // Verifica se o VIP ainda está válido
+    if (data.is_vip && data.vip_valid_until) {
+      return new Date(data.vip_valid_until) > new Date();
+    }
+    return false;
   } catch (e) {
     console.error("Erro ao verificar VIP:", e);
     return false;
   }
 }
+
 
 
 
@@ -194,18 +223,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
 
-    // 🔹 Checa VIP usando backend Mercado Pago
-    async function checkVip(email) {
-      try {
-        const response = await fetch(`https://mercadopago-backend-fsux.onrender.com/check-vip/${email}`);
-        if (!response.ok) return false;
-        const data = await response.json();
-        return data.vip === true;
-      } catch (e) {
-        console.error("Erro ao verificar VIP:", e);
-        return false;
-      }
-    }
 
     const isVip = await checkVip(emailNormalizado);
 
@@ -284,6 +301,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
