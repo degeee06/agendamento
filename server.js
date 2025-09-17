@@ -78,6 +78,24 @@ async function ensureDynamicHeaders(sheet, newKeys) {
   }
 }
 
+if (!isPremium) {
+  const { data: agendamentos, error: errorAgend } = await supabase
+    .from("agendamentos")
+    .select("id")
+    .eq("email", emailNormalizado) // email normalizado
+    .eq("cliente", cliente);       // do cliente correto
+
+  if (errorAgend) {
+    console.error("Erro ao buscar agendamentos:", errorAgend);
+    return res.status(500).json({ msg: "Erro interno ao validar limite" });
+  }
+
+  if ((agendamentos?.length || 0) >= 3) {
+    return res
+      .status(400)
+      .json({ msg: "Você já atingiu o limite de 3 agendamentos (plano free)" });
+  }
+}
 
 // ---------------- Disponibilidade ----------------
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
@@ -525,6 +543,7 @@ app.post("/criar-pix/:cliente", authMiddleware, async (req, res) => {
 
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
