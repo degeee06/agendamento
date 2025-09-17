@@ -160,21 +160,7 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ---------------- Checa VIP ----------------
-async function checkVip(email) {
-  const now = new Date();
-  const { data, error } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email.toLowerCase().trim())
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
 
-  return !!data;
-}
 
 // ---------------- Checa VIP ----------------
 async function checkVip(email) {
@@ -277,4 +263,5 @@ if (!isVip) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
