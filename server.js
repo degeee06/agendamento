@@ -164,20 +164,17 @@ app.post("/webhook", async (req, res) => {
 
 // ---------------- Checa VIP ----------------
 async function checkVip(email) {
-  const now = new Date();
-  const { data, error } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email.toLowerCase().trim())
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
-
-  // Retorna true se tiver pagamento aprovado e válido
-  return !!data;
+  try {
+    const response = await fetch(`https://mercadopago-backend-fsux.onrender.com/check-vip/${email}`);
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data.vip === true;
+  } catch (e) {
+    console.error("Erro ao verificar VIP:", e);
+    return false;
+  }
 }
+
 
 
 
@@ -185,35 +182,54 @@ async function checkVip(email) {
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (req.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Acesso negado" });
+    }
 
     const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
+    if (!Nome || !Email || !Telefone || !Data || !Horario) {
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+    }
 
     const emailNormalizado = Email.toLowerCase().trim();
-    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
+    const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
 
+    // 🔹 Checa VIP usando backend Mercado Pago
+    async function checkVip(email) {
+      try {
+        const response = await fetch(`https://mercadopago-backend-fsux.onrender.com/check-vip/${email}`);
+        if (!response.ok) return false;
+        const data = await response.json();
+        return data.vip === true;
+      } catch (e) {
+        console.error("Erro ao verificar VIP:", e);
+        return false;
+      }
+    }
 
-    // 🔹 Checa VIP (novo fluxo)
-const isVip = await checkVip(emailNormalizado);
+    const isVip = await checkVip(emailNormalizado);
 
-// 🔹 Checa limite free (3 agendamentos)
-if (!isVip) {
-  const { data: agendamentosHoje } = await supabase
-    .from("agendamentos")
-    .select("id")
-    .eq("cliente", cliente)
-    .eq("data", dataNormalizada)
-    .eq("email", emailNormalizado)
-    .in("status", ["pendente", "confirmado"]);
+    // 🔹 Checa limite free (3 agendamentos)
+    if (!isVip) {
+      const { data: agendamentosHoje, error } = await supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("cliente", cliente)
+        .eq("data", dataNormalizada)
+        .eq("email", emailNormalizado)
+        .in("status", ["pendente", "confirmado"]);
 
-  if ((agendamentosHoje?.length || 0) >= 3) {
-    return res.status(402).json({
-      msg: "Você atingiu o limite de 3 agendamentos por dia. Efetue o pagamento VIP para continuar.",
-    });
-  }
-}
+      if (error) {
+        console.error("Erro ao buscar agendamentos:", error);
+        return res.status(500).json({ msg: "Erro interno ao validar limite" });
+      }
+
+      if ((agendamentosHoje?.length || 0) >= 3) {
+        return res.status(402).json({
+          msg: "Você atingiu o limite de 3 agendamentos. Efetue o pagamento VIP para desbloquear ilimitado.",
+        });
+      }
+    }
 
     // 🔹 Checa se horário está disponível
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
@@ -246,7 +262,10 @@ if (!isVip) {
       .select()
       .single();
 
-    if (insertError) return res.status(500).json({ msg: "Erro ao salvar agendamento" });
+    if (insertError) {
+      console.error("Erro ao salvar no Supabase:", insertError);
+      return res.status(500).json({ msg: "Erro ao salvar agendamento" });
+    }
 
     // 🔹 Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
@@ -255,13 +274,16 @@ if (!isVip) {
     await sheet.addRow(novoAgendamento);
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+
   } catch (err) {
     console.error("Erro no /agendar:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
 
+
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
