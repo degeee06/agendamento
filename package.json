@@ -12,9 +12,10 @@
     "cors": "^2.8.5",
     "google-spreadsheet": "^3.3.0",
     "@supabase/supabase-js": "^2.8.0",
-    "mercadopago": "1.5.14"
+    "mercadopago": "^2.8.0"
   },
   "engines": {
     "node": "20.x"
   }
 }
+
