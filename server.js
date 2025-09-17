@@ -176,6 +176,25 @@ async function checkVip(email) {
   return !!data;
 }
 
+// ---------------- Checa VIP ----------------
+async function checkVip(email) {
+  const now = new Date();
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .select("valid_until")
+    .eq("email", email.toLowerCase().trim())
+    .eq("status", "approved")
+    .gt("valid_until", now.toISOString())
+    .order("valid_until", { ascending: false })
+    .limit(1)
+    .single();
+
+  // Retorna true se tiver pagamento aprovado e válido
+  return !!data;
+}
+
+
+
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -189,27 +208,26 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
-    // 🔹 Checa VIP
-    const isVip = await checkVip(emailNormalizado);
 
-    // 🔹 Checa limite free (3 agendamentos)
-    if (!isVip) {
-      const { data: agendamentosHoje, error } = await supabase
-        .from("agendamentos")
-        .select("id")
-        .eq("cliente", cliente)
-        .eq("data", dataNormalizada)
-        .eq("email", emailNormalizado)
-        .in("status", ["pendente", "confirmado"]);
+    // 🔹 Checa VIP (novo fluxo)
+const isVip = await checkVip(emailNormalizado);
 
-      if (error) return res.status(500).json({ msg: "Erro ao validar limite" });
+// 🔹 Checa limite free (3 agendamentos)
+if (!isVip) {
+  const { data: agendamentosHoje } = await supabase
+    .from("agendamentos")
+    .select("id")
+    .eq("cliente", cliente)
+    .eq("data", dataNormalizada)
+    .eq("email", emailNormalizado)
+    .in("status", ["pendente", "confirmado"]);
 
-      if ((agendamentosHoje?.length || 0) >= 3) {
-        return res.status(402).json({
-          msg: "Você atingiu o limite de 3 agendamentos por dia. Efetue o pagamento VIP para continuar.",
-        });
-      }
-    }
+  if ((agendamentosHoje?.length || 0) >= 3) {
+    return res.status(402).json({
+      msg: "Você atingiu o limite de 3 agendamentos por dia. Efetue o pagamento VIP para continuar.",
+    });
+  }
+}
 
     // 🔹 Checa se horário está disponível
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
@@ -259,3 +277,4 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
