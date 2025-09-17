@@ -130,7 +130,7 @@ app.post("/create-pix", async (req, res) => {
   }
 });
 
-// ---------------- Webhook Mercado Pago ----------------
+
 // ---------------- Webhook Mercado Pago ----------------
 app.post("/webhook", async (req, res) => {
   try {
@@ -182,6 +182,7 @@ app.post("/webhook", async (req, res) => {
 
 
 
+// ---------------- Função global para checar VIP ----------------
 async function checkVip(email) {
   try {
     const { data, error } = await supabase
@@ -194,7 +195,7 @@ async function checkVip(email) {
 
     if (error || !data) return false;
 
-    return (data.status.toLowerCase() === "approved" || data.status.toLowerCase() === "paid") &&
+    return (["approved", "paid"].includes(data.status.toLowerCase())) &&
            data.valid_until && new Date(data.valid_until) > new Date();
   } catch (e) {
     console.error("Erro ao verificar VIP:", e);
@@ -202,10 +203,7 @@ async function checkVip(email) {
   }
 }
 
-
-
-
-// ---------------- Agendar ----------------
+// ---------------- Rota de agendamento ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -221,30 +219,10 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0]; // yyyy-mm-dd
 
-    // 🔹 Checa VIP pelo pagamento aprovado
-    async function checkVip(email) {
-      try {
-        const { data, error } = await supabase
-          .from("pagamentos")
-          .select("status, valid_until")
-          .eq("email", email)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-
-        if (error || !data) return false;
-
-        return (["approved", "paid"].includes(data.status.toLowerCase())) &&
-               data.valid_until && new Date(data.valid_until) > new Date();
-      } catch (e) {
-        console.error("Erro ao verificar VIP:", e);
-        return false;
-      }
-    }
-
+    // 🔹 Checa VIP
     const isVip = await checkVip(emailNormalizado);
 
-    // 🔹 Checa limite free (3 agendamentos)
+    // 🔹 Limite free: máximo 3 agendamentos
     const { data: agendamentosHoje, error: agendamentoError } = await supabase
       .from("agendamentos")
       .select("id")
@@ -270,10 +248,12 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       });
 
       // Atualiza os agendamentos pendentes com payment_id
-      await supabase
-        .from("agendamentos")
-        .update({ payment_id: result.id })
-        .in("id", agendamentosHoje.map(a => a.id));
+      if (agendamentosHoje.length > 0) {
+        await supabase
+          .from("agendamentos")
+          .update({ payment_id: result.id })
+          .in("id", agendamentosHoje.map(a => a.id));
+      }
 
       // Insere pagamento na tabela pagamentos
       await supabase.from("pagamentos").upsert(
@@ -345,6 +325,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
