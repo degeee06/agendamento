@@ -1,627 +1,379 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Agendamento VIP</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-  <script src="https://unpkg.com/feather-icons"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
+import { MercadoPagoConfig, Payment } from "mercadopago";
+import { GoogleSpreadsheet } from "google-spreadsheet";
 
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
-    .status-pendente { color:#fbbf24; background:rgba(251,191,36,0.15); padding:2px 6px; border-radius:6px; font-weight:600; }
-    .status-confirmado { color:#34d399; background:rgba(52,211,153,0.15); padding:2px 6px; border-radius:6px; font-weight:600; }
-    .status-cancelado { color:#f87171; background:rgba(248,113,113,0.15); padding:2px 6px; border-radius:6px; font-weight:600; }
-    .tab-dia.active { box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -1px rgba(0,0,0,0.06); }
-    .agendamento-card { transition:all 0.3s ease; }
-    .agendamento-card:hover { transform:translateY(-2px); box-shadow:0 10px 15px -3px rgba(0,0,0,0.1),0 4px 6px -2px rgba(0,0,0,0.05); }
-    .truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 220px; display:inline-block; vertical-align:middle; }
-  </style>
-</head>
-<body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
-  <div class="container mx-auto px-4 py-8 max-w-6xl">
-    <!-- Header -->
-    <header class="text-center mb-12" data-aos="fade-down">
-      <h1 class="text-4xl md:text-5xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">Agendamento VIP</h1>
-      <p class="text-lg opacity-90">Gerencie seus compromissos com uma interface moderna</p>
-    </header>
+// ---------------- Variáveis ----------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PORT = process.env.PORT || 3000;
 
-    <!-- Login -->
-    <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
-      <h2 class="text-2xl font-semibold text-center mb-6">Acesso ao Sistema</h2>
-      <input type="email" id="email" placeholder="seu@email.com" class="w-full p-3 rounded mb-3 bg-white/10">
-      <input type="password" id="senha" placeholder="Senha" class="w-full p-3 rounded mb-3 bg-white/10">
-      <button id="loginBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-3 rounded">Entrar</button>
-    </div>
+// ---------------- App ----------------
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-    <!-- VIP Section -->
-    <div id="vipSection" class="glass-card rounded-2xl p-8 mb-8 hidden" data-aos="fade-up">
-      <div class="flex items-center justify-center mb-6">
-        <div class="p-3 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 shadow-lg">
-          <i data-feather="star" class="w-6 h-6 text-white"></i>
-        </div>
-      </div>
-      <h2 class="text-2xl font-semibold text-center mb-6">Seja VIP 🚀</h2>
-      <p class="text-center mb-4 opacity-90">Agende ilimitado e confirme instantaneamente!</p>
-      <div class="flex justify-center">
-        <button id="vipBtn" class="bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg">Seja VIP (R$ 29,90)</button>
-      </div>
-      <div id="pixContainer" class="mt-6 text-center hidden">
-        <h3 class="font-medium mb-2">Pague via PIX</h3>
-        <img id="pixQR" class="mx-auto w-64 h-64 rounded-lg shadow-lg border border-white/20" />
-        <p class="mt-2 text-sm opacity-80">Escaneie o QR Code no seu banco para ativar VIP</p>
-      </div>
-    </div>
+// ---------------- Supabase ----------------
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-    <!-- Formulário de Agendamento -->
-    <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
-      <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
-      <input type="text" name="Nome" placeholder="Seu nome" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="email" name="Email" placeholder="seu@email.com" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="text" name="Telefone" placeholder="(00) 00000-0000" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="date" name="Data" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="time" name="Horario" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-2 rounded">Agendar</button>
-    </form>
+// ---------------- Mercado Pago ----------------
+const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+const mpPayment = new Payment(mpClient);
 
-    <!-- Filtros e ações (mantidos para compatibilidade com o script) -->
-    <div id="filtersSection" class="glass-card rounded-2xl p-4 mb-6 hidden" data-aos="fade-up">
-      <div class="flex gap-3 items-center">
-        <input id="searchInput" placeholder="Pesquisar por nome ou email" class="flex-1 p-2 rounded bg-white/10" />
-        <select id="statusFilter" class="p-2 rounded bg-white/10">
-          <option value="">Todos</option>
-          <option value="pendente">Pendente</option>
-          <option value="confirmado">Confirmado</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-        <button id="exportCSVBtn" class="px-3 py-2 bg-white/10 rounded">Exportar CSV</button>
-        <button id="exportPDFBtn" class="px-3 py-2 bg-white/10 rounded">Exportar PDF</button>
-      </div>
+// ---------------- Google Sheets ----------------
+let creds;
+try {
+  creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+} catch (e) {
+  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
+  process.exit(1);
+}
 
-      <!-- Tabs de dias/semana (estrutura mínima para o script) -->
-      <div id="diasTabs" class="flex gap-2 mt-4" style="display:none;">
-        <div class="tab-dia p-2 rounded bg-white/10 cursor-pointer" data-dia="1">Seg</div>
-        <div class="tab-dia p-2 rounded bg-white/10 cursor-pointer" data-dia="2">Ter</div>
-        <div class="tab-dia p-2 rounded bg-white/10 cursor-pointer" data-dia="3">Qua</div>
-        <div class="tab-dia p-2 rounded bg-white/10 cursor-pointer" data-dia="4">Qui</div>
-        <div class="tab-dia p-2 rounded bg-white/10 cursor-pointer" data-dia="5">Sex</div>
-        <div class="tab-dia p-2 rounded bg-white/10 cursor-pointer" data-dia="6">Sáb</div>
-        <!-- semanas (valores negativos) -->
-        <div class="tab-semana p-2 rounded bg-white/5 cursor-pointer" data-semana="-1">-1 sem</div>
-        <div class="tab-semana p-2 rounded bg-white/5 cursor-pointer" data-semana="-2">-2 sem</div>
-      </div>
-    </div>
+async function accessSpreadsheet(clienteId) {
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("spreadsheet_id")
+    .eq("id", clienteId)
+    .single();
+  if (error || !data) throw new Error(`Cliente ${clienteId} não encontrado`);
+  const doc = new GoogleSpreadsheet(data.spreadsheet_id);
+  await doc.useServiceAccountAuth(creds);
+  await doc.loadInfo();
+  return doc;
+}
 
-    <!-- Lista de Agendamentos -->
-    <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 hidden" data-aos="fade-up">
-      Nenhum agendamento
-    </div>
-  </div>
+async function ensureDynamicHeaders(sheet, newKeys) {
+  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
+  const currentHeaders = sheet.headerValues || [];
+  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+  if (headersToAdd.length > 0) {
+    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
+  }
+}
 
-  <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+// ---------------- Middleware Auth ----------------
+async function authMiddleware(req, res, next) {
+  const token = req.headers["authorization"]?.split("Bearer ")[1];
+  if (!token) return res.status(401).json({ msg: "Token não enviado" });
 
-  <!-- SCRIPT ÚNICO (unificado e completo) -->
-  <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
-    // ---------------- Config Supabase (front) ----------------
-    const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk"; // mantenha a sua chave anônima aqui
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  req.user = data.user;
+  req.clienteId = data.user.user_metadata.cliente_id;
+  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
+  next();
+}
 
-    // ---------------- Estado ----------------
-    let userToken = null;
-    let agendamentosCache = [];
-    let diaSelecionado = 1;
+// ---------------- Verifica disponibilidade ----------------
+async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
+  let query = supabase
+    .from("agendamentos")
+    .select("*")
+    .eq("cliente", cliente)
+    .eq("data", data)
+    .eq("horario", horario)
+    .neq("status", "cancelado");
 
-    // ---------------- Elementos ----------------
-    const form = document.getElementById('agendamentoForm');
-    const loginBtn = document.getElementById('loginBtn');
-    const loginSection = document.getElementById('loginSection');
-    const meusAgendamentos = document.getElementById('meusAgendamentos');
-    const vipSection = document.getElementById("vipSection");
-    const vipBtn = document.getElementById("vipBtn");
-    const pixContainer = document.getElementById("pixContainer");
-    const pixQR = document.getElementById("pixQR");
-    const searchInput = document.getElementById("searchInput");
-    const statusFilter = document.getElementById("statusFilter");
-    const exportCSVBtn = document.getElementById("exportCSVBtn");
-    const exportPDFBtn = document.getElementById("exportPDFBtn");
-    const filtersSection = document.getElementById("filtersSection");
-    const diasTabs = document.getElementById("diasTabs");
+  if (ignoreId) query = query.neq("id", ignoreId);
+  const { data: agendamentos, error } = await query;
+  if (error) throw error;
+  return agendamentos.length === 0;
+}
 
-    // util
-    function formatData(data){
-      const [y,m,d] = data.split("-");
-      return `${d}/${m}/${y}`;
-    }
+// ---------------- Rotas ----------------
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
 
-    // ---------------- TOASTS ----------------
-    let activeToasts = [];
-    function showToast(message, type = "success") {
-      const colors = {
-        success: "bg-gradient-to-r from-green-500 to-teal-400",
-        error: "bg-gradient-to-r from-red-500 to-pink-500",
-        info: "bg-gradient-to-r from-blue-500 to-cyan-400",
-        warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
-      };
-      const container = document.getElementById("toast-container");
-      if (activeToasts.length >= 3) {
-        const oldest = activeToasts.shift();
-        oldest.remove();
-      }
-      const toast = document.createElement("div");
-      toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
-      toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
-      container.appendChild(toast);
-      activeToasts.push(toast);
-      feather.replace();
-      requestAnimationFrame(()=>{
-        toast.classList.remove("opacity-0","translate-x-5");
-        toast.classList.add("opacity-100","translate-x-0");
-      });
-      setTimeout(()=>{
-        toast.classList.add("opacity-0","translate-x-5");
-        setTimeout(()=>{
-          toast.remove();
-          activeToasts = activeToasts.filter(t => t !== toast);
-        },300);
-      },3000);
-    }
+app.get("/:cliente", async (req, res) => {
+  const cliente = req.params.cliente;
+  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
+  if (error || !data) return res.status(404).send("Cliente não encontrado");
+  res.sendFile(path.join(__dirname, "public/index.html"));
+});
 
-    // ---------------- VIP / PIX ----------------
-    function showVipOption(email){
-      vipSection.classList.remove("hidden");
-      vipBtn.onclick = async () => {
-        try {
-          vipBtn.disabled = true;
-          const res = await fetch("/create-pix", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount: 29.90, description: "Assinatura VIP Agenda", email })
-          });
-          const data = await res.json();
-          if(data.qr_code_base64){
-            pixQR.src = `data:image/png;base64,${data.qr_code_base64}`;
-            pixContainer.classList.remove("hidden");
-            showToast("QR code gerado. Escaneie no app do seu banco.", "info");
-          } else {
-            showToast("Erro ao gerar PIX", "error");
-          }
-        } catch (e) {
-          console.error(e);
-          showToast("Erro ao gerar PIX", "error");
-        } finally { vipBtn.disabled = false; }
-      };
-    }
+// ---------------- Cria PIX ----------------
+app.post("/create-pix", async (req, res) => {
+  const { amount, description, email } = req.body;
+  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
 
-    // ---------------- RENDER AGENDAMENTOS ----------------
-    function renderAgendamentos(){
-      const cliente = window.location.pathname.split('/')[1] || "";
-      const filtroNome = (searchInput?.value || "").toLowerCase();
-      const filtroStatus = statusFilter?.value || "";
-
-      const hoje = new Date();
-      const filtrados = agendamentosCache
-        .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) && (filtroStatus ? a.status === filtroStatus : true))
-        .filter(a => {
-          const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-          const zeroHoje = new Date(); zeroHoje.setHours(0,0,0,0);
-          // Se for um dia da semana (1-6)
-          if (diaSelecionado >= 1 && diaSelecionado <= 6) {
-            return dataAgendamento.getDay() === diaSelecionado && dataAgendamento >= zeroHoje;
-          } else {
-            // semanas negativas (ex.: -1 = semana anterior)
-            const semanas = -diaSelecionado;
-            const dataLimite = new Date();
-            dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-            dataLimite.setHours(0,0,0,0);
-            return dataAgendamento >= dataLimite && dataAgendamento < zeroHoje;
-          }
-        })
-        .sort((a,b) => {
-          const dateA = new Date(`${a.data}T${a.horario}`);
-          const dateB = new Date(`${b.data}T${b.horario}`);
-          return dateA - dateB;
-        });
-
-      if (filtrados.length === 0) {
-        meusAgendamentos.innerHTML = `
-          <div class='text-center py-8'>
-            <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-              <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-            </div>
-            <p class="text-gray-300">Nenhum agendamento encontrado</p>
-          </div>
-        `;
-        feather.replace();
-        return;
-      }
-
-      meusAgendamentos.innerHTML = "";
-      filtrados.forEach(a => {
-        const div = document.createElement("div");
-        div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
-        div.innerHTML = `
-          <div class="flex justify-between items-start mb-2">
-            <div class="flex items-center gap-2">
-              <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-              <span class="font-medium">${a.horario}</span>
-            </div>
-            <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
-              ${a.status}
-            </span>
-          </div>
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-              <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
-            </div>
-            <div>
-              <h3 class="font-medium">${a.nome}</h3>
-              <p class="text-sm text-gray-300">${formatData(a.data)}</p>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-2 text-sm">
-            <div class="flex items-center gap-2">
-              <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-              <span class="truncate">${a.email}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-              <span>${a.telefone}</span>
-            </div>
-          </div>
-        `;
-
-        // Botões container
-        const btnContainer = document.createElement("div");
-        btnContainer.className = "flex gap-2 mt-4";
-
-        // Confirmar (se ainda não confirmado)
-        if (!a.confirmado) {
-          const btn = document.createElement("button");
-          btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-          btn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-          btn.addEventListener("click", async () => {
-            btn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Confirmando...`;
-            feather.replace();
-            try {
-              const cliente = window.location.pathname.split('/')[1] || "";
-              const res = await fetch(`/agendamentos/${cliente}/confirmar/${a.id}`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${userToken}` }
-              });
-              if (res.ok) {
-                btn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
-                setTimeout(() => {
-                  showToast("Agendamento confirmado!", "success");
-                  listarAgendamentos();
-                }, 300);
-              } else {
-                btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                feather.replace();
-                showToast("Erro ao confirmar", "error");
-              }
-            } catch (e) {
-              console.error(e);
-              btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-              feather.replace();
-              showToast("Erro ao confirmar", "error");
-            }
-          });
-          btnContainer.appendChild(btn);
-        }
-
-        // Reagendar
-        const reBtn = document.createElement("button");
-        reBtn.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-        reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-
-        // Cancelar
-        const cancelBtn = document.createElement("button");
-        cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-        cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-        cancelBtn.addEventListener("click", async () => {
-          if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
-          cancelBtn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Cancelando...`;
-          feather.replace();
-          try {
-            const cliente = window.location.pathname.split('/')[1] || "";
-            const res = await fetch(`/agendamentos/${cliente}/cancelar/${a.id}`, {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${userToken}` }
-            });
-            if (res.ok) {
-              cancelBtn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
-              setTimeout(()=> {
-                showToast("Agendamento cancelado!", "success");
-                listarAgendamentos();
-              }, 300);
-            } else {
-              cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-              feather.replace();
-              const errorData = await res.json().catch(()=>({}));
-              showToast(errorData.message || "Erro ao cancelar", "error");
-            }
-          } catch (e) {
-            console.error(e);
-            cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-            feather.replace();
-            showToast("Erro ao cancelar agendamento", "error");
-          }
-        });
-
-        // Reagendar - abre mini form
-        reBtn.addEventListener("click", () => {
-          if (div.querySelector(".reagendar-form")) return;
-          const miniForm = document.createElement("div");
-          miniForm.className = "reagendar-form mt-3 p-3 bg-white/10 rounded-lg";
-          miniForm.innerHTML = `
-            <div class="grid grid-cols-2 gap-2 mb-2">
-              <div>
-                <label class="block text-xs mb-1">Nova Data</label>
-                <input type="date" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
-              </div>
-              <div>
-                <label class="block text-xs mb-1">Novo Horário</label>
-                <input type="time" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <button class="confirmar-mini flex-1 bg-green-600 hover:bg-green-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1"> <i data-feather="check" class="w-3 h-3"></i> Confirmar </button>
-              <button class="cancelar-mini flex-1 bg-gray-600 hover:bg-gray-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1"> <i data-feather="x" class="w-3 h-3"></i> Cancelar </button>
-            </div>
-          `;
-          div.appendChild(miniForm);
-          feather.replace();
-
-          miniForm.querySelector(".cancelar-mini").addEventListener("click", () => miniForm.remove());
-
-          miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
-            const novaData = miniForm.querySelector('input[type="date"]').value;
-            const novoHorario = miniForm.querySelector('input[type="time"]').value;
-            if (!novaData || !novoHorario) { showToast("Preencha data e hora","warning"); return; }
-            try {
-              const cliente = window.location.pathname.split('/')[1] || "";
-              const res = await fetch(`/agendamentos/${cliente}/reagendar/${a.id}`, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${userToken}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ novaData, novoHorario })
-              });
-              if (res.ok) {
-                showToast("Agendamento reagendado!","success");
-                listarAgendamentos();
-              } else {
-                const err = await res.json().catch(()=>({}));
-                showToast(err.msg || "Erro ao reagendar","error");
-              }
-            } catch (e) {
-              console.error(e);
-              showToast("Erro ao reagendar","error");
-            }
-          });
-        });
-
-        btnContainer.appendChild(reBtn);
-        btnContainer.appendChild(cancelBtn);
-        div.appendChild(btnContainer);
-        meusAgendamentos.appendChild(div);
-        feather.replace();
-      });
-    }
-
-    // ---------------- LISTAR AGENDAMENTOS ----------------
-    async function listarAgendamentos(){
-      if (!userToken) return;
-      try {
-        const cliente = window.location.pathname.split('/')[1] || "";
-        // Endpoint /meus-agendamentos/:cliente deve existir no server (se não existir, implemente na API)
-        const res = await fetch(`/meus-agendamentos/${cliente}`, {
-          headers: { "Authorization": `Bearer ${userToken}` }
-        });
-        if (!res.ok) {
-          // Tenta também rota alternativa (compatibilidade): /agendamentos/:cliente (GET)
-          try {
-            const res2 = await fetch(`/agendamentos/${cliente}`, { headers: { "Authorization": `Bearer ${userToken}` }});
-            if (res2.ok) {
-              const payload = await res2.json();
-              agendamentosCache = payload.agendamentos || payload || [];
-            } else {
-              agendamentosCache = [];
-            }
-          } catch (e) {
-            agendamentosCache = [];
-          }
-        } else {
-          const json = await res.json();
-          agendamentosCache = json.agendamentos || [];
-        }
-
-        if (!Array.isArray(agendamentosCache)) agendamentosCache = [];
-
-        meusAgendamentos.style.display = 'block';
-        filtersSection.style.display = 'block';
-        diasTabs.style.display = 'flex';
-        initTabsDias();
-        renderAgendamentos();
-      } catch (e) {
-        console.error(e);
-        showToast("Erro ao listar agendamentos","error");
-      }
-    }
-
-    // ---------------- LOGIN ----------------
-    loginBtn.addEventListener('click', async () => {
-      const email = document.getElementById('email').value;
-      const senha = document.getElementById('senha').value;
-      if (!email || !senha) { showToast("Preencha email e senha", "warning"); return; }
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-        if (error) { showToast(error.message,"error"); return; }
-        userToken = data.session.access_token;
-        loginSection.style.display = 'none';
-        form.style.display = 'block';
-        // Tentativa de carregar agendamentos
-        await listarAgendamentos();
-        // Seleciona o dia atual (ajusta domingo -> seg(1))
-        let hoje = new Date().getDay(); if (hoje === 0) hoje = 1;
-        document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click();
-        showToast("Login realizado com sucesso!", "success");
-      } catch (e) {
-        console.error(e);
-        showToast("Erro ao fazer login", "error");
-      }
+  try {
+    const result = await mpPayment.create({
+      body: {
+        transaction_amount: Number(amount),
+        description: description || "Pagamento VIP",
+        payment_method_id: "pix",
+        payer: { email },
+      },
     });
 
-    // ---------------- AGENDAR (usa /agendar/:cliente) ----------------
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(form);
-      const dataToSend = {};
-      formData.forEach((v,k) => dataToSend[k] = v);
-      const cliente = window.location.pathname.split('/')[1] || "";
-      // campos obrigatórios
-      if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast("Preencha todos os campos", "warning");
-        return;
-      }
-      try {
-        const response = await fetch(`/agendar/${cliente}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
-          body: JSON.stringify(dataToSend)
-        });
-        if (response.ok) {
-          showToast("Agendado com sucesso!","success");
-          form.reset();
-          listarAgendamentos();
-        } else {
-          const errorData = await response.json().catch(()=>({}));
-          if (response.status === 402) {
-            showToast(errorData.msg || "Limite atingido. Torne-se VIP.", "warning");
-            showVipOption(dataToSend.Email);
-          } else {
-            showToast(errorData.msg || "Não foi possível agendar, horário ocupado!", "error");
-          }
-        }
-      } catch (err) {
-        console.error(err);
-        showToast("Erro ao enviar agendamento","error");
-      }
+    await supabase.from("pagamentos").upsert(
+      [{ id: result.id, email, amount: Number(amount), status: "pending", valid_until: null }],
+      { onConflict: ["id"] }
+    );
+
+    res.json({
+      id: result.id,
+      status: result.status,
+      qr_code: result.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    // ---------------- FILTROS ----------------
-    searchInput?.addEventListener("input", renderAgendamentos);
-    statusFilter?.addEventListener("change", renderAgendamentos);
+// ---------------- Webhook Mercado Pago ----------------
+app.post("/webhook", async (req, res) => {
+  try {
+    const paymentId = req.body?.data?.id || req.query["data.id"];
+    if (!paymentId) return res.sendStatus(400);
 
-    // ---------------- TABS ----------------
-    function initTabsDias(){
-      const tabsDia = document.querySelectorAll(".tab-dia");
-      const tabsSemana = document.querySelectorAll(".tab-semana");
-      tabsDia.forEach(btn => {
-        btn.addEventListener("click", () => {
-          tabsDia.forEach(b => b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-          tabsDia.forEach(b => b.classList.add("bg-white/10", "hover:bg-white/20"));
-          tabsSemana.forEach(b => b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-          tabsSemana.forEach(b => b.classList.add("bg-white/5", "hover:bg-white/10"));
-          btn.classList.remove("bg-white/10", "hover:bg-white/20");
-          btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-          diaSelecionado = parseInt(btn.dataset.dia);
-          renderAgendamentos();
-        });
-      });
-      tabsSemana.forEach(btn => {
-        btn.addEventListener("click", () => {
-          tabsDia.forEach(b => b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-          tabsDia.forEach(b => b.classList.add("bg-white/10", "hover:bg-white/20"));
-          tabsSemana.forEach(b => b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-          tabsSemana.forEach(b => b.classList.add("bg-white/5", "hover:bg-white/10"));
-          btn.classList.remove("bg-white/5", "hover:bg-white/10");
-          btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-          const semanas = parseInt(btn.dataset.semana);
-          const dataLimite = new Date();
-          dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-          diaSelecionado = dataLimite.getDay();
-          renderAgendamentos();
-        });
-      });
+    const paymentDetails = await mpPayment.get({ id: paymentId });
+    const status = paymentDetails.status;
+    let valid_until = null;
+
+    if (["approved", "paid"].includes(status.toLowerCase())) {
+      const vipExpires = new Date();
+      vipExpires.setDate(vipExpires.getDate() + 30);
+      valid_until = vipExpires.toISOString();
     }
 
-    // ---------------- EXPORT ----------------
-    exportCSVBtn?.addEventListener("click", () => {
-      const cliente = window.location.pathname.split('/')[1] || "";
-      const filtrados = agendamentosCache.filter(a => statusFilter.value ? a.status === statusFilter.value : true);
-      if (filtrados.length === 0) { showToast("Nenhum agendamento para exportar", "warning"); return; }
-      let csv = "Nome,Email,Telefone,Data,Horario,Status\n";
-      filtrados.forEach(a => {
-        csv += `${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`;
-      });
-      const blob = new Blob([csv], { type: "text/csv" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `agendamentos_${cliente}.csv`;
-      link.click();
-      showToast("Exportado para CSV com sucesso", "success");
+    const { error: updateError } = await supabase
+      .from("pagamentos")
+      .update({ status, valid_until })
+      .eq("id", paymentId);
+
+    if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
+    else console.log(`Pagamento ${paymentId} atualizado: status=${status}`);
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Erro no webhook:", err.message);
+    res.sendStatus(500);
+  }
+});
+
+// ---------------- Checa VIP ----------------
+async function checkVip(email) {
+  const now = new Date();
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .select("valid_until")
+    .eq("email", email.toLowerCase().trim())
+    .eq("status", "approved")
+    .gt("valid_until", now.toISOString())
+    .order("valid_until", { ascending: false })
+    .limit(1)
+    .single();
+
+  return !!data;
+}
+
+// ---------------- Agendar ----------------
+app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { Nome, Email, Telefone, Data, Horario } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario)
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+
+    const emailNormalizado = Email.toLowerCase().trim();
+    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
+
+    // 🔹 Checa VIP
+    const isVip = await checkVip(emailNormalizado);
+
+    // 🔹 Checa limite free (3 agendamentos)
+if (!isVip) {
+  const { data: agendamentosHoje, error } = await supabase
+    .from("agendamentos")
+    .select("id")
+    .eq("cliente", cliente)
+    .eq("data", dataNormalizada)
+    .eq("email", emailNormalizado)
+    .in("status", ["pendente", "confirmado"]);
+
+  if (error) {
+    console.error("Erro ao consultar agendamentos do usuário:", error);
+    return res.status(500).json({ msg: "Erro ao validar limite" });
+  }
+
+  const totalAgendamentos = agendamentosHoje ? agendamentosHoje.length : 0;
+
+  if (totalAgendamentos >= 3) {
+    return res.status(402).json({
+      msg: "Você atingiu o limite de 3 agendamentos por dia. Efetue o pagamento VIP para continuar.",
     });
+  }
+}
 
-    exportPDFBtn?.addEventListener("click", () => {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      const cliente = window.location.pathname.split('/')[1] || "";
-      const filtrados = agendamentosCache.filter(a => statusFilter.value ? a.status === statusFilter.value : true);
-      if (filtrados.length === 0) { showToast("Nenhum agendamento para exportar", "warning"); return; }
 
-      doc.setFontSize(18);
-      doc.setTextColor(40);
-      doc.text("Agendamentos", 105, 20, null, null, "center");
-      doc.setFontSize(12);
-      doc.setTextColor(100);
-      doc.text(`Cliente: ${cliente}`, 105, 30, null, null, "center");
-      const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
-      const today = new Date().toLocaleDateString('pt-BR', options);
-      doc.text(`Gerado em: ${today}`, 105, 35, null, null, "center");
-      doc.setDrawColor(200);
-      doc.line(20, 40, 190, 40);
+    // 🔹 Checa se horário está disponível
+    const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
+    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-      doc.setFontSize(10);
-      doc.setTextColor(40);
-      let y = 50;
-      doc.setFillColor(230);
-      doc.rect(20, y, 170, 10, 'F');
-      doc.text("Data", 25, y + 7);
-      doc.text("Horário", 50, y + 7);
-      doc.text("Nome", 80, y + 7);
-      doc.text("Status", 160, y + 7);
-      y += 10;
+    // 🔹 Remove agendamento cancelado no mesmo horário
+    await supabase
+      .from("agendamentos")
+      .delete()
+      .eq("cliente", cliente)
+      .eq("data", dataNormalizada)
+      .eq("horario", Horario)
+      .eq("status", "cancelado");
 
-      filtrados.forEach(a => {
-        if (y > 270) { doc.addPage(); y = 20; }
-        doc.text(formatData(a.data), 25, y + 7);
-        doc.text(a.horario, 50, y + 7);
-        doc.text(a.nome, 80, y + 7);
-        if (a.status === 'confirmado') doc.setTextColor(0,150,0);
-        else if (a.status === 'pendente') doc.setTextColor(200,150,0);
-        else doc.setTextColor(40);
-        doc.text(a.status, 160, y + 7);
-        doc.setTextColor(40);
-        y += 10;
-      });
+    // 🔹 Insere novo agendamento
+    const { data: novoAgendamento, error: insertError } = await supabase
+      .from("agendamentos")
+      .insert([
+        {
+          cliente,
+          nome: Nome,
+          email: emailNormalizado,
+          telefone: Telefone,
+          data: dataNormalizada,
+          horario: Horario,
+          status: isVip ? "confirmado" : "pendente",
+          confirmado: isVip,
+        },
+      ])
+      .select()
+      .single();
 
-      doc.save(`agendamentos_${cliente}.pdf`);
-      showToast("Exportado para PDF com sucesso", "success");
+    if (insertError) return res.status(500).json({ msg: "Erro ao salvar agendamento" });
+
+    // 🔹 Salva no Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+    await sheet.addRow(novoAgendamento);
+
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+  } catch (err) {
+    console.error("Erro no /agendar:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+// ---------------- Função auxiliar para atualizar linha no Sheets ----------------
+async function updateRowInSheet(sheet, rowId, updatedData) {
+  await sheet.loadHeaderRow();
+  await sheet.loadCells(); // Carrega células
+  const rows = await sheet.getRows();
+  const row = rows.find(r => r.id === rowId); // Assume que 'id' é coluna no Sheets
+  if (row) {
+    Object.keys(updatedData).forEach(key => {
+      if (sheet.headerValues.includes(key)) {
+        row[key] = updatedData[key];
+      }
     });
+    await row.save();
+  } else {
+    // Se não existir, adiciona como nova linha
+    await ensureDynamicHeaders(sheet, Object.keys(updatedData));
+    await sheet.addRow(updatedData);
+  }
+}
 
-    // ---------------- INIT ----------------
-    AOS.init({ duration: 800, easing: 'ease-out-quart', once: true });
-    feather.replace();
-  </script>
-</body>
-</html>
+// ---------------- Confirmar agendamento ----------------
+app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ confirmado: true, status: "confirmado" })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+
+    if (error || !data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Atualiza Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await updateRowInSheet(sheet, id, data);
+
+    res.json({ msg: "Agendamento confirmado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao confirmar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Cancelar agendamento ----------------
+app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ status: "cancelado", confirmado: false })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+
+    if (error || !data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Atualiza Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await updateRowInSheet(sheet, id, data);
+
+    res.json({ msg: "Agendamento cancelado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao cancelar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Reagendar agendamento ----------------
+app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    const { novaData, novoHorario } = req.body;
+
+    if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    // Verifica se horário está disponível
+    const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
+    if (!disponivel) return res.status(400).json({ msg: "Horário indisponível" });
+
+    // Atualiza agendamento
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .update({ data: novaData, horario: novoHorario })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
+
+    if (error || !data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    // Atualiza Google Sheets
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await updateRowInSheet(sheet, id, data);
+
+    res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao reagendar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Servidor ----------------
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
