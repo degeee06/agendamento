@@ -110,6 +110,18 @@
                 Gerencie seus compromissos com uma interface intuitiva e elegante
             </p>
         </header>
+<!-- Modal de Pagamento PIX -->
+<div id="pixModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center; z-index:1000;">
+  <div style="background:white; padding:20px; border-radius:10px; text-align:center; max-width:400px; width:100%;">
+    <h2>Pagamento VIP</h2>
+    <p>Escaneie o QR Code abaixo para pagar via PIX:</p>
+    <img id="pixQrCode" src="" style="width:250px; height:250px; margin:10px auto; display:block;" />
+    <p><b>Código Copia e Cola:</b></p>
+    <textarea id="pixCode" readonly style="width:100%; height:80px; font-size:12px;"></textarea>
+    <button onclick="copiarPix()" style="margin-top:10px; padding:10px 20px; background:#4caf50; color:white; border:none; border-radius:5px; cursor:pointer;">Copiar Código PIX</button>
+    <button onclick="fecharPixModal()" style="margin-top:10px; padding:10px 20px; background:#f44336; color:white; border:none; border-radius:5px; cursor:pointer;">Fechar</button>
+  </div>
+</div>
 
         <!-- Login Section -->
         <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -867,6 +879,7 @@ function checkFreeLimit() {
     </script>
 </body>
 </html>
+
 
 
 
