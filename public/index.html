@@ -110,48 +110,6 @@
                 Gerencie seus compromissos com uma interface intuitiva e elegante
             </p>
         </header>
-<div class="container mx-auto p-8 max-w-xl text-white">
-    <h1 class="text-2xl font-bold mb-4">Pagamento VIP via PIX</h1>
-    <p class="mb-2" id="amount">Valor: R$ --</p>
-    <p class="mb-4" id="status">Status: Pending</p>
-    <div id="pixCodeContainer" class="p-4 bg-white/10 rounded-lg mb-4 text-black font-mono">
-        Código PIX: --
-    </div>
-    <button id="confirmarPixBtn" class="bg-green-500 px-4 py-2 rounded-lg text-white font-medium">Já paguei</button>
-</div>
-
-<script type="module">
-    const pathParts = window.location.pathname.split('/');
-    const pagamentoId = pathParts[2];
-
-    async function initPix() {
-        const res = await fetch(`/pagamento/${pagamentoId}`, {
-            headers: { 'Authorization': `Bearer ${userToken}` }
-        });
-        const data = await res.json();
-
-        if(!res.ok) { document.body.innerHTML = "<h2>Pagamento não encontrado</h2>"; return; }
-
-        document.getElementById('amount').innerText = `Valor: R$ ${data.amount}`;
-        document.getElementById('status').innerText = `Status: ${data.status}`;
-        document.getElementById('pixCodeContainer').innerText = `Código PIX:\n${data.pixCode || 'PIX simulada'}`;
-
-        document.getElementById('confirmarPixBtn').addEventListener('click', async () => {
-            const confirmRes = await fetch(`/pagamento/${pagamentoId}/confirmar`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${userToken}` }
-            });
-            if(confirmRes.ok){
-                alert("Pagamento confirmado! Agendamentos liberados.");
-                window.location.href = `/${cliente}`;
-            } else {
-                alert("Erro ao confirmar pagamento.");
-            }
-        });
-    }
-
-    initPix();
-</script>
 
         <!-- Login Section -->
         <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -301,17 +259,6 @@
                 </div>
             </div>
         </div>
-<div id="upgradeVip">
-  <button onclick="upgradeVip()">Upgrade VIP</button>
-
-  <div id="pixPagamento" style="display:none;">
-    <p>Código PIX:</p>
-    <pre id="pixCode"></pre>
-    <button id="copiarBotao">Copiar</button>
-    <!-- Se quiser gerar QR code visual -->
-    <img id="qrCodeImg" />
-  </div>
-</div>
 
         <!-- Tabs Dias da Semana -->
         <div id="diasTabs" style="display:none;" class="flex gap-2 mb-6 overflow-x-auto pb-2" data-aos="fade-up">
@@ -405,24 +352,6 @@
                 },300);
             },3000);
         }
-
-
-async function upgradeVip() {
-  const email = userEmail; // email do usuário logado
-  const cliente = clienteId; // id do cliente logado
-  const response = await fetch('/criar-pagamento-vip', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ email, cliente })
-  });
-  const data = await response.json();
-
-  // data vai conter { pixCode, urlPagamento }
-  document.getElementById('pixCode').textContent = data.pixCode;
-  document.getElementById('copiarBotao').onclick = () => navigator.clipboard.writeText(data.pixCode);
-}
-
-
 
         // ---------------- RENDER AGENDAMENTOS ----------------
         function renderAgendamentos() {
@@ -655,31 +584,6 @@ async function upgradeVip() {
             });
         }
 
-async function checkVipStatus() {
-    try {
-        const res = await fetch('/meu-pagamento-vip', {
-            headers: { 'Authorization': `Bearer ${userToken}` }
-        });
-        const { isVip } = await res.json();
-
-        const agendamentoForm = document.getElementById('agendamentoForm');
-        const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
-
-        if(isVip) {
-            // Libera botão
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('opacity-50','cursor-not-allowed');
-
-            // Remove botão VIP, se existir
-            const vipBtn = document.getElementById('upgradeVIP');
-            if(vipBtn) vipBtn.remove();
-        }
-    } catch(e) {
-        console.error("Erro ao verificar VIP", e);
-    }
-}
-
-
         // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
     if(!userToken) return;
@@ -746,18 +650,6 @@ loginBtn.addEventListener('click', async () => {
     }
 });
 
-listarAgendamentos().then(() => {
-    // Seleciona o dia atual
-    let hoje = new Date().getDay(); 
-    if (hoje === 0) hoje = 1; 
-
-    const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-    if (btnHoje) btnHoje.click(); 
-    else document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-
-    // Verifica VIP e libera botão se necessário
-    checkVipStatus();
-});
 
 
         // ---------------- AGENDAR ----------------
@@ -932,55 +824,24 @@ const MAX_FREE = 3; // limite de agendamentos free
 function checkFreeLimit() {
     const agendamentosUser = agendamentosCache.length;
     const agendamentoForm = document.getElementById('agendamentoForm');
-    const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
-
-    // Primeiro checa VIP
-    checkVipStatus();
 
     if(agendamentosUser >= MAX_FREE) {
-        // Desabilita botão se não VIP
+        // Desabilita botão de agendamento
+        const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50','cursor-not-allowed');
 
+        // Adiciona botão de Upgrade VIP, se ainda não existir
         if(!document.getElementById('upgradeVIP')) {
             const vipBtn = document.createElement('button');
             vipBtn.id = 'upgradeVIP';
             vipBtn.innerText = 'Upgrade VIP';
             vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
-            
-            vipBtn.addEventListener('click', async () => {
-                try {
-                    const res = await fetch('/criar-pagamento-vip', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
-                        body: JSON.stringify({ cliente, email: agendamentosCache[0]?.email || '' })
-                    });
-                    const data = await res.json();
-
-                    if(!res.ok) { showToast(data.message || "Erro ao criar pagamento", "error"); return; }
-
-                    // Redireciona para checkout PIX
-                    window.location.href = `/checkout/${data.urlPagamento.split("/").pop()}`;
-                } catch(e){
-                    console.error(e);
-                    showToast("Erro ao criar pagamento", "error");
-                }
+            vipBtn.addEventListener('click', () => {
+                window.location.href = '/upgrade'; // link para página de pagamento
             });
-
             agendamentoForm.appendChild(vipBtn);
         }
-    } else {
-        // Reabilita botão se abaixo do limite
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('opacity-50','cursor-not-allowed');
-
-        const vipBtn = document.getElementById('upgradeVIP');
-        if(vipBtn) vipBtn.remove();
-    }
-}
-
-
-
     } else {
         // Reabilita botão de agendamento
         const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
@@ -1006,11 +867,6 @@ function checkFreeLimit() {
     </script>
 </body>
 </html>
-
-
-
-
-
 
 
 
