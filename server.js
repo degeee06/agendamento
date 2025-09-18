@@ -22,7 +22,7 @@ const supabase = createClient(
 );
 
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
-const payment = new Payment(mpClient); // Usaremos "payment" em todo o código
+const payment = new Payment(mpClient); // 🔹 nova versão Payment
 
 let creds;
 try {
@@ -144,7 +144,7 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- PIX / Mercado Pago ----------------
+// Cria PIX
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email } = req.body;
   if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
@@ -159,6 +159,7 @@ app.post("/create-pix", async (req, res) => {
       },
     });
 
+    // Salva pagamento como pending com valid_until nulo
     await supabase.from("pagamentos").upsert(
       [{ id: result.id, email, amount: Number(amount), status: "pending", valid_until: null }],
       { onConflict: ["id"] }
@@ -176,7 +177,7 @@ app.post("/create-pix", async (req, res) => {
   }
 });
 
-// Checa VIP pelo email
+// Checa VIP pelo email (aprovado e dentro do prazo)
 app.get("/check-vip/:email", async (req, res) => {
   const email = req.params.email;
   if (!email) return res.status(400).json({ error: "Faltando email" });
@@ -210,12 +211,13 @@ app.post("/webhook", async (req, res) => {
 
     const paymentDetails = await payment.get({ id: paymentId });
 
+    // Atualiza status no Supabase
     const status = paymentDetails.status;
     let valid_until = null;
 
     if (["approved", "paid"].includes(status.toLowerCase())) {
       const vipExpires = new Date();
-      vipExpires.setDate(vipExpires.getDate() + 30);
+      vipExpires.setDate(vipExpires.getDate() + 30); // 30 dias
       valid_until = vipExpires.toISOString();
     }
 
