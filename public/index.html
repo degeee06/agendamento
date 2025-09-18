@@ -889,11 +889,10 @@ function criarBotaoVIP() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                amount: 0.01, // corrigido
-                description: "Assinatura VIP",
-                email
-            })
-
+                    amount: 0.01, // valor do teste
+                    description: "Assinatura VIP",
+                    email
+                })
             });
 
             if (!res.ok) {
@@ -902,7 +901,6 @@ function criarBotaoVIP() {
             }
 
             const data = await res.json();
-
             if (!data.qr_code_base64) {
                 throw new Error('Não foi possível gerar o QR Code PIX');
             }
@@ -925,27 +923,35 @@ function criarBotaoVIP() {
 
             showToast("QR Code gerado! Pague para ativar seu VIP", "success");
 
-            // Verifica automaticamente se o usuário já pagou
-            const interval = setInterval(async () => {
-                const vipRes = await fetch(`/check-vip/${encodeURIComponent(email)}`);
-                if (!vipRes.ok) return;
+            // Função de polling para checar VIP
+            async function checkVipStatus(email, pixDiv, tentativas = 0, maxTentativas = 20) {
+                try {
+                    const res = await fetch(`/check-vip/${encodeURIComponent(email)}`);
+                    if (!res.ok) throw new Error("Erro ao checar VIP");
 
-                const vipData = await vipRes.json();
-                if (vipData.vip) {
-    clearInterval(interval);
-    showToast("Parabéns! Agora você é VIP 🎉", "success");
-    pixDiv.remove();
+                    const vipData = await res.json();
+                    if (vipData.vip) {
+                        showToast("Parabéns! Agora você é VIP 🎉", "success");
+                        pixDiv.remove();
+                        if (typeof listarAgendamentos === 'function') listarAgendamentos();
+                        return;
+                    }
 
-    // força checagem no backend e reabilita agendamento
-    if (typeof checkFreeLimit === 'function') {
-        checkFreeLimit();
-    }
+                    if (tentativas < maxTentativas) {
+                        setTimeout(() => checkVipStatus(email, pixDiv, tentativas + 1, maxTentativas), 8000);
+                    } else {
+                        showToast("Ainda não recebemos o pagamento, tente novamente mais tarde.", "warning");
+                    }
+                } catch (err) {
+                    console.error("Erro ao checar VIP:", err);
+                    if (tentativas < maxTentativas) {
+                        setTimeout(() => checkVipStatus(email, pixDiv, tentativas + 1, maxTentativas), 8000);
+                    }
+                }
+            }
 
-    if (typeof listarAgendamentos === 'function') {
-        listarAgendamentos();
-    }
-}
-            }, 8000); // checa a cada 8 segundos
+            // **Inicia a checagem de VIP**
+            checkVipStatus(email, pixDiv);
 
         } catch (err) {
             console.error("Erro ao gerar Pix:", err);
@@ -966,6 +972,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
