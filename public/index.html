@@ -821,14 +821,16 @@ loginBtn.addEventListener('click', async () => {
 
 const MAX_FREE = 3; // limite de agendamentos free
 
-<!-- ---------------- Função para atualizar botão/agendamento ---------------- -->
 <script>
+// ---------------- Função para atualizar botão/agendamento ----------------
 async function atualizarAgendamento() {
     const agendamentoForm = document.getElementById('agendamentoForm');
+    if (!agendamentoForm) return;
+
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
     const emailInput = document.getElementById('email');
-
     if (!emailInput?.value) return;
+
     const email = emailInput.value.trim().toLowerCase();
 
     // 1️⃣ Verifica se é VIP no backend
@@ -849,14 +851,12 @@ async function atualizarAgendamento() {
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
-        // Remove botão VIP se existir
         const vipContainer = document.getElementById('vipArea');
         if (vipContainer) vipContainer.remove();
     } else {
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        // Cria container VIP se não existir
         let vipContainer = document.getElementById('vipArea');
         if (!vipContainer) {
             vipContainer = document.createElement('div');
@@ -865,11 +865,10 @@ async function atualizarAgendamento() {
             agendamentoForm.parentNode.insertBefore(vipContainer, agendamentoForm.nextSibling);
         }
 
-        // Cria botão VIP se não existir
         if (!document.getElementById('upgradeVIP')) {
             const vipBtn = document.createElement('button');
             vipBtn.id = 'upgradeVIP';
-            vipBtn.type = 'button'; // evita conflito com submit
+            vipBtn.type = 'button';
             vipBtn.innerText = 'Upgrade VIP';
             vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
 
@@ -883,7 +882,6 @@ async function atualizarAgendamento() {
                     const data = await res.json();
                     if (!data.qr_code_base64) throw new Error("Erro ao gerar pagamento PIX");
 
-                    // Exibe QR Code
                     let pixDiv = document.getElementById("pixArea");
                     if (!pixDiv) {
                         pixDiv = document.createElement("div");
@@ -898,7 +896,6 @@ async function atualizarAgendamento() {
                         <textarea readonly style="width:100%;height:80px">${data.qr_code}</textarea>
                     `;
 
-                    // 4️⃣ Checa status de pagamento a cada 5s
                     const interval = setInterval(async () => {
                         const vipRes = await fetch(`${API_URL}/check-vip/${email}`);
                         const vipData = await vipRes.json();
@@ -906,7 +903,7 @@ async function atualizarAgendamento() {
                             clearInterval(interval);
                             pixDiv.remove();
                             showToast("Parabéns! Agora você é VIP 🎉", "success");
-                            atualizarAgendamento(); // atualiza botão/agendamento
+                            atualizarAgendamento();
                         }
                     }, 5000);
 
@@ -921,27 +918,57 @@ async function atualizarAgendamento() {
     }
 }
 
-// ---------------- Ao carregar a página ----------------
+// ---------------- DOMContentLoaded (login + agendamento unificado) ----------------
 document.addEventListener("DOMContentLoaded", async () => {
+    // ===== LOGIN INIT =====
+    const loginForm = document.getElementById("loginForm");
+    if (loginForm) {
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("loginEmail").value.trim();
+            const senha = document.getElementById("loginSenha").value.trim();
+
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password: senha
+                });
+
+                if (error) throw error;
+
+                showToast("Login realizado com sucesso!", "success");
+                window.loggedUserEmail = data.user.email;
+
+                // Preenche campo de agendamento automaticamente
+                const emailInput = document.getElementById("email");
+                if (emailInput) emailInput.value = data.user.email;
+
+                await carregarAgendamentos();
+                await atualizarAgendamento();
+
+            } catch (err) {
+                console.error(err);
+                showToast("Erro ao fazer login", "error");
+            }
+        });
+    }
+
+    // ===== AGENDAMENTO INIT =====
     const emailInput = document.getElementById("email");
+    if (window.loggedUserEmail && emailInput) {
+        emailInput.value = window.loggedUserEmail;
+    }
 
-    // Preenche email se estiver logado
-    if (window.loggedUserEmail) emailInput.value = window.loggedUserEmail;
-
-    // ⚠️ Primeiro carrega agendamentos
     await carregarAgendamentos();
-
-    // Depois atualiza botão/agendamento
     await atualizarAgendamento();
 
-    // Atualiza sempre que o email mudar
     emailInput?.addEventListener("change", async () => {
         await carregarAgendamentos();
         await atualizarAgendamento();
     });
 });
 
-// ---------------- INIT ----------------
+// ---------------- INIT (animações/ícones) ----------------
 AOS.init({
     duration: 800,
     easing: 'ease-out-quart',
@@ -949,10 +976,3 @@ AOS.init({
 });
 feather.replace();
 </script>
-
-
-
-
-
-
-
