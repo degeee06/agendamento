@@ -107,12 +107,8 @@
 
   <!-- SCRIPT ÚNICO (unificado e completo) -->
   <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-
-    // ---------------- Config Supabase (front) ----------------
-    const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk"; // mantenha a sua chave anônima aqui
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Get cliente from URL path
+    const cliente = window.location.pathname.split('/')[1] || "";
 
     // ---------------- Estado ----------------
     let userToken = null;
@@ -333,8 +329,7 @@
           try {
             const cliente = window.location.pathname.split('/')[1] || "";
             const res = await fetch(`/agendamentos/${cliente}/cancelar/${a.id}`, {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${userToken}` }
+              method: "POST"
             });
             if (res.ok) {
               cancelBtn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
@@ -390,10 +385,7 @@
               const cliente = window.location.pathname.split('/')[1] || "";
               const res = await fetch(`/agendamentos/${cliente}/reagendar/${a.id}`, {
                 method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${userToken}`,
-                  "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ novaData, novoHorario })
               });
               if (res.ok) {
@@ -424,25 +416,17 @@
       try {
         const cliente = window.location.pathname.split('/')[1] || "";
         // Endpoint /meus-agendamentos/:cliente deve existir no server (se não existir, implemente na API)
-        const res = await fetch(`/meus-agendamentos/${cliente}`, {
+        // Get appointments directly from /agendar/:cliente route
+        const res = await fetch(`/agendar/${cliente}`, {
+          method: 'GET',
           headers: { "Authorization": `Bearer ${userToken}` }
         });
-        if (!res.ok) {
-          // Tenta também rota alternativa (compatibilidade): /agendamentos/:cliente (GET)
-          try {
-            const res2 = await fetch(`/agendamentos/${cliente}`, { headers: { "Authorization": `Bearer ${userToken}` }});
-            if (res2.ok) {
-              const payload = await res2.json();
-              agendamentosCache = payload.agendamentos || payload || [];
-            } else {
-              agendamentosCache = [];
-            }
-          } catch (e) {
-            agendamentosCache = [];
-          }
+        
+        if (res.ok) {
+          const data = await res.json();
+          agendamentosCache = data.agendamentos || [];
         } else {
-          const json = await res.json();
-          agendamentosCache = json.agendamentos || [];
+          agendamentosCache = [];
         }
 
         if (!Array.isArray(agendamentosCache)) agendamentosCache = [];
@@ -459,26 +443,14 @@
     }
 
     // ---------------- LOGIN ----------------
-    loginBtn.addEventListener('click', async () => {
-      const email = document.getElementById('email').value;
-      const senha = document.getElementById('senha').value;
-      if (!email || !senha) { showToast("Preencha email e senha", "warning"); return; }
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-        if (error) { showToast(error.message,"error"); return; }
-        userToken = data.session.access_token;
-        loginSection.style.display = 'none';
-        form.style.display = 'block';
-        // Tentativa de carregar agendamentos
-        await listarAgendamentos();
-        // Seleciona o dia atual (ajusta domingo -> seg(1))
-        let hoje = new Date().getDay(); if (hoje === 0) hoje = 1;
-        document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click();
-        showToast("Login realizado com sucesso!", "success");
-      } catch (e) {
-        console.error(e);
-        showToast("Erro ao fazer login", "error");
-      }
+    // Remove login functionality since we're using direct API calls
+    loginBtn.addEventListener('click', () => {
+      // Just show the form since we don't have auth in server.js
+      loginSection.style.display = 'none';
+      form.style.display = 'block';
+      filtersSection.style.display = 'block';
+      meusAgendamentos.style.display = 'block';
+      showToast("Pronto para agendar!", "success");
     });
 
     // ---------------- AGENDAR (usa /agendar/:cliente) ----------------
@@ -496,7 +468,7 @@
       try {
         const response = await fetch(`/agendar/${cliente}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', "Authorization": `Bearer ${userToken}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dataToSend)
         });
         if (response.ok) {
