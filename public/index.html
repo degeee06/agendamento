@@ -626,6 +626,31 @@
             });
         }
 
+async function checkVipStatus() {
+    try {
+        const res = await fetch('/meu-pagamento-vip', {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        const { isVip } = await res.json();
+
+        const agendamentoForm = document.getElementById('agendamentoForm');
+        const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+
+        if(isVip) {
+            // Libera botão
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-50','cursor-not-allowed');
+
+            // Remove botão VIP, se existir
+            const vipBtn = document.getElementById('upgradeVIP');
+            if(vipBtn) vipBtn.remove();
+        }
+    } catch(e) {
+        console.error("Erro ao verificar VIP", e);
+    }
+}
+
+
         // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
     if(!userToken) return;
@@ -692,6 +717,18 @@ loginBtn.addEventListener('click', async () => {
     }
 });
 
+listarAgendamentos().then(() => {
+    // Seleciona o dia atual
+    let hoje = new Date().getDay(); 
+    if (hoje === 0) hoje = 1; 
+
+    const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
+    if (btnHoje) btnHoje.click(); 
+    else document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
+
+    // Verifica VIP e libera botão se necessário
+    checkVipStatus();
+});
 
 
         // ---------------- AGENDAR ----------------
@@ -866,41 +903,53 @@ const MAX_FREE = 3; // limite de agendamentos free
 function checkFreeLimit() {
     const agendamentosUser = agendamentosCache.length;
     const agendamentoForm = document.getElementById('agendamentoForm');
+    const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+
+    // Primeiro checa VIP
+    checkVipStatus();
 
     if(agendamentosUser >= MAX_FREE) {
-        // Desabilita botão de agendamento
-        const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+        // Desabilita botão se não VIP
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50','cursor-not-allowed');
 
-        // Adiciona botão de Upgrade VIP, se ainda não existir
-       if(!document.getElementById('upgradeVIP')) {
-    const vipBtn = document.createElement('button');
-    vipBtn.id = 'upgradeVIP';
-    vipBtn.innerText = 'Upgrade VIP';
-    vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
-    
-    vipBtn.addEventListener('click', async () => {
-    try {
-        const res = await fetch('/criar-pagamento-vip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
-            body: JSON.stringify({ cliente, email: agendamentosCache[0]?.email || '' })
-        });
-        const data = await res.json();
+        if(!document.getElementById('upgradeVIP')) {
+            const vipBtn = document.createElement('button');
+            vipBtn.id = 'upgradeVIP';
+            vipBtn.innerText = 'Upgrade VIP';
+            vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
+            
+            vipBtn.addEventListener('click', async () => {
+                try {
+                    const res = await fetch('/criar-pagamento-vip', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
+                        body: JSON.stringify({ cliente, email: agendamentosCache[0]?.email || '' })
+                    });
+                    const data = await res.json();
 
-        if(!res.ok) { showToast(data.message || "Erro ao criar pagamento", "error"); return; }
+                    if(!res.ok) { showToast(data.message || "Erro ao criar pagamento", "error"); return; }
 
-        // Redireciona para checkout PIX
-        window.location.href = `/checkout/${data.urlPagamento.split("/").pop()}`;
-    } catch(e){
-        console.error(e);
-        showToast("Erro ao criar pagamento", "error");
+                    // Redireciona para checkout PIX
+                    window.location.href = `/checkout/${data.urlPagamento.split("/").pop()}`;
+                } catch(e){
+                    console.error(e);
+                    showToast("Erro ao criar pagamento", "error");
+                }
+            });
+
+            agendamentoForm.appendChild(vipBtn);
+        }
+    } else {
+        // Reabilita botão se abaixo do limite
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('opacity-50','cursor-not-allowed');
+
+        const vipBtn = document.getElementById('upgradeVIP');
+        if(vipBtn) vipBtn.remove();
     }
-});
-
-    agendamentoForm.appendChild(vipBtn);
 }
+
 
 
     } else {
@@ -928,6 +977,7 @@ function checkFreeLimit() {
     </script>
 </body>
 </html>
+
 
 
 
