@@ -192,20 +192,22 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     // 🔹 Checa VIP
     const isVip = await checkVip(emailNormalizado);
 
-    // 🔹 Checa limite free (3 agendamentos)
+ // 🔹 Checa limite free (3 agendamentos)
 if (!isVip) {
   const { data: agendamentosHoje, error } = await supabase
     .from("agendamentos")
-    .select("id")
+    .select("id, status, email, data")
     .eq("cliente", cliente)
-    .eq("data", dataNormalizada)
-    .eq("email", emailNormalizado)
+    .eq("data", dataNormalizada)   // funciona porque sua coluna é DATE
+    .ilike("email", emailNormalizado) // ignora maiúsculas/minúsculas
     .in("status", ["pendente", "confirmado"]);
 
   if (error) {
     console.error("Erro ao consultar agendamentos do usuário:", error);
     return res.status(500).json({ msg: "Erro ao validar limite" });
   }
+
+  console.log("Agendamentos encontrados para", emailNormalizado, ":", agendamentosHoje);
 
   const totalAgendamentos = agendamentosHoje ? agendamentosHoje.length : 0;
 
@@ -215,6 +217,8 @@ if (!isVip) {
     });
   }
 }
+
+
 
 
     // 🔹 Checa se horário está disponível
@@ -376,4 +380,5 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
