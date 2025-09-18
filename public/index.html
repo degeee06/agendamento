@@ -1015,7 +1015,11 @@ function habilitarAcoesVIP() {
 document.addEventListener('DOMContentLoaded', () => {
     // ---------------- LOGIN E AGENDAMENTO ----------------
     const loginSection = document.getElementById('loginSection');
-    if (loginSection) loginSection.style.display = 'block';
+if (loginSection) {
+    loginSection.style.display = 'block';   // caso não use Tailwind
+    loginSection.classList.remove('hidden'); // caso use Tailwind ou outra classe que esconda
+}
+
 
     // Atualiza estado do agendamento apenas se o usuário já colocou email
     atualizarEstadoAgendamento();
@@ -1029,6 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
     feather.replace();
 });
 </script>
+
 
 
 
