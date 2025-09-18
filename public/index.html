@@ -110,6 +110,48 @@
                 Gerencie seus compromissos com uma interface intuitiva e elegante
             </p>
         </header>
+<div class="container mx-auto p-8 max-w-xl text-white">
+    <h1 class="text-2xl font-bold mb-4">Pagamento VIP via PIX</h1>
+    <p class="mb-2" id="amount">Valor: R$ --</p>
+    <p class="mb-4" id="status">Status: Pending</p>
+    <div id="pixCodeContainer" class="p-4 bg-white/10 rounded-lg mb-4 text-black font-mono">
+        Código PIX: --
+    </div>
+    <button id="confirmarPixBtn" class="bg-green-500 px-4 py-2 rounded-lg text-white font-medium">Já paguei</button>
+</div>
+
+<script type="module">
+    const pathParts = window.location.pathname.split('/');
+    const pagamentoId = pathParts[2];
+
+    async function initPix() {
+        const res = await fetch(`/pagamento/${pagamentoId}`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        const data = await res.json();
+
+        if(!res.ok) { document.body.innerHTML = "<h2>Pagamento não encontrado</h2>"; return; }
+
+        document.getElementById('amount').innerText = `Valor: R$ ${data.amount}`;
+        document.getElementById('status').innerText = `Status: ${data.status}`;
+        document.getElementById('pixCodeContainer').innerText = `Código PIX:\n${data.pixCode || 'PIX simulada'}`;
+
+        document.getElementById('confirmarPixBtn').addEventListener('click', async () => {
+            const confirmRes = await fetch(`/pagamento/${pagamentoId}/confirmar`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${userToken}` }
+            });
+            if(confirmRes.ok){
+                alert("Pagamento confirmado! Agendamentos liberados.");
+                window.location.href = `/${cliente}`;
+            } else {
+                alert("Erro ao confirmar pagamento.");
+            }
+        });
+    }
+
+    initPix();
+</script>
 
         <!-- Login Section -->
         <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -886,6 +928,7 @@ function checkFreeLimit() {
     </script>
 </body>
 </html>
+
 
 
 
