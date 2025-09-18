@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import crypto from "crypto";
-import { MercadoPagoConfig, Payment } from "mercadopago";
+
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,14 +17,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Mercado Pago
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
-const mpPayment = new Payment(mpClient);
+const payment = new Payment(mpClient);
 
+// Google Sheets
 let creds;
 try {
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -33,7 +36,6 @@ try {
   process.exit(1);
 }
 
-// ---------------- Google Sheets ----------------
 async function accessSpreadsheet(clienteId) {
   const { data, error } = await supabase
     .from("clientes")
@@ -60,9 +62,9 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 async function updateRowInSheet(sheet, rowId, updatedData) {
   await sheet.loadHeaderRow();
   const rows = await sheet.getRows();
-  const row = rows.find(r => r.id === rowId);
+  const row = rows.find((r) => r.id === rowId);
   if (row) {
-    Object.keys(updatedData).forEach(key => {
+    Object.keys(updatedData).forEach((key) => {
       if (sheet.headerValues.includes(key)) row[key] = updatedData[key];
     });
     await row.save();
@@ -71,61 +73,6 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
     await sheet.addRow(updatedData);
   }
 }
-
-
-
-app.get('/pagamento/:pagamentoId', authMiddleware, async (req, res) => {
-    const { pagamentoId } = req.params;
-
-    const { data, error } = await supabase
-        .from('pagamentos')
-        .select('*')
-        .eq('id', pagamentoId)
-        .single();
-
-    if(error || !data) return res.status(404).json({ message: "Pagamento não encontrado" });
-
-    res.json(data);
-});
-
-
-app.post('/pagamento/:pagamentoId/confirmar', authMiddleware, async (req, res) => {
-    const { pagamentoId } = req.params;
-
-    const { error } = await supabase
-        .from('pagamentos')
-        .update({ status: 'paid' })
-        .eq('id', pagamentoId);
-
-    if(error) return res.status(500).json({ message: error.message });
-
-    res.json({ message: "Pagamento confirmado" });
-});
-
-
-
-app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado")
-      .order("data", { ascending: true })
-      .order("horario", { ascending: true });
-
-    if (error) throw error;
-    res.json({ agendamentos: data });
-  } catch (err) {
-    console.error("Erro ao listar agendamentos:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-
 
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
@@ -170,16 +117,7 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   return agendamentos.length === 0;
 }
 
-// ---------------- Rotas ----------------
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
-app.get("/:cliente", async (req, res) => {
-  const cliente = req.params.cliente;
-  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
-  if (error || !data) return res.status(404).send("Cliente não encontrado");
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
-
-
+// ---------------- Rotas PIX ----------------
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email, cpf, nome, sobrenome } = req.body;
   if (!amount || !email || !cpf || !nome || !sobrenome) {
@@ -198,9 +136,9 @@ app.post("/create-pix", async (req, res) => {
           last_name: sobrenome,
           identification: {
             type: "CPF",
-            number: cpf
-          }
-        }
+            number: cpf,
+          },
+        },
       },
     });
 
@@ -208,13 +146,15 @@ app.post("/create-pix", async (req, res) => {
     const status = result.status;
 
     await supabase.from("pagamentos").upsert(
-      [{
-        id: paymentId,
-        email,
-        amount: Number(amount),
-        status,
-        valid_until: null
-      }],
+      [
+        {
+          id: paymentId,
+          email,
+          amount: Number(amount),
+          status,
+          valid_until: null,
+        },
+      ],
       { onConflict: ["id"] }
     );
 
@@ -230,47 +170,19 @@ app.post("/create-pix", async (req, res) => {
   }
 });
 
-// Checa VIP pelo email (aprovado e dentro do prazo)
-app.get("/check-vip/:email", async (req, res) => {
-  const email = req.params.email;
-  if (!email) return res.status(400).json({ error: "Faltando email" });
-
-  const now = new Date();
-  const { data, error } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email)
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error && error.code !== "PGRST116") {
-    return res.status(500).json({ error: error.message });
-  }
-
-  res.json({
-    vip: !!data,
-    valid_until: data?.valid_until || null
-  });
-});
-
-// Webhook Mercado Pago
+// ---------------- Webhook Mercado Pago ----------------
 app.post("/webhook", async (req, res) => {
   try {
     const paymentId = req.body?.data?.id || req.query["data.id"];
     if (!paymentId) return res.sendStatus(400);
 
     const paymentDetails = await payment.get({ id: paymentId });
-
-    // Atualiza status no Supabase
     const status = paymentDetails.status;
     let valid_until = null;
 
     if (["approved", "paid"].includes(status.toLowerCase())) {
       const vipExpires = new Date();
-      vipExpires.setDate(vipExpires.getDate() + 30); // 30 dias
+      vipExpires.setDate(vipExpires.getDate() + 30);
       valid_until = vipExpires.toISOString();
     }
 
@@ -280,7 +192,7 @@ app.post("/webhook", async (req, res) => {
       .eq("id", paymentId);
 
     if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
-    else console.log(`Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
+    else console.log(`Pagamento ${paymentId} atualizado: ${status}`);
 
     res.sendStatus(200);
   } catch (err) {
@@ -409,6 +321,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
