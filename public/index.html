@@ -874,14 +874,14 @@ function criarBotaoVIP() {
 
         try {
             const res = await fetch("/create-pix", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    amount: 00.01,
-                    description: "Assinatura VIP",
-                    email
-                })
-            });
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        amount: 0.01, // 1 centavo
+        description: "Assinatura VIP",
+        email
+    })
+});
 
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
@@ -946,6 +946,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
