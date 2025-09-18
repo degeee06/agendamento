@@ -821,26 +821,26 @@ loginBtn.addEventListener('click', async () => {
 
 const MAX_FREE = 3; // limite de agendamentos free
 
-// ---------------- CHECK FREE LIMIT E CRIAÇÃO BOTÃO VIP ----------------
 function checkFreeLimit() {
     const agendamentosUser = agendamentosCache.length;
     const agendamentoForm = document.getElementById('agendamentoForm');
+
+    // Seleciona o botão de agendamento
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
 
     if (agendamentosUser >= MAX_FREE) {
         // Desabilita botão de agendamento
         submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-50','cursor-not-allowed');
+        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        // Cria botão VIP, se não existir
+        // Adiciona botão de Upgrade VIP, se ainda não existir
         if (!document.getElementById('upgradeVipBtn')) {
             const vipBtn = document.createElement('button');
-            vipBtn.id = 'upgradeVipBtn';
+            vipBtn.id = 'upgradeVipBtn'; // ID correto para o listener
             vipBtn.innerText = 'Upgrade VIP';
             vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
-            agendamentoForm.appendChild(vipBtn);
-
-            // Listener para gerar PIX
+            
+            // Listener para gerar Pix
             vipBtn.addEventListener('click', async () => {
                 const email = document.getElementById("email").value;
                 if (!email) {
@@ -875,6 +875,7 @@ function checkFreeLimit() {
                         <textarea readonly style="width:100%;height:80px">${data.qr_code}</textarea>
                     `;
                     document.body.appendChild(pixDiv);
+
                     showToast("QR Code gerado! Pague para ativar seu VIP", "success");
 
                     // Checagem automática se já é VIP
@@ -885,7 +886,7 @@ function checkFreeLimit() {
                         if (vipData.vip) {
                             clearInterval(interval);
                             showToast("Parabéns! Agora você é VIP 🎉", "success");
-                            document.getElementById("pixArea").remove();
+                            document.getElementById("pixArea")?.remove();
                         }
                     }, 8000);
 
@@ -894,12 +895,14 @@ function checkFreeLimit() {
                     showToast("Erro ao iniciar pagamento", "error");
                 }
             });
+
+            agendamentoForm.appendChild(vipBtn);
         }
 
     } else {
         // Reabilita botão de agendamento
         submitBtn.disabled = false;
-        submitBtn.classList.remove('opacity-50','cursor-not-allowed');
+        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
         // Remove botão VIP, se existir
         const vipBtn = document.getElementById('upgradeVipBtn');
@@ -918,6 +921,7 @@ function checkFreeLimit() {
     </script>
 </body>
 </html>
+
 
 
 
