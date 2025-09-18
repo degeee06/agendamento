@@ -821,7 +821,8 @@ loginBtn.addEventListener('click', async () => {
 
 const MAX_FREE = 3; // limite de agendamentos free
 
-// ---------------- Função para atualizar botão/agendamento ----------------
+<!-- ---------------- Função para atualizar botão/agendamento ---------------- -->
+<script>
 async function atualizarAgendamento() {
     const agendamentoForm = document.getElementById('agendamentoForm');
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
@@ -840,8 +841,8 @@ async function atualizarAgendamento() {
         console.error("Erro ao checar VIP:", err);
     }
 
-    // 2️⃣ Conta agendamentos do usuário
-    const agendamentosUser = agendamentosCache.length;
+    // 2️⃣ Conta agendamentos do usuário (proteção contra undefined)
+    const agendamentosUser = Array.isArray(agendamentosCache) ? agendamentosCache.length : 0;
 
     // 3️⃣ Libera ou bloqueia botão de agendamento
     if (isVip || agendamentosUser < MAX_FREE) {
@@ -849,16 +850,26 @@ async function atualizarAgendamento() {
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
         // Remove botão VIP se existir
-        const vipBtn = document.getElementById('upgradeVIP');
-        if (vipBtn) vipBtn.remove();
+        const vipContainer = document.getElementById('vipArea');
+        if (vipContainer) vipContainer.remove();
     } else {
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        // Cria container VIP se não existir
+        let vipContainer = document.getElementById('vipArea');
+        if (!vipContainer) {
+            vipContainer = document.createElement('div');
+            vipContainer.id = 'vipArea';
+            vipContainer.className = 'mt-4';
+            agendamentoForm.parentNode.insertBefore(vipContainer, agendamentoForm.nextSibling);
+        }
 
         // Cria botão VIP se não existir
         if (!document.getElementById('upgradeVIP')) {
             const vipBtn = document.createElement('button');
             vipBtn.id = 'upgradeVIP';
+            vipBtn.type = 'button'; // evita conflito com submit
             vipBtn.innerText = 'Upgrade VIP';
             vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
 
@@ -873,8 +884,12 @@ async function atualizarAgendamento() {
                     if (!data.qr_code_base64) throw new Error("Erro ao gerar pagamento PIX");
 
                     // Exibe QR Code
-                    const pixDiv = document.getElementById("pixArea") || document.createElement("div");
-                    pixDiv.id = "pixArea";
+                    let pixDiv = document.getElementById("pixArea");
+                    if (!pixDiv) {
+                        pixDiv = document.createElement("div");
+                        pixDiv.id = "pixArea";
+                        vipContainer.appendChild(pixDiv);
+                    }
                     pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
                     pixDiv.innerHTML = `
                         <h3 class="mb-2">Escaneie o QR Code para pagar:</h3>
@@ -882,7 +897,6 @@ async function atualizarAgendamento() {
                         <p><strong>Código copia e cola:</strong></p>
                         <textarea readonly style="width:100%;height:80px">${data.qr_code}</textarea>
                     `;
-                    agendamentoForm.appendChild(pixDiv);
 
                     // 4️⃣ Checa status de pagamento a cada 5s
                     const interval = setInterval(async () => {
@@ -902,7 +916,7 @@ async function atualizarAgendamento() {
                 }
             });
 
-            agendamentoForm.appendChild(vipBtn);
+            vipContainer.appendChild(vipBtn);
         }
     }
 }
@@ -914,41 +928,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Preenche email se estiver logado
     if (window.loggedUserEmail) emailInput.value = window.loggedUserEmail;
 
-    // Atualiza botão/agendamento
+    // ⚠️ Primeiro carrega agendamentos
+    await carregarAgendamentos();
+
+    // Depois atualiza botão/agendamento
     await atualizarAgendamento();
 
     // Atualiza sempre que o email mudar
-    emailInput?.addEventListener("change", atualizarAgendamento);
+    emailInput?.addEventListener("change", async () => {
+        await carregarAgendamentos();
+        await atualizarAgendamento();
+    });
 });
 
-
-
-        // ---------------- INIT ----------------
-        AOS.init({
-            duration: 800,
-            easing: 'ease-out-quart',
-            once: true
-        });
-        feather.replace();
-    </script>
-</body>
-</html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// ---------------- INIT ----------------
+AOS.init({
+    duration: 800,
+    easing: 'ease-out-quart',
+    once: true
+});
+feather.replace();
+</script>
 
 
 
