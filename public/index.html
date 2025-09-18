@@ -821,44 +821,41 @@ loginBtn.addEventListener('click', async () => {
 
 const MAX_FREE = 3; // limite de agendamentos free
 
-// ---------------- Função unificada de limite e VIP ----------------
-async function atualizarAgendamento(email) {
+// ---------------- Função para atualizar botão/agendamento ----------------
+async function atualizarAgendamento() {
     const agendamentoForm = document.getElementById('agendamentoForm');
-    if (!agendamentoForm) return;
-
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
-    if (!submitBtn) return;
+    const emailInput = document.getElementById('email');
 
-    if (!email) return; // Não tem email ainda
-    email = email.trim().toLowerCase();
+    if (!emailInput?.value) return;
+    const email = emailInput.value.trim().toLowerCase();
 
-    // Checa se o usuário é VIP
+    // 1️⃣ Verifica se é VIP no backend
     let isVip = false;
     try {
         const res = await fetch(`${API_URL}/check-vip/${email}`);
         const data = await res.json();
-        isVip = data.vip;
+        isVip = data.vip || false;
     } catch (err) {
         console.error("Erro ao checar VIP:", err);
     }
 
-    // Conta agendamentos do usuário
+    // 2️⃣ Conta agendamentos do usuário
     const agendamentosUser = agendamentosCache.length;
 
+    // 3️⃣ Libera ou bloqueia botão de agendamento
     if (isVip || agendamentosUser < MAX_FREE) {
-        // Libera botão de agendamento
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
-        // Remove botão VIP, se existir
+        // Remove botão VIP se existir
         const vipBtn = document.getElementById('upgradeVIP');
         if (vipBtn) vipBtn.remove();
     } else {
-        // Bloqueia botão de agendamento
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        // Cria botão VIP se ainda não existir
+        // Cria botão VIP se não existir
         if (!document.getElementById('upgradeVIP')) {
             const vipBtn = document.createElement('button');
             vipBtn.id = 'upgradeVIP';
@@ -872,12 +869,8 @@ async function atualizarAgendamento(email) {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ amount: 0.01, description: "Assinatura VIP", email })
                     });
-
                     const data = await res.json();
-                    if (!data.qr_code_base64) {
-                        showToast("Erro ao gerar pagamento Pix", "error");
-                        return;
-                    }
+                    if (!data.qr_code_base64) throw new Error("Erro ao gerar pagamento PIX");
 
                     // Exibe QR Code
                     const pixDiv = document.getElementById("pixArea") || document.createElement("div");
@@ -890,19 +883,18 @@ async function atualizarAgendamento(email) {
                         <textarea readonly style="width:100%;height:80px">${data.qr_code}</textarea>
                     `;
                     agendamentoForm.appendChild(pixDiv);
-                    showToast("QR Code gerado! Pague para ativar seu VIP", "success");
 
-                    // Verifica status do pagamento a cada 8s
+                    // 4️⃣ Checa status de pagamento a cada 5s
                     const interval = setInterval(async () => {
                         const vipRes = await fetch(`${API_URL}/check-vip/${email}`);
                         const vipData = await vipRes.json();
                         if (vipData.vip) {
                             clearInterval(interval);
-                            showToast("Parabéns! Agora você é VIP 🎉", "success");
                             pixDiv.remove();
-                            atualizarAgendamento(email); // Atualiza botão/agendamento
+                            showToast("Parabéns! Agora você é VIP 🎉", "success");
+                            atualizarAgendamento(); // atualiza botão/agendamento
                         }
-                    }, 8000);
+                    }, 5000);
 
                 } catch (err) {
                     console.error(err);
@@ -919,19 +911,16 @@ async function atualizarAgendamento(email) {
 document.addEventListener("DOMContentLoaded", async () => {
     const emailInput = document.getElementById("email");
 
-    if (!emailInput) return;
+    // Preenche email se estiver logado
+    if (window.loggedUserEmail) emailInput.value = window.loggedUserEmail;
 
-    // Atualiza botão/agendamento apenas após o login
-    emailInput.addEventListener("change", async () => {
-        if (emailInput.value) await atualizarAgendamento(emailInput.value);
-    });
+    // Atualiza botão/agendamento
+    await atualizarAgendamento();
 
-    // Se já houver usuário logado (ex.: via token), libera automaticamente
-    if (window.loggedUserEmail) {
-        emailInput.value = window.loggedUserEmail;
-        await atualizarAgendamento(window.loggedUserEmail);
-    }
+    // Atualiza sempre que o email mudar
+    emailInput?.addEventListener("change", atualizarAgendamento);
 });
+
 
 
         // ---------------- INIT ----------------
@@ -944,6 +933,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     </script>
 </body>
 </html>
+
 
 
 
