@@ -77,16 +77,16 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { data: agendamentos, error } = await supabase
+    const { data, error } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("cliente", cliente)
+      .neq("status", "cancelado")
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
-    if (error) return res.status(500).json({ msg: error.message });
-
-    res.json({ agendamentos });
+    if (error) throw error;
+    res.json({ agendamentos: data });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
@@ -324,4 +324,5 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
