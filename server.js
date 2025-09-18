@@ -71,6 +71,28 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
+
+app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .order("data", { ascending: true })
+      .order("horario", { ascending: true });
+
+    if (error) return res.status(500).json({ msg: error.message });
+
+    res.json({ agendamentos });
+  } catch (err) {
+    console.error("Erro ao listar agendamentos:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
@@ -302,3 +324,4 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
