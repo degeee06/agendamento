@@ -145,13 +145,13 @@ app.get("/:cliente", async (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-// Cria PIX
+// ---------------- PIX / Mercado Pago ----------------
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email } = req.body;
   if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
 
   try {
-    const result = await payment.create({
+    const result = await mpPayment.create({
       body: {
         transaction_amount: Number(amount),
         description: description || "Pagamento VIP",
@@ -160,7 +160,6 @@ app.post("/create-pix", async (req, res) => {
       },
     });
 
-    // Salva pagamento como pending com valid_until nulo
     await supabase.from("pagamentos").upsert(
       [{ id: result.id, email, amount: Number(amount), status: "pending", valid_until: null }],
       { onConflict: ["id"] }
@@ -173,62 +172,31 @@ app.post("/create-pix", async (req, res) => {
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Checa VIP pelo email (aprovado e dentro do prazo)
-app.get("/check-vip/:email", async (req, res) => {
-  const email = req.params.email;
-  if (!email) return res.status(400).json({ error: "Faltando email" });
-
-  const now = new Date();
-  const { data, error } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email)
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error && error.code !== "PGRST116") {
-    return res.status(500).json({ error: error.message });
-  }
-
-  res.json({
-    vip: !!data,
-    valid_until: data?.valid_until || null
-  });
-});
-
-// Webhook Mercado Pago
+// ---------------- Webhook ----------------
 app.post("/webhook", async (req, res) => {
   try {
     const paymentId = req.body?.data?.id || req.query["data.id"];
     if (!paymentId) return res.sendStatus(400);
 
-    const paymentDetails = await payment.get({ id: paymentId });
-
-    // Atualiza status no Supabase
+    const paymentDetails = await mpPayment.get({ id: paymentId });
     const status = paymentDetails.status;
     let valid_until = null;
 
     if (["approved", "paid"].includes(status.toLowerCase())) {
       const vipExpires = new Date();
-      vipExpires.setDate(vipExpires.getDate() + 30); // 30 dias
+      vipExpires.setDate(vipExpires.getDate() + 30);
       valid_until = vipExpires.toISOString();
     }
 
-    const { error: updateError } = await supabase
+    await supabase
       .from("pagamentos")
       .update({ status, valid_until })
       .eq("id", paymentId);
-
-    if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
-    else console.log(`Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
 
     res.sendStatus(200);
   } catch (err) {
