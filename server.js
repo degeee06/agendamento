@@ -216,10 +216,11 @@ app.get("/:cliente", async (req, res) => {
 });
 
 
-// Cria PIX
 app.post("/create-pix", async (req, res) => {
-  const { amount, description, email } = req.body;
-  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
+  const { amount, description, email, cpf, nome, sobrenome } = req.body;
+  if (!amount || !email || !cpf || !nome || !sobrenome) {
+    return res.status(400).json({ error: "Dados obrigatórios faltando" });
+  }
 
   try {
     const result = await payment.create({
@@ -227,24 +228,40 @@ app.post("/create-pix", async (req, res) => {
         transaction_amount: Number(amount),
         description: description || "Pagamento VIP",
         payment_method_id: "pix",
-        payer: { email },
+        payer: {
+          email,
+          first_name: nome,
+          last_name: sobrenome,
+          identification: {
+            type: "CPF",
+            number: cpf
+          }
+        }
       },
     });
 
-    // Salva pagamento como pending com valid_until nulo
+    const paymentId = result.id;
+    const status = result.status;
+
     await supabase.from("pagamentos").upsert(
-      [{ id: result.id, email, amount: Number(amount), status: "pending", valid_until: null }],
+      [{
+        id: paymentId,
+        email,
+        amount: Number(amount),
+        status,
+        valid_until: null
+      }],
       { onConflict: ["id"] }
     );
 
     res.json({
-      id: result.id,
-      status: result.status,
+      id: paymentId,
+      status,
       qr_code: result.point_of_interaction.transaction_data.qr_code,
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -428,6 +445,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
