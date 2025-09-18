@@ -1010,21 +1010,27 @@ function habilitarAcoesVIP() {
     });
 }
 
-// ---------------- INIT ----------------
-document.addEventListener('DOMContentLoaded', () => {
-    atualizarEstadoAgendamento();
-});
 
-        // ---------------- INIT ----------------
-        AOS.init({
-            duration: 800,
-            easing: 'ease-out-quart',
-            once: true
-        });
-        feather.replace();
-    </script>
-</body>
-</html>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // ---------------- LOGIN E AGENDAMENTO ----------------
+    const loginSection = document.getElementById('loginSection');
+    if (loginSection) loginSection.style.display = 'block';
+
+    // Atualiza estado do agendamento apenas se o usuário já colocou email
+    atualizarEstadoAgendamento();
+
+    // ---------------- ANIMAÇÕES E ICONES ----------------
+    AOS.init({
+        duration: 800,
+        easing: 'ease-out-quart',
+        once: true
+    });
+    feather.replace();
+});
+</script>
+
+
 
 
 
