@@ -868,7 +868,7 @@ async function atualizarAgendamento() {
                     const res = await fetch(`${API_URL}/create-pix`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ amount: 29.90, description: "Assinatura VIP", email })
+                        body: JSON.stringify({ amount: 00.01, description: "Assinatura VIP", email })
                     });
 
                     const data = await res.json();
@@ -939,6 +939,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     </script>
 </body>
 </html>
+
 
 
 
