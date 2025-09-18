@@ -194,20 +194,24 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
  // 🔹 Checa limite free (3 agendamentos)
 if (!isVip) {
+  const dataInicio = new Date(Data);
+  dataInicio.setHours(0,0,0,0);
+  const dataFim = new Date(Data);
+  dataFim.setHours(23,59,59,999);
+
   const { data: agendamentosHoje, error } = await supabase
     .from("agendamentos")
     .select("id, status, email, data")
     .eq("cliente", cliente)
-    .eq("data", dataNormalizada)   // funciona porque sua coluna é DATE
-    .ilike("email", emailNormalizado) // ignora maiúsculas/minúsculas
-    .in("status", ["pendente", "confirmado"]);
+    .ilike("email", emailNormalizado)
+    .in("status", ["pendente", "confirmado"])
+    .gte("created_at", dataInicio.toISOString())
+    .lte("created_at", dataFim.toISOString());
 
   if (error) {
     console.error("Erro ao consultar agendamentos do usuário:", error);
     return res.status(500).json({ msg: "Erro ao validar limite" });
   }
-
-  console.log("Agendamentos encontrados para", emailNormalizado, ":", agendamentosHoje);
 
   const totalAgendamentos = agendamentosHoje ? agendamentosHoje.length : 0;
 
@@ -380,5 +384,6 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
