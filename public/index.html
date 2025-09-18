@@ -1,136 +1,157 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agendamento VIP</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-  <script src="https://unpkg.com/feather-icons"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    .glass-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(16px); border:1px solid rgba(255,255,255,0.1); }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento VIP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .scrollbar-hide::-webkit-scrollbar { display:none; }
+    </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
-  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
 
-    <!-- Login -->
-    <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
-      <h2 class="text-2xl font-semibold text-center mb-6">Acesso ao Sistema</h2>
-      <input type="email" id="email" placeholder="seu@email.com" class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="password" id="senha" placeholder="Senha" class="w-full p-2 rounded mb-3 bg-white/10">
-      <button id="loginBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-2 rounded">Entrar</button>
+        <!-- Header -->
+        <header class="text-center mb-12" data-aos="fade-down">
+            <h1 class="text-4xl md:text-5xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
+                Agenda VIP
+            </h1>
+            <p class="text-lg opacity-90">Gerencie seus compromissos de forma moderna</p>
+        </header>
+
+        <!-- Login -->
+        <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
+            <h2 class="text-2xl font-semibold text-center mb-6">Acesso</h2>
+            <input type="email" id="email" placeholder="seu@email.com" class="w-full p-3 rounded mb-3 bg-white/10">
+            <input type="password" id="senha" placeholder="Senha" class="w-full p-3 rounded mb-3 bg-white/10">
+            <button id="loginBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-3 rounded">Entrar</button>
+        </div>
+
+        <!-- VIP Section -->
+        <div id="vipSection" class="glass-card rounded-2xl p-8 mb-8 hidden" data-aos="fade-up">
+            <div class="flex items-center justify-center mb-6">
+                <div class="p-3 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 shadow-lg">
+                    <i data-feather="star" class="w-6 h-6 text-white"></i>
+                </div>
+            </div>
+            <h2 class="text-2xl font-semibold text-center mb-6">Seja VIP 🚀</h2>
+            <p class="text-center mb-4 opacity-90">Agende ilimitado e confirme instantaneamente!</p>
+            <div class="flex justify-center">
+                <button id="vipBtn" class="bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg">Seja VIP (R$ 29,90)</button>
+            </div>
+            <div id="pixContainer" class="mt-6 text-center hidden">
+                <h3 class="font-medium mb-2">Pague via PIX</h3>
+                <img id="pixQR" class="mx-auto w-64 h-64 rounded-lg shadow-lg border border-white/20" />
+                <p class="mt-2 text-sm opacity-80">Escaneie o QR Code no seu banco para ativar VIP</p>
+            </div>
+        </div>
+
+        <!-- Formulário de Agendamento -->
+        <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
+            <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="space-y-4">
+                    <input type="text" name="Nome" placeholder="Seu nome" required class="w-full p-3 rounded bg-white/10">
+                    <input type="email" name="Email" placeholder="seu@email.com" required class="w-full p-3 rounded bg-white/10">
+                </div>
+                <div class="space-y-4">
+                    <input type="text" name="Telefone" placeholder="(00) 00000-0000" required class="w-full p-3 rounded bg-white/10">
+                    <input type="date" name="Data" required class="w-full p-3 rounded bg-white/10">
+                    <input type="time" name="Horario" required class="w-full p-3 rounded bg-white/10">
+                </div>
+            </div>
+            <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-3 mt-6 rounded">Agendar</button>
+        </form>
+
+        <!-- Lista de Agendamentos -->
+        <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 hidden max-h-[500px] overflow-y-auto scrollbar-hide" data-aos="fade-up">
+            Nenhum agendamento
+        </div>
     </div>
 
-    <!-- VIP Section -->
-    <div id="vipSection" class="glass-card rounded-2xl p-8 mb-8 hidden" data-aos="fade-up">
-      <h2 class="text-2xl font-semibold text-center mb-6">Seja VIP 🚀</h2>
-      <p class="text-center mb-4 opacity-90">Agende ilimitado e confirme instantaneamente!</p>
-      <div class="flex justify-center">
-        <button id="vipBtn" class="bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg">Seja VIP (R$ 29,90)</button>
-      </div>
-      <div id="pixContainer" class="mt-6 text-center hidden">
-        <h3 class="font-medium mb-2">Pague via PIX</h3>
-        <img id="pixQR" class="mx-auto w-64 h-64 rounded-lg shadow-lg border border-white/20" />
-        <p class="mt-2 text-sm opacity-80">Escaneie o QR Code no seu banco para ativar VIP</p>
-      </div>
-    </div>
+    <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
-    <!-- Formulário de Agendamento -->
-    <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
-      <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
-      <input type="text" name="Nome" placeholder="Seu nome" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="email" name="Email" placeholder="seu@email.com" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="text" name="Telefone" placeholder="(00) 00000-0000" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="date" name="Data" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <input type="time" name="Horario" required class="w-full p-2 rounded mb-3 bg-white/10">
-      <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-2 rounded">Agendar</button>
-    </form>
+    <script type="module">
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
+        const SUPABASE_ANON_KEY = "ey..."; // sua chave
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    <!-- Lista de Agendamentos -->
-    <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 hidden">Nenhum agendamento</div>
+        let userToken = null;
+        const form = document.getElementById('agendamentoForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginSection = document.getElementById('loginSection');
+        const meusAgendamentos = document.getElementById('meusAgendamentos');
+        const vipSection = document.getElementById("vipSection");
+        const vipBtn = document.getElementById("vipBtn");
+        const pixContainer = document.getElementById("pixContainer");
+        const pixQR = document.getElementById("pixQR");
 
-  </div>
+        function showToast(msg){ alert(msg); } // simples
 
-  <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
-
-  <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-    const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-    const SUPABASE_ANON_KEY = "ey..."; // substitua pela sua chave
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    let userToken = null;
-    const form = document.getElementById('agendamentoForm');
-    const loginBtn = document.getElementById('loginBtn');
-    const loginSection = document.getElementById('loginSection');
-    const meusAgendamentos = document.getElementById('meusAgendamentos');
-    const vipSection = document.getElementById("vipSection");
-    const vipBtn = document.getElementById("vipBtn");
-    const pixContainer = document.getElementById("pixContainer");
-    const pixQR = document.getElementById("pixQR");
-
-    function showToast(msg, type="info"){
-      alert(msg); // simplificado para este exemplo
-    }
-
-    function showVipOption(email){
-      vipSection.classList.remove("hidden");
-      vipBtn.onclick = async () => {
-        const res = await fetch("/create-pix", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: 29.90, description:"Assinatura VIP Agenda", email })
-        });
-        const data = await res.json();
-        if(data.qr_code_base64){
-          pixQR.src = `data:image/png;base64,${data.qr_code_base64}`;
-          pixContainer.classList.remove("hidden");
+        function showVipOption(email){
+            vipSection.classList.remove("hidden");
+            vipBtn.onclick = async () => {
+                const res = await fetch("/create-pix", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount: 29.90, description:"Assinatura VIP Agenda", email })
+                });
+                const data = await res.json();
+                if(data.qr_code_base64){
+                    pixQR.src = `data:image/png;base64,${data.qr_code_base64}`;
+                    pixContainer.classList.remove("hidden");
+                }
+            };
         }
-      };
-    }
 
-    loginBtn.addEventListener("click", async ()=>{
-      const email = document.getElementById('email').value;
-      const senha = document.getElementById('senha').value;
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-      if(error){ showToast("Erro: " + error.message, "error"); return; }
-      userToken = data.session.access_token;
-      loginSection.style.display="none";
-      form.style.display="block";
-    });
-
-    form.addEventListener("submit", async (e)=>{
-      e.preventDefault();
-      const formData=new FormData(form);
-      const dataToSend={}; formData.forEach((v,k)=>dataToSend[k]=v);
-      const cliente = window.location.pathname.split('/')[1] || "";
-      try{
-        const response = await fetch(`/agendar/${cliente}`,{
-          method:"POST",
-          headers:{ "Content-Type":"application/json","Authorization":`Bearer ${userToken}` },
-          body:JSON.stringify(dataToSend)
+        loginBtn.addEventListener("click", async ()=>{
+            const email = document.getElementById('email').value;
+            const senha = document.getElementById('senha').value;
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+            if(error){ showToast("Erro: " + error.message); return; }
+            userToken = data.session.access_token;
+            loginSection.style.display="none";
+            form.style.display="block";
+            meusAgendamentos.style.display="block";
         });
-        if(response.ok){
-          showToast("Agendado com sucesso!","success");
-          form.reset();
-        } else {
-          const errorData = await response.json();
-          if(response.status===402){
-            showToast(errorData.msg,"warning");
-            showVipOption(dataToSend.Email);
-          } else {
-            showToast(errorData.msg || "Erro","error");
-          }
-        }
-      } catch(err){ showToast("Erro","error"); }
-    });
 
-    AOS.init();
-    feather.replace();
-  </script>
+        form.addEventListener("submit", async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={}; formData.forEach((v,k)=>dataToSend[k]=v);
+            const cliente = window.location.pathname.split('/')[1] || "";
+            try{
+                const response = await fetch(`/agendar/${cliente}`,{
+                    method:"POST",
+                    headers:{ "Content-Type":"application/json","Authorization":`Bearer ${userToken}` },
+                    body:JSON.stringify(dataToSend)
+                });
+                if(response.ok){
+                    showToast("Agendado com sucesso!");
+                    form.reset();
+                } else {
+                    const errorData = await response.json();
+                    if(response.status===402){
+                        showToast(errorData.msg);
+                        showVipOption(dataToSend.Email);
+                    } else {
+                        showToast(errorData.msg || "Erro");
+                    }
+                }
+            } catch(err){ showToast("Erro ao agendar"); }
+        });
+
+        AOS.init();
+        feather.replace();
+    </script>
 </body>
 </html>
