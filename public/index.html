@@ -832,16 +832,35 @@ function checkFreeLimit() {
         submitBtn.classList.add('opacity-50','cursor-not-allowed');
 
         // Adiciona botão de Upgrade VIP, se ainda não existir
-        if(!document.getElementById('upgradeVIP')) {
-            const vipBtn = document.createElement('button');
-            vipBtn.id = 'upgradeVIP';
-            vipBtn.innerText = 'Upgrade VIP';
-            vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
-            vipBtn.addEventListener('click', () => {
-                window.location.href = '/upgrade'; // link para página de pagamento
-            });
-            agendamentoForm.appendChild(vipBtn);
-        }
+       if(!document.getElementById('upgradeVIP')) {
+    const vipBtn = document.createElement('button');
+    vipBtn.id = 'upgradeVIP';
+    vipBtn.innerText = 'Upgrade VIP';
+    vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
+    
+    vipBtn.addEventListener('click', async () => {
+    try {
+        const res = await fetch('/criar-pagamento-vip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userToken}` },
+            body: JSON.stringify({ cliente, email: agendamentosCache[0]?.email || '' })
+        });
+        const data = await res.json();
+
+        if(!res.ok) { showToast(data.message || "Erro ao criar pagamento", "error"); return; }
+
+        // Redireciona para checkout PIX
+        window.location.href = `/checkout/${data.urlPagamento.split("/").pop()}`;
+    } catch(e){
+        console.error(e);
+        showToast("Erro ao criar pagamento", "error");
+    }
+});
+
+    agendamentoForm.appendChild(vipBtn);
+}
+
+
     } else {
         // Reabilita botão de agendamento
         const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
@@ -867,6 +886,7 @@ function checkFreeLimit() {
     </script>
 </body>
 </html>
+
 
 
 
