@@ -145,8 +145,6 @@ app.get("/:cliente", async (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-
-
 // Cria PIX
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email } = req.body;
@@ -206,8 +204,6 @@ app.get("/check-vip/:email", async (req, res) => {
   });
 });
 
-
-
 // Webhook Mercado Pago
 app.post("/webhook", async (req, res) => {
   try {
@@ -240,7 +236,6 @@ app.post("/webhook", async (req, res) => {
     res.sendStatus(500);
   }
 });
-
 
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
