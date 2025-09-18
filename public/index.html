@@ -821,33 +821,51 @@ loginBtn.addEventListener('click', async () => {
 
 const MAX_FREE = 3; // limite de agendamentos free
 
-function checkFreeLimit() {
-    const agendamentosUser = agendamentosCache.length;
+async function checkFreeLimit(email) {
     const agendamentoForm = document.getElementById('agendamentoForm');
-
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
 
-    if (agendamentosUser >= MAX_FREE) {
-        // Desabilita botão de agendamento
-        submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    // Consulta VIP no servidor
+    let isVip = false;
+    try {
+        const res = await fetch(`${API_URL}/check-vip/${email}`);
+        const data = await res.json();
+        isVip = data.vip;
+    } catch (err) {
+        console.error("Erro ao checar VIP:", err);
+    }
 
-        // Cria botão de Upgrade VIP
-        criarBotaoVIP(); // <-- chama a função que gera o botão e o Pix
-    } else {
-        // Reabilita botão de agendamento
+    // Conta agendamentos atuais
+    const agendamentosUser = agendamentosCache.length;
+
+    if (isVip || agendamentosUser < MAX_FREE) {
+        // Habilita botão de agendamento
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
         // Remove botão VIP, se existir
         const vipBtn = document.getElementById('upgradeVIP');
         if (vipBtn) vipBtn.remove();
+    } else {
+        // Desabilita botão de agendamento
+        submitBtn.disabled = true;
+        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        // Remove área do Pix, se existir
-        const pixDiv = document.getElementById('pixArea');
-        if (pixDiv) pixDiv.remove();
+        // Adiciona botão VIP, se ainda não existir
+        if (!document.getElementById('upgradeVIP')) {
+            criarBotaoVIP(); // Função que cria o botão VIP
+        }
     }
 }
+
+// Ao carregar a página
+document.addEventListener("DOMContentLoaded", async () => {
+    const emailInput = document.getElementById("email");
+    if (emailInput?.value) {
+        await checkFreeLimit(emailInput.value);
+    }
+});
+
 
 
 function criarBotaoVIP() {
@@ -946,6 +964,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
