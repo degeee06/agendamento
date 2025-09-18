@@ -110,18 +110,6 @@
                 Gerencie seus compromissos com uma interface intuitiva e elegante
             </p>
         </header>
-<!-- Modal de Pagamento PIX -->
-<div id="pixModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center; z-index:1000;">
-  <div style="background:white; padding:20px; border-radius:10px; text-align:center; max-width:400px; width:100%;">
-    <h2>Pagamento VIP</h2>
-    <p>Escaneie o QR Code abaixo para pagar via PIX:</p>
-    <img id="pixQrCode" src="" style="width:250px; height:250px; margin:10px auto; display:block;" />
-    <p><b>Código Copia e Cola:</b></p>
-    <textarea id="pixCode" readonly style="width:100%; height:80px; font-size:12px;"></textarea>
-    <button onclick="copiarPix()" style="margin-top:10px; padding:10px 20px; background:#4caf50; color:white; border:none; border-radius:5px; cursor:pointer;">Copiar Código PIX</button>
-    <button onclick="fecharPixModal()" style="margin-top:10px; padding:10px 20px; background:#f44336; color:white; border:none; border-radius:5px; cursor:pointer;">Fechar</button>
-  </div>
-</div>
 
         <!-- Login Section -->
         <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -158,9 +146,6 @@
                 </button>
             </div>
         </div>
-<button id="upgradeVipBtn" class="mt-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-2 px-4 rounded-lg font-medium shadow-lg hover:opacity-90 transition-all">
-    Upgrade VIP
-</button>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -367,53 +352,6 @@
                 },300);
             },3000);
         }
-
-const BACKEND_URL = "https://mercadopago-backend-hwb6.onrender.com"; // ajuste para sua URL real
-
-// Função abrir modal PIX
-function abrirPixModal(qrCodeBase64, qrCode) {
-  document.getElementById("pixQrCode").src = `data:image/png;base64,${qrCodeBase64}`;
-  document.getElementById("pixCode").value = qrCode;
-  document.getElementById("pixModal").style.display = "flex";
-}
-
-function fecharPixModal() {
-  document.getElementById("pixModal").style.display = "none";
-}
-
-function copiarPix() {
-  const pixCode = document.getElementById("pixCode");
-  pixCode.select();
-  document.execCommand("copy");
-  showToast("Código PIX copiado!", "success");
-}
-
-// Clique no botão Upgrade VIP
-document.getElementById("upgradeVipBtn").addEventListener("click", async () => {
-  try {
-    const email = document.getElementById("email").value; // usa email do login
-    if (!email) {
-      showToast("Faça login para continuar", "error");
-      return;
-    }
-
-    const res = await fetch(`${BACKEND_URL}/create-pix`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: 49.90, description: "VIP 30 dias", email })
-    });
-
-    if (!res.ok) throw new Error("Erro ao gerar pagamento PIX");
-    const data = await res.json();
-
-    abrirPixModal(data.qr_code_base64, data.qr_code);
-
-  } catch (err) {
-    console.error(err);
-    showToast("Erro ao iniciar pagamento PIX", "error");
-  }
-});
-
 
         // ---------------- RENDER AGENDAMENTOS ----------------
         function renderAgendamentos() {
@@ -711,20 +649,6 @@ loginBtn.addEventListener('click', async () => {
         showToast("Erro ao fazer login", "error");
     }
 });
-async function carregarAgendamentos() {
-  try {
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*");
-
-    if (error) throw error;
-    agendamentosCache = data || [];
-    renderAgendamentos();
-  } catch (err) {
-    console.error(err);
-    showToast("Erro ao carregar agendamentos", "error");
-  }
-}
 
 
 
@@ -943,8 +867,6 @@ function checkFreeLimit() {
     </script>
 </body>
 </html>
-
-
 
 
 
