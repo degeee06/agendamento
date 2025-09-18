@@ -822,7 +822,7 @@ loginBtn.addEventListener('click', async () => {
 const MAX_FREE = 3; // limite de agendamentos free
 
 // ---------------- Função para criar botão VIP ----------------
-function criarBotaoVIP() {
+function criarBotaoVIP(email) {
     const agendamentoForm = document.getElementById('agendamentoForm');
 
     // Remove botão antigo, se existir
@@ -836,9 +836,8 @@ function criarBotaoVIP() {
     vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
 
     vipBtn.addEventListener('click', async () => {
-        const email = document.getElementById('email').value;
         if (!email) {
-            showToast("Informe seu email para ser VIP", "warning");
+            showToast("Email não encontrado para VIP", "warning");
             return;
         }
 
@@ -924,22 +923,23 @@ async function checkFreeLimit(email) {
 
         // Adiciona botão VIP, se ainda não existir
         if (!document.getElementById('upgradeVIP')) {
-            criarBotaoVIP();
+            criarBotaoVIP(email);
         }
     }
 }
 
 // ---------------- Ao carregar a página ----------------
 document.addEventListener("DOMContentLoaded", async () => {
-    const emailInput = document.getElementById("email");
-    if (emailInput?.value) {
-        await checkFreeLimit(emailInput.value);
-    }
+    // Pega o email do usuário logado
+    const loggedEmail = window.loggedUserEmail || null; // Ajuste aqui de acordo com seu login
+    if (!loggedEmail) return;
 
-    // Atualiza o limite sempre que o email mudar
-    emailInput?.addEventListener("change", async () => {
-        await checkFreeLimit(emailInput.value);
-    });
+    // Preenche o input de email (se houver)
+    const emailInput = document.getElementById("email");
+    if (emailInput) emailInput.value = loggedEmail;
+
+    // Checa VIP e limite ao carregar
+    await checkFreeLimit(loggedEmail);
 });
 
 
@@ -953,6 +953,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     </script>
 </body>
 </html>
+
 
 
 
