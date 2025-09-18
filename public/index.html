@@ -1,837 +1,136 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agendamento</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-    <script src="https://unpkg.com/feather-icons"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-      
-  
-        .glass-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .animate-fade-in {
-            animation: fadeIn 0.3s ease-out forwards;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .input-field {
-            transition: all 0.3s ease;
-        }
-        
-        .input-field:focus {
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
-        }
-        
-        .status-pendente {
-    color: #fbbf24;
-    background-color: rgba(251, 191, 36, 0.15);
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 600;
-}
-
-.status-confirmado {
-    color: #34d399;
-    background-color: rgba(52, 211, 153, 0.15);
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 600;
-}
-
-.status-cancelado {
-    color: #f87171;
-    background-color: rgba(248, 113, 113, 0.15);
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 600;
-}
-
-        
-        .tab-dia.active {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        
-        .agendamento-card {
-            transition: all 0.3s ease;
-        }
-        
-        .agendamento-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendamento VIP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .glass-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(16px); border:1px solid rgba(255,255,255,0.1); }
+  </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
-    <div class="container mx-auto px-4 py-8 max-w-6xl">
-        <!-- Header with animated gradient -->
-        <header class="text-center mb-12" data-aos="fade-down">
-            <h1 class="text-4xl md:text-5xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
-                Agendamento
-            </h1>
-            <p class="text-lg opacity-90 max-w-2xl mx-auto">
-                Gerencie seus compromissos com uma interface intuitiva e elegante
-            </p>
-        </header>
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
 
-        <!-- Login Section -->
-        <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
-            <div class="flex items-center justify-center mb-6">
-                <div class="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg">
-                    <i data-feather="lock" class="w-6 h-6 text-white"></i>
-                </div>
-            </div>
-            <h2 class="text-2xl font-semibold text-center mb-6">Acesso ao Sistema</h2>
-            <div class="space-y-5 max-w-md mx-auto">
-                <div>
-                    <label for="email" class="block mb-2 text-sm font-medium opacity-80">Email</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-feather="mail" class="w-5 h-5 text-gray-400"></i>
-                        </div>
-                        <input type="email" id="email" placeholder="seu@email.com" 
-                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                    </div>
-                </div>
-                <div>
-                    <label for="senha" class="block mb-2 text-sm font-medium opacity-80">Senha</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-feather="key" class="w-5 h-5 text-gray-400"></i>
-                        </div>
-                        <input type="password" id="senha" placeholder="••••••••" 
-                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                    </div>
-                </div>
-                <button id="loginBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
-                    <i data-feather="log-in" class="w-5 h-5"></i>
-                    Entrar
-                </button>
-            </div>
-        </div>
-
-        <!-- Appointment Form (Hidden Initially) -->
-        <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
-            <div class="flex items-center justify-center mb-6">
-                <div class="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg">
-                    <i data-feather="calendar" class="w-6 h-6 text-white"></i>
-                </div>
-            </div>
-            <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl mx-auto">
-                <div class="space-y-5">
-                    <div>
-                        <label for="Nome" class="block mb-2 text-sm font-medium opacity-80">Nome Completo</label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <i data-feather="user" class="w-5 h-5 text-gray-400"></i>
-                            </div>
-                            <input type="text" name="Nome" placeholder="Seu nome" required 
-                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                        </div>
-                    </div>
-                    <div>
-                        <label for="Email" class="block mb-2 text-sm font-medium opacity-80">Email</label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <i data-feather="mail" class="w-5 h-5 text-gray-400"></i>
-                            </div>
-                            <input type="email" name="Email" placeholder="seu@email.com" required 
-                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                        </div>
-                    </div>
-                </div>
-                <div class="space-y-5">
-                    <div>
-                        <label for="Telefone" class="block mb-2 text-sm font-medium opacity-80">Telefone</label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <i data-feather="phone" class="w-5 h-5 text-gray-400"></i>
-                            </div>
-                            <input type="text" name="Telefone" placeholder="(00) 00000-0000" required 
-                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label for="Data" class="block mb-2 text-sm font-medium opacity-80">Data</label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
-                                </div>
-                                <input type="date" name="Data" placeholder="Data do Agendamento" required 
-                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                            </div>
-                        </div>
-                        <div>
-                            <label for="Horario" class="block mb-2 text-sm font-medium opacity-80">Horário</label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <i data-feather="clock" class="w-5 h-5 text-gray-400"></i>
-                                </div>
-                                <input type="time" name="Horario" placeholder="Horário" required 
-                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="max-w-md mx-auto mt-8">
-                <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
-                    <i data-feather="plus" class="w-5 h-5"></i>
-                    Agendar
-                </button>
-            </div>
-        </form>
-
-        <!-- Filters Section -->
-        <div id="filtersSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <div class="flex flex-col md:flex-row gap-4 items-center">
-                <div class="flex-1 w-full">
-                    <label for="searchInput" class="sr-only">Pesquisar</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-feather="search" class="w-5 h-5 text-gray-400"></i>
-                        </div>
-                        <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email" 
-                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                    </div>
-                </div>
-                <div class="w-full md:w-48 relative">
-                    <label for="statusFilter" class="sr-only">Status</label>
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i data-feather="filter" class="w-5 h-5 text-gray-400"></i>
-                    </div>
-                    <select id="statusFilter" 
-                            class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none input-field">
-                        <option value="">Todos os status</option>
-                        <option value="pendente">Pendente</option>
-                        <option value="confirmado">Confirmado</option>
-                        <option value="cancelado">Cancelado</option>
-                    </select>
-                </div>
-                <div class="flex gap-2">
-                    <button id="exportCSVBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2">
-                        <i data-feather="download" class="w-5 h-5"></i>
-                        <span class="hidden md:inline">CSV</span>
-                    </button>
-                    <button id="exportPDFBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2">
-                        <i data-feather="file-text" class="w-5 h-5"></i>
-                        <span class="hidden md:inline">PDF</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabs Dias da Semana -->
-        <div id="diasTabs" style="display:none;" class="flex gap-2 mb-6 overflow-x-auto pb-2" data-aos="fade-up">
-            <div class="flex gap-2">
-                <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-medium whitespace-nowrap">Segunda</button>
-                <button data-dia="2" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Terça</button>
-                <button data-dia="3" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quarta</button>
-                <button data-dia="4" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quinta</button>
-                <button data-dia="5" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sexta</button>
-                <button data-dia="6" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sábado</button>
-            </div>
-            <div class="flex gap-2 ml-4 pl-4 border-l border-white/20">
-                <button data-semana="-1" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">Semana Passada</button>
-                <button data-semana="-2" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">2 Semanas</button>
-                <button data-semana="-4" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">1 Mês</button>
-            </div>
-        </div>
-
-        <!-- Appointments List -->
-        <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" style="display:none;" data-aos="fade-up">
-            <div class="text-center py-8">
-                <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                    <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                </div>
-                <p class="text-gray-300">Nenhum agendamento encontrado</p>
-            </div>
-        </div>
+    <!-- Login -->
+    <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
+      <h2 class="text-2xl font-semibold text-center mb-6">Acesso ao Sistema</h2>
+      <input type="email" id="email" placeholder="seu@email.com" class="w-full p-2 rounded mb-3 bg-white/10">
+      <input type="password" id="senha" placeholder="Senha" class="w-full p-2 rounded mb-3 bg-white/10">
+      <button id="loginBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-2 rounded">Entrar</button>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+    <!-- VIP Section -->
+    <div id="vipSection" class="glass-card rounded-2xl p-8 mb-8 hidden" data-aos="fade-up">
+      <h2 class="text-2xl font-semibold text-center mb-6">Seja VIP 🚀</h2>
+      <p class="text-center mb-4 opacity-90">Agende ilimitado e confirme instantaneamente!</p>
+      <div class="flex justify-center">
+        <button id="vipBtn" class="bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg">Seja VIP (R$ 29,90)</button>
+      </div>
+      <div id="pixContainer" class="mt-6 text-center hidden">
+        <h3 class="font-medium mb-2">Pague via PIX</h3>
+        <img id="pixQR" class="mx-auto w-64 h-64 rounded-lg shadow-lg border border-white/20" />
+        <p class="mt-2 text-sm opacity-80">Escaneie o QR Code no seu banco para ativar VIP</p>
+      </div>
+    </div>
 
-    <script type="module">
-        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+    <!-- Formulário de Agendamento -->
+    <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
+      <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
+      <input type="text" name="Nome" placeholder="Seu nome" required class="w-full p-2 rounded mb-3 bg-white/10">
+      <input type="email" name="Email" placeholder="seu@email.com" required class="w-full p-2 rounded mb-3 bg-white/10">
+      <input type="text" name="Telefone" placeholder="(00) 00000-0000" required class="w-full p-2 rounded mb-3 bg-white/10">
+      <input type="date" name="Data" required class="w-full p-2 rounded mb-3 bg-white/10">
+      <input type="time" name="Horario" required class="w-full p-2 rounded mb-3 bg-white/10">
+      <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 py-2 rounded">Agendar</button>
+    </form>
 
-        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    <!-- Lista de Agendamentos -->
+    <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 hidden">Nenhum agendamento</div>
 
-        let userToken = null;
-        let agendamentosCache = [];
-        let diaSelecionado = 1;
+  </div>
 
-        const form = document.getElementById('agendamentoForm');
-        const loginBtn = document.getElementById('loginBtn');
-        const loginSection = document.getElementById('loginSection');
-        const meusAgendamentos = document.getElementById('meusAgendamentos');
-        const searchInput = document.getElementById("searchInput");
-        const statusFilter = document.getElementById("statusFilter");
-        const exportCSVBtn = document.getElementById("exportCSVBtn");
-        const exportPDFBtn = document.getElementById("exportPDFBtn");
+  <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
-        const pathParts = window.location.pathname.split('/');
-        const cliente = pathParts[1] || '';
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+    const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
+    const SUPABASE_ANON_KEY = "ey..."; // substitua pela sua chave
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+    let userToken = null;
+    const form = document.getElementById('agendamentoForm');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginSection = document.getElementById('loginSection');
+    const meusAgendamentos = document.getElementById('meusAgendamentos');
+    const vipSection = document.getElementById("vipSection");
+    const vipBtn = document.getElementById("vipBtn");
+    const pixContainer = document.getElementById("pixContainer");
+    const pixQR = document.getElementById("pixQR");
 
-        // ---------------- TOASTS ----------------
-        let activeToasts = [];
-        function showToast(message, type = "success") {
-            const colors = {
-                success: "bg-gradient-to-r from-green-500 to-teal-400",
-                error: "bg-gradient-to-r from-red-500 to-pink-500",
-                info: "bg-gradient-to-r from-blue-500 to-cyan-400",
-                warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
-            };
-            
-            const container = document.getElementById("toast-container");
-            if (activeToasts.length >= 3) {
-                const oldest = activeToasts.shift();
-                oldest.remove();
-            }
-            
-            const toast = document.createElement("div");
-            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
-            toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
-            container.appendChild(toast);
-            activeToasts.push(toast);
-            feather.replace();
-            
-            requestAnimationFrame(()=>{
-                toast.classList.remove("opacity-0","translate-x-5"); 
-                toast.classList.add("opacity-100","translate-x-0");
-            });
-            
-            setTimeout(()=>{
-                toast.classList.add("opacity-0","translate-x-5"); 
-                setTimeout(()=>{
-                    toast.remove(); 
-                    activeToasts=activeToasts.filter(t=>t!==toast);
-                },300);
-            },3000);
-        }
-
-        // ---------------- RENDER AGENDAMENTOS ----------------
-        function renderAgendamentos() {
-            const filtroNome = searchInput.value.toLowerCase();
-            const filtroStatus = statusFilter.value;
-
-            const filtrados = agendamentosCache
-                .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                            (filtroStatus ? a.status === filtroStatus : true))
-                .filter(a => {
-                    const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-                    const hoje = new Date();
-                    
-                    // Se for um dia da semana (1-6)
-                    if(diaSelecionado >= 1 && diaSelecionado <= 6) {
-                        return dataAgendamento.getDay() === diaSelecionado && 
-                               dataAgendamento >= new Date(hoje.setHours(0,0,0,0));
-                    } 
-                    // Se for uma semana anterior (valores negativos)
-                    else {
-                        const semanas = -diaSelecionado;
-                        const dataLimite = new Date();
-                        dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                        return dataAgendamento >= new Date(dataLimite.setHours(0,0,0,0)) && 
-                               dataAgendamento < new Date(hoje.setHours(0,0,0,0));
-                    }
-                })
-                .sort((a,b) => {
-  const dateA = new Date(`${a.data}T${a.horario}`);
-  const dateB = new Date(`${b.data}T${b.horario}`);
-  return dateA - dateB;
-});
-
-            if (filtrados.length === 0) {
-                meusAgendamentos.innerHTML = `
-                    <div class='text-center py-8'>
-                        <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                            <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                        </div>
-                        <p class="text-gray-300">Nenhum agendamento encontrado</p>
-                    </div>
-                `;
-                return;
-            }
-
-            meusAgendamentos.innerHTML = "";
-
-            filtrados.forEach(a => {
-                const div = document.createElement("div");
-                div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
-                
-                div.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-                            <span class="font-medium">${a.horario}</span>
-                        </div>
-                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
-                            ${a.status}
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                            <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-medium">${a.nome}</h3>
-                            <p class="text-sm text-gray-300">${formatData(a.data)}</p>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-                            <span class="truncate">${a.email}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                            <span>${a.telefone}</span>
-                        </div>
-                    </div>
-                `;
-
-                // Container para botões
-                const btnContainer = document.createElement("div");
-                btnContainer.className = "flex gap-2 mt-4";
-
-                // Confirmar
-                if(!a.confirmado) {
-                    const btn = document.createElement("button");
-                    btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                    btn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-                    btn.addEventListener("click", async () => {
-                        btn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Confirmando...`;
-                        feather.replace();
-                        try {
-                            const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-                                method: "POST",
-                                headers: { "Authorization": `Bearer ${userToken}` }
-                            });
-                            if (res.ok) {
-                                btn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
-                                setTimeout(() => {
-                                    showToast("Agendamento confirmado!", "success");
-                                    listarAgendamentos();
-                                }, 300);
-                            } else {
-                                btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                                feather.replace();
-                                showToast("Erro ao confirmar", "error");
-                            }
-                        } catch (e) {
-                            console.error(e);
-                            btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                            feather.replace();
-                            showToast("Erro ao confirmar", "error");
-                        }
-                    });
-                    btnContainer.appendChild(btn);
-                }
-
-                // Reagendar
-                const reBtn = document.createElement("button");
-                reBtn.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-                reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-
-                // Cancelar
-                const cancelBtn = document.createElement("button");
-                cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-                cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-                cancelBtn.addEventListener("click", async () => {
-                    if(!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
-                    
-                    cancelBtn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Cancelando...`;
-                    feather.replace();
-                    try {
-                        const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
-                            method: "POST",
-                            headers: { "Authorization": `Bearer ${userToken}` }
-                        });
-                        if (res.ok) {
-                            cancelBtn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
-                            setTimeout(() => {
-                                showToast("Agendamento cancelado!", "success");
-                                listarAgendamentos();
-                            }, 300);
-                        } else {
-                            cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-                            feather.replace();
-                            const errorData = await res.json();
-                            showToast(errorData.message || "Erro ao cancelar", "error");
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-                        feather.replace();
-                        showToast("Erro ao cancelar agendamento", "error");
-                    }
-                });
-
-                btnContainer.appendChild(cancelBtn);
-
-                reBtn.addEventListener("click", () => {
-                    if(div.querySelector(".reagendar-form")) return;
-
-                    const miniForm = document.createElement("div");
-                    miniForm.className = "reagendar-form mt-3 p-3 bg-white/10 rounded-lg";
-
-                    miniForm.innerHTML = `
-                        <div class="grid grid-cols-2 gap-2 mb-2">
-                            <div>
-                                <label class="block text-xs mb-1">Nova Data</label>
-                                <input type="date" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
-                            </div>
-                            <div>
-                                <label class="block text-xs mb-1">Novo Horário</label>
-                                <input type="time" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
-                            </div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="confirmar-mini flex-1 bg-green-600 hover:bg-green-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1">
-                                <i data-feather="check" class="w-3 h-3"></i> Confirmar
-                            </button>
-                            <button class="cancelar-mini flex-1 bg-gray-600 hover:bg-gray-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1">
-                                <i data-feather="x" class="w-3 h-3"></i> Cancelar
-                            </button>
-                        </div>
-                    `;
-
-                    div.appendChild(miniForm);
-                    feather.replace();
-
-                    // Cancelar
-                    miniForm.querySelector(".cancelar-mini").addEventListener("click", () => {
-                        miniForm.remove();
-                    });
-
-                    // Confirmar
-                    miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
-    const novaData = miniForm.querySelector('input[type="date"]').value;
-    const novoHorario = miniForm.querySelector('input[type="time"]').value;
-    if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
-
-    try {
-        const res = await fetch(`/reagendar/${cliente}/${a.id}`, {  // <-- use 'a.id' do Supabase
-            method: "POST",
-            headers: { 
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ novaData, novoHorario })
-        });
-
-        if(res.ok){
-            showToast("Agendamento reagendado!","success");
-            listarAgendamentos();
-        } else showToast("Erro ao reagendar","error");
-    } catch(e){
-        console.error(e);
-        showToast("Erro ao reagendar","error");
+    function showToast(msg, type="info"){
+      alert(msg); // simplificado para este exemplo
     }
-});
 
-                });
-                btnContainer.appendChild(reBtn);
-                feather.replace();
-
-                div.appendChild(btnContainer);
-                meusAgendamentos.appendChild(div);
-                feather.replace();
-            });
+    function showVipOption(email){
+      vipSection.classList.remove("hidden");
+      vipBtn.onclick = async () => {
+        const res = await fetch("/create-pix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: 29.90, description:"Assinatura VIP Agenda", email })
+        });
+        const data = await res.json();
+        if(data.qr_code_base64){
+          pixQR.src = `data:image/png;base64,${data.qr_code_base64}`;
+          pixContainer.classList.remove("hidden");
         }
+      };
+    }
 
-        // ---------------- LISTAR AGENDAMENTOS ----------------
-        async function listarAgendamentos(){
-    if(!userToken) return;
-    try{
-        const res = await fetch(`/meus-agendamentos/${cliente}`, {
-            headers: { "Authorization": `Bearer ${userToken}` }
+    loginBtn.addEventListener("click", async ()=>{
+      const email = document.getElementById('email').value;
+      const senha = document.getElementById('senha').value;
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+      if(error){ showToast("Erro: " + error.message, "error"); return; }
+      userToken = data.session.access_token;
+      loginSection.style.display="none";
+      form.style.display="block";
+    });
+
+    form.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const formData=new FormData(form);
+      const dataToSend={}; formData.forEach((v,k)=>dataToSend[k]=v);
+      const cliente = window.location.pathname.split('/')[1] || "";
+      try{
+        const response = await fetch(`/agendar/${cliente}`,{
+          method:"POST",
+          headers:{ "Content-Type":"application/json","Authorization":`Bearer ${userToken}` },
+          body:JSON.stringify(dataToSend)
         });
-        const { agendamentos } = await res.json();
-        agendamentosCache = agendamentos;
-        meusAgendamentos.style.display = 'block';
-        document.getElementById('filtersSection').style.display = 'block';
-        document.getElementById('diasTabs').style.display = 'flex';
-        initTabsDias();
-        renderAgendamentos(); // só atualiza a lista, sem alterar o dia
-    } catch(e){
-        console.error(e);
-        showToast("Erro ao listar agendamentos","error");
-    }
-}
-
-
-        // ---------------- LOGIN ----------------
-loginBtn.addEventListener('click', async () => {
-    const email = document.getElementById('email').value;
-    const senha = document.getElementById('senha').value;
-    if(!email || !senha) {
-        showToast("Preencha email e senha", "warning");
-        return;
-    }
-    
-    try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-        if(error){ 
-            showToast(error.message,"error"); 
-            return; 
+        if(response.ok){
+          showToast("Agendado com sucesso!","success");
+          form.reset();
+        } else {
+          const errorData = await response.json();
+          if(response.status===402){
+            showToast(errorData.msg,"warning");
+            showVipOption(dataToSend.Email);
+          } else {
+            showToast(errorData.msg || "Erro","error");
+          }
         }
+      } catch(err){ showToast("Erro","error"); }
+    });
 
-        userToken = data.session.access_token;
-        loginSection.style.display = 'none';
-        form.style.display = 'block';
-
-        listarAgendamentos().then(() => {
-            // ------------------- Seleciona o dia atual -------------------
-            let hoje = new Date().getDay(); // 0 = Domingo ... 6 = Sábado
-            if (hoje === 0) {
-                hoje = 1; // se for domingo, pula pra segunda
-            }
-
-            const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-            if (btnHoje) {
-                btnHoje.click();
-            } else {
-                // fallback: sempre garante segunda
-                document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-            }
-        });
-
-        showToast("Login realizado com sucesso!", "success");
-
-    } catch(e) {
-        console.error(e);
-        showToast("Erro ao fazer login", "error");
-    }
-});
-
-
-
-        // ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
-
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
-
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
-            }
-        });
-
-        // ---------------- FILTROS ----------------
-        searchInput.addEventListener("input", renderAgendamentos);
-        statusFilter.addEventListener("change", renderAgendamentos);
-
-        // ---------------- TABS ----------------
-        function initTabsDias(){
-            const tabsDia=document.querySelectorAll(".tab-dia");
-            const tabsSemana=document.querySelectorAll(".tab-semana");
-            
-            tabsDia.forEach(btn=>{
-                btn.addEventListener("click",()=>{
-                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
-                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
-                    
-                    btn.classList.remove("bg-white/10", "hover:bg-white/20");
-                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-                    diaSelecionado=parseInt(btn.dataset.dia);
-                    renderAgendamentos();
-                });
-            });
-
-            tabsSemana.forEach(btn=>{
-                btn.addEventListener("click",()=>{
-                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
-                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
-                    
-                    btn.classList.remove("bg-white/5", "hover:bg-white/10");
-                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-                    
-                    const semanas = parseInt(btn.dataset.semana);
-                    const dataLimite = new Date();
-                    dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                    diaSelecionado = dataLimite.getDay();
-                    renderAgendamentos();
-                });
-            });
-        }
-
-        // ---------------- EXPORT ----------------
-        exportCSVBtn.addEventListener("click", ()=>{
-            const filtrados = agendamentosCache.filter(a=>statusFilter.value?a.status===statusFilter.value:true);
-            if(filtrados.length === 0) {
-                showToast("Nenhum agendamento para exportar", "warning");
-                return;
-            }
-            
-            let csv="Nome,Email,Telefone,Data,Horario,Status\n";
-            filtrados.forEach(a=>{csv+=`${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`;});
-            const blob=new Blob([csv],{type:"text/csv"});
-            const link=document.createElement("a");
-            link.href=URL.createObjectURL(blob);
-            link.download=`agendamentos_${cliente}.csv`;
-            link.click();
-            showToast("Exportado para CSV com sucesso", "success");
-        });
-
-        exportPDFBtn.addEventListener("click", ()=>{
-            const { jsPDF }=window.jspdf;
-            const doc=new jsPDF();
-            
-            const filtrados = agendamentosCache.filter(a=>statusFilter.value?a.status===statusFilter.value:true);
-            if(filtrados.length === 0) {
-                showToast("Nenhum agendamento para exportar", "warning");
-                return;
-            }
-            
-            // Adiciona cabeçalho
-            doc.setFontSize(18);
-            doc.setTextColor(40);
-            doc.text("Agendamentos", 105, 20, null, null, "center");
-            
-            doc.setFontSize(12);
-            doc.setTextColor(100);
-            doc.text(`Cliente: ${cliente}`, 105, 30, null, null, "center");
-            
-            // Adiciona data
-            const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
-            const today = new Date().toLocaleDateString('pt-BR', options);
-            doc.text(`Gerado em: ${today}`, 105, 35, null, null, "center");
-            
-            // Adiciona linha
-            doc.setDrawColor(200);
-            doc.line(20, 40, 190, 40);
-            
-            // Configurações da tabela
-            doc.setFontSize(10);
-            doc.setTextColor(40);
-            let y = 50;
-            
-            // Cabeçalho da tabela
-            doc.setFillColor(230);
-            doc.rect(20, y, 170, 10, 'F');
-            doc.text("Data", 25, y + 7);
-            doc.text("Horário", 50, y + 7);
-            doc.text("Nome", 80, y + 7);
-            doc.text("Status", 160, y + 7);
-            y += 10;
-            
-            // Conteúdo da tabela
-            filtrados.forEach(a => {
-                if(y > 270) { // Nova página se necessário
-                    doc.addPage();
-                    y = 20;
-                }
-                
-                doc.text(formatData(a.data), 25, y + 7);
-                doc.text(a.horario, 50, y + 7);
-                doc.text(a.nome, 80, y + 7);
-                
-                // Status com cor
-                if(a.status === 'confirmado') {
-                    doc.setTextColor(0, 150, 0);
-                } else if(a.status === 'pendente') {
-                    doc.setTextColor(200, 150, 0);
-                } else {
-                    doc.setTextColor(40);
-                }
-                doc.text(a.status, 160, y + 7);
-                doc.setTextColor(40);
-                
-                y += 10;
-            });
-            
-            doc.save(`agendamentos_${cliente}.pdf`);
-            showToast("Exportado para PDF com sucesso", "success");
-        });
-
-        // ---------------- INIT ----------------
-        AOS.init({
-            duration: 800,
-            easing: 'ease-out-quart',
-            once: true
-        });
-        feather.replace();
-    </script>
+    AOS.init();
+    feather.replace();
+  </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
