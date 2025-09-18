@@ -877,10 +877,11 @@ function criarBotaoVIP() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    amount: "0.01",
-                    description: "Assinatura VIP",
-                    email
-                })
+                amount: 0.01, // corrigido
+                description: "Assinatura VIP",
+                email
+            })
+
             });
 
             if (!res.ok) {
@@ -946,6 +947,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
