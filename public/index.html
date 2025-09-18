@@ -821,81 +821,16 @@ loginBtn.addEventListener('click', async () => {
 
 const MAX_FREE = 3; // limite de agendamentos free
 
-// ---------------- Função para criar botão VIP ----------------
-function criarBotaoVIP(email) {
-    const agendamentoForm = document.getElementById('agendamentoForm');
-
-    // Remove botão antigo, se existir
-    const antigoBtn = document.getElementById('upgradeVIP');
-    if (antigoBtn) antigoBtn.remove();
-
-    // Cria botão VIP
-    const vipBtn = document.createElement('button');
-    vipBtn.id = 'upgradeVIP';
-    vipBtn.innerText = 'Upgrade VIP';
-    vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
-
-    vipBtn.addEventListener('click', async () => {
-        if (!email) {
-            showToast("Email não encontrado para VIP", "warning");
-            return;
-        }
-
-        try {
-            const res = await fetch(`${API_URL}/create-pix`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount: 29.90, description: "Assinatura VIP", email })
-            });
-
-            const data = await res.json();
-            if (!data.qr_code_base64) {
-                showToast("Erro ao gerar pagamento Pix", "error");
-                return;
-            }
-
-            // Exibe o QR Code PIX
-            const pixDiv = document.getElementById("pixArea") || document.createElement("div");
-            pixDiv.id = "pixArea";
-            pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-            pixDiv.innerHTML = `
-                <h3 class="mb-2">Escaneie o QR Code para pagar:</h3>
-                <img src="data:image/png;base64,${data.qr_code_base64}" class="mx-auto mb-2"/>
-                <p><strong>Código copia e cola:</strong></p>
-                <textarea readonly style="width:100%;height:80px">${data.qr_code}</textarea>
-            `;
-            agendamentoForm.appendChild(pixDiv);
-
-            showToast("QR Code gerado! Pague para ativar seu VIP", "success");
-
-            // Verifica se o usuário já pagou
-            const interval = setInterval(async () => {
-                const vipRes = await fetch(`${API_URL}/check-vip/${email}`);
-                const vipData = await vipRes.json();
-
-                if (vipData.vip) {
-                    clearInterval(interval);
-                    showToast("Parabéns! Agora você é VIP 🎉", "success");
-                    pixDiv.remove();
-                    await checkFreeLimit(email); // Atualiza o botão de agendamento
-                }
-            }, 8000); // checa a cada 8s
-
-        } catch (err) {
-            console.error(err);
-            showToast("Erro ao iniciar pagamento", "error");
-        }
-    });
-
-    agendamentoForm.appendChild(vipBtn);
-}
-
-// ---------------- Função para checar limite e VIP ----------------
-async function checkFreeLimit(email) {
+// ---------------- Função unificada de limite e VIP ----------------
+async function atualizarAgendamento() {
     const agendamentoForm = document.getElementById('agendamentoForm');
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+    const emailInput = document.getElementById('email');
 
-    // Verifica se é VIP
+    if (!emailInput?.value) return; // Não tem email
+    const email = emailInput.value.trim().toLowerCase();
+
+    // Checa se o usuário é VIP
     let isVip = false;
     try {
         const res = await fetch(`${API_URL}/check-vip/${email}`);
@@ -909,7 +844,7 @@ async function checkFreeLimit(email) {
     const agendamentosUser = agendamentosCache.length;
 
     if (isVip || agendamentosUser < MAX_FREE) {
-        // Habilita botão de agendamento
+        // Libera agendamento
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
@@ -917,30 +852,81 @@ async function checkFreeLimit(email) {
         const vipBtn = document.getElementById('upgradeVIP');
         if (vipBtn) vipBtn.remove();
     } else {
-        // Desabilita botão de agendamento
+        // Bloqueia agendamento
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        // Adiciona botão VIP, se ainda não existir
+        // Cria botão VIP, se ainda não existir
         if (!document.getElementById('upgradeVIP')) {
-            criarBotaoVIP(email);
+            const vipBtn = document.createElement('button');
+            vipBtn.id = 'upgradeVIP';
+            vipBtn.innerText = 'Upgrade VIP';
+            vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
+
+            vipBtn.addEventListener('click', async () => {
+                try {
+                    const res = await fetch(`${API_URL}/create-pix`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: 29.90, description: "Assinatura VIP", email })
+                    });
+
+                    const data = await res.json();
+                    if (!data.qr_code_base64) {
+                        showToast("Erro ao gerar pagamento Pix", "error");
+                        return;
+                    }
+
+                    // Exibe QR Code
+                    const pixDiv = document.getElementById("pixArea") || document.createElement("div");
+                    pixDiv.id = "pixArea";
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+                    pixDiv.innerHTML = `
+                        <h3 class="mb-2">Escaneie o QR Code para pagar:</h3>
+                        <img src="data:image/png;base64,${data.qr_code_base64}" class="mx-auto mb-2"/>
+                        <p><strong>Código copia e cola:</strong></p>
+                        <textarea readonly style="width:100%;height:80px">${data.qr_code}</textarea>
+                    `;
+                    agendamentoForm.appendChild(pixDiv);
+                    showToast("QR Code gerado! Pague para ativar seu VIP", "success");
+
+                    // Checa status de pagamento a cada 8s
+                    const interval = setInterval(async () => {
+                        const vipRes = await fetch(`${API_URL}/check-vip/${email}`);
+                        const vipData = await vipRes.json();
+                        if (vipData.vip) {
+                            clearInterval(interval);
+                            showToast("Parabéns! Agora você é VIP 🎉", "success");
+                            pixDiv.remove();
+                            atualizarAgendamento(); // Atualiza botão de agendamento
+                        }
+                    }, 8000);
+
+                } catch (err) {
+                    console.error(err);
+                    showToast("Erro ao iniciar pagamento", "error");
+                }
+            });
+
+            agendamentoForm.appendChild(vipBtn);
         }
     }
 }
 
 // ---------------- Ao carregar a página ----------------
 document.addEventListener("DOMContentLoaded", async () => {
-    // Pega o email do usuário logado
-    const loggedEmail = window.loggedUserEmail || null; // Ajuste aqui de acordo com seu login
-    if (!loggedEmail) return;
-
-    // Preenche o input de email (se houver)
     const emailInput = document.getElementById("email");
-    if (emailInput) emailInput.value = loggedEmail;
 
-    // Checa VIP e limite ao carregar
-    await checkFreeLimit(loggedEmail);
+    // Pega email do usuário logado automaticamente
+    if (window.loggedUserEmail) emailInput.value = window.loggedUserEmail;
+
+    // Atualiza botão/agendamento ao carregar
+    await atualizarAgendamento();
+
+    // Atualiza sempre que o email mudar
+    emailInput?.addEventListener("change", atualizarAgendamento);
 });
+
 
 
         // ---------------- INIT ----------------
@@ -953,6 +939,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     </script>
 </body>
 </html>
+
 
 
 
