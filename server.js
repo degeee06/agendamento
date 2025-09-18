@@ -98,7 +98,6 @@ app.get("/:cliente", async (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-// ---------------- Cria PIX ----------------
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email } = req.body;
   if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
@@ -113,6 +112,10 @@ app.post("/create-pix", async (req, res) => {
       },
     });
 
+    if (!result || !result.point_of_interaction?.transaction_data?.qr_code_base64) {
+      return res.status(500).json({ error: "Erro ao gerar QR code PIX" });
+    }
+
     await supabase.from("pagamentos").upsert(
       [{ id: result.id, email, amount: Number(amount), status: "pending", valid_until: null }],
       { onConflict: ["id"] }
@@ -125,10 +128,11 @@ app.post("/create-pix", async (req, res) => {
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ---------------- Webhook Mercado Pago ----------------
 app.post("/webhook", async (req, res) => {
@@ -384,6 +388,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
