@@ -110,7 +110,12 @@
                 Gerencie seus compromissos com uma interface intuitiva e elegante
             </p>
         </header>
-
+ <button id="upgradeVIP">Upgrade VIP</button>
+    <div id="vipModal" style="display:none;">
+        <img id="pixQRCode" src="" alt="QR Code">
+        <p id="vipStatus"></p>
+        <button id="closeVipModal">Fechar</button>
+    </div>
         <!-- Login Section -->
         <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
             <div class="flex items-center justify-center mb-6">
@@ -315,6 +320,65 @@
         const cliente = pathParts[1] || '';
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+
+const upgradeBtn = document.getElementById('upgradeVIP');
+const vipModal = document.getElementById('vipModal');
+const closeVipModal = document.getElementById('closeVipModal');
+const pixQRCode = document.getElementById('pixQRCode');
+const vipStatus = document.getElementById('vipStatus');
+
+let paymentId = null;
+let vipCheckInterval = null;
+
+upgradeBtn?.addEventListener('click', async () => {
+    const emailInput = document.querySelector('input[name="Email"]');
+    const email = emailInput?.value;
+    if(!email) {
+        alert("Preencha seu email antes de fazer upgrade.");
+        return;
+    }
+
+    vipModal.style.display = 'flex';
+    vipStatus.textContent = "Gerando QR code...";
+    
+    try {
+        const res = await fetch('/create-pix', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ amount: 10.0, description: "VIP 30 dias", email })
+        });
+
+        if(!res.ok) throw new Error("Erro ao criar pagamento");
+        const data = await res.json();
+
+        paymentId = data.id;
+        pixQRCode.src = data.qr_code_base64 || data.qr_code;
+        vipStatus.textContent = "Aguardando pagamento...";
+
+        // Inicia polling para checar status
+        if(vipCheckInterval) clearInterval(vipCheckInterval);
+        vipCheckInterval = setInterval(async () => {
+            const check = await fetch(`/check-vip/${email}`);
+            if(!check.ok) return;
+            const vipData = await check.json();
+            if(vipData.vip) {
+                vipStatus.textContent = "Pagamento aprovado! VIP ativado.";
+                clearInterval(vipCheckInterval);
+                upgradeBtn.remove(); // remove botão VIP
+            }
+        }, 5000); // checa a cada 5s
+
+    } catch(err) {
+        console.error(err);
+        vipStatus.textContent = "Erro ao gerar pagamento.";
+    }
+});
+
+closeVipModal.addEventListener('click', () => {
+    vipModal.style.display = 'none';
+    if(vipCheckInterval) clearInterval(vipCheckInterval);
+});
+
 
         // ---------------- TOASTS ----------------
         let activeToasts = [];
