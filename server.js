@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import crypto from "crypto";
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
@@ -72,6 +73,37 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
 }
 
 
+
+app.get('/pagamento/:pagamentoId', authMiddleware, async (req, res) => {
+    const { pagamentoId } = req.params;
+
+    const { data, error } = await supabase
+        .from('pagamentos')
+        .select('*')
+        .eq('id', pagamentoId)
+        .single();
+
+    if(error || !data) return res.status(404).json({ message: "Pagamento não encontrado" });
+
+    res.json(data);
+});
+
+
+app.post('/pagamento/:pagamentoId/confirmar', authMiddleware, async (req, res) => {
+    const { pagamentoId } = req.params;
+
+    const { error } = await supabase
+        .from('pagamentos')
+        .update({ status: 'paid' })
+        .eq('id', pagamentoId);
+
+    if(error) return res.status(500).json({ message: error.message });
+
+    res.json({ message: "Pagamento confirmado" });
+});
+
+
+
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
@@ -92,6 +124,44 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
+app.post('/criar-pagamento-vip', authMiddleware, async (req, res) => {
+    try {
+        const { cliente, email } = req.body;
+        if(!cliente || !email) return res.status(400).json({ message: "Cliente ou email ausente" });
+
+        const pagamentoId = crypto.randomUUID();
+        const amount = 49.90; // valor do VIP
+        const validUntil = new Date();
+        validUntil.setMonth(validUntil.getMonth() + 1); // 1 mês de validade
+
+        // Aqui você poderia gerar um QRCode PIX real com alguma API (ex: Gerencianet, PIX API Banco do Brasil)
+        // Para simulação, vamos criar apenas um código estático:
+        const pixCode = `00020126360014BR.GOV.BCB.PIX0114+55YOURPIXKEY520400005303986540${(amount*100).toFixed(0)}5802BR5925Seu Nome ou Empresa6009SUA CIDADE62070503***6304XXXX`;
+
+        // Salva no Supabase
+        const { error } = await supabase
+            .from('pagamentos')
+            .insert([{
+                id: pagamentoId,
+                email,
+                amount,
+                status: 'pending',
+                valid_until: validUntil
+            }]);
+
+        if(error) return res.status(500).json({ message: error.message });
+
+        res.json({
+            urlPagamento: `/checkout/${pagamentoId}`,
+            pixCode
+        });
+    } catch(err) {
+        console.error(err);
+        res.status(500).json({ message: "Erro interno" });
+    }
+});
+
 
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
@@ -324,5 +394,6 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
