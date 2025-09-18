@@ -22,7 +22,7 @@ const supabase = createClient(
 );
 
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
-const mpPayment = new Payment(mpClient);
+const payment = new Payment(mpClient); // Usaremos "payment" em todo o código
 
 let creds;
 try {
@@ -70,28 +70,6 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
     await sheet.addRow(updatedData);
   }
 }
-
-
-app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado")
-      .order("data", { ascending: true })
-      .order("horario", { ascending: true });
-
-    if (error) throw error;
-    res.json({ agendamentos: data });
-  } catch (err) {
-    console.error("Erro ao listar agendamentos:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
 
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
@@ -145,13 +123,34 @@ app.get("/:cliente", async (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
+app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .neq("status", "cancelado")
+      .order("data", { ascending: true })
+      .order("horario", { ascending: true });
+
+    if (error) throw error;
+    res.json({ agendamentos: data });
+  } catch (err) {
+    console.error("Erro ao listar agendamentos:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
 // ---------------- PIX / Mercado Pago ----------------
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email } = req.body;
   if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
 
   try {
-    const result = await mpPayment.create({
+    const result = await payment.create({
       body: {
         transaction_amount: Number(amount),
         description: description || "Pagamento VIP",
@@ -172,18 +171,45 @@ app.post("/create-pix", async (req, res) => {
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
     });
   } catch (err) {
-    console.error("Erro ao criar PIX:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ---------------- Webhook ----------------
+// Checa VIP pelo email
+app.get("/check-vip/:email", async (req, res) => {
+  const email = req.params.email;
+  if (!email) return res.status(400).json({ error: "Faltando email" });
+
+  const now = new Date();
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .select("valid_until")
+    .eq("email", email)
+    .eq("status", "approved")
+    .gt("valid_until", now.toISOString())
+    .order("valid_until", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json({
+    vip: !!data,
+    valid_until: data?.valid_until || null
+  });
+});
+
+// Webhook Mercado Pago
 app.post("/webhook", async (req, res) => {
   try {
     const paymentId = req.body?.data?.id || req.query["data.id"];
     if (!paymentId) return res.sendStatus(400);
 
-    const paymentDetails = await mpPayment.get({ id: paymentId });
+    const paymentDetails = await payment.get({ id: paymentId });
+
     const status = paymentDetails.status;
     let valid_until = null;
 
@@ -193,10 +219,13 @@ app.post("/webhook", async (req, res) => {
       valid_until = vipExpires.toISOString();
     }
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("pagamentos")
       .update({ status, valid_until })
       .eq("id", paymentId);
+
+    if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
+    else console.log(`Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
 
     res.sendStatus(200);
   } catch (err) {
@@ -218,10 +247,8 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
-    // 🔹 Checa VIP
     const isVip = await checkVip(emailNormalizado);
 
-    // 🔹 Limite Free (3 agendamentos/dia)
     if (!isVip) {
       const startDay = new Date(Data); startDay.setHours(0,0,0,0);
       const endDay = new Date(Data); endDay.setHours(23,59,59,999);
@@ -241,11 +268,9 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         });
     }
 
-    // 🔹 Checa horário disponível
     const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
 
-    // 🔹 Remove agendamento cancelado
     await supabase
       .from("agendamentos")
       .delete()
@@ -254,7 +279,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    // 🔹 Insere agendamento
     const { data: novoAgendamento } = await supabase
       .from("agendamentos")
       .insert([{
@@ -270,7 +294,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .select()
       .single();
 
-    // 🔹 Google Sheets
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
@@ -324,4 +347,3 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
