@@ -1005,33 +1005,35 @@ function habilitarAcoesVIP() {
             }
         });
     });
-}
 
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // ---------------- LOGIN E AGENDAMENTO ----------------
     const loginSection = document.getElementById('loginSection');
-if (loginSection) {
-    loginSection.style.display = 'block';   // caso não use Tailwind
-    loginSection.classList.remove('hidden'); // caso use Tailwind ou outra classe que esconda
-}
-
+    if (loginSection) {
+        // garante que aparece
+        loginSection.style.display = '';
+        loginSection.classList.remove('hidden');
+    }
 
     // Atualiza estado do agendamento apenas se o usuário já colocou email
     atualizarEstadoAgendamento();
 
     // ---------------- ANIMAÇÕES E ICONES ----------------
-    AOS.init({
-        duration: 800,
-        easing: 'ease-out-quart',
-        once: true
-    });
-    feather.replace();
+    if (typeof AOS !== "undefined") {
+        AOS.init({
+            duration: 800,
+            easing: 'ease-out-quart',
+            once: true
+        });
+    }
+
+    if (typeof feather !== "undefined") {
+        feather.replace();
+    }
 });
 </script>
-
-
 
 
 
