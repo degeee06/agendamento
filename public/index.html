@@ -606,6 +606,7 @@
 }
 
 
+
         // ---------------- LOGIN ----------------
 loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value;
@@ -821,33 +822,44 @@ loginBtn.addEventListener('click', async () => {
 
 const MAX_FREE = 3; // limite de agendamentos free
 
-function checkFreeLimit() {
-    const agendamentosUser = agendamentosCache.length;
-    const agendamentoForm = document.getElementById('agendamentoForm');
+async function checkFreeLimit() {
+    const emailInput = document.getElementById('email');
+    const email = emailInput?.value?.trim();
+    let isVIP = false;
 
+    if (email) {
+        try {
+            const res = await fetch(`/check-vip/${encodeURIComponent(email)}`);
+            if (res.ok) {
+                const data = await res.json();
+                isVIP = data.vip === true;
+            }
+        } catch (e) {
+            console.error("Erro ao verificar VIP:", e);
+        }
+    }
+
+    const agendamentoForm = document.getElementById('agendamentoForm');
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
 
-    if (agendamentosUser >= MAX_FREE) {
-        // Desabilita botão de agendamento
+    if (!isVIP && agendamentosCache.length >= MAX_FREE) {
+        // bloqueia
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-        // Cria botão de Upgrade VIP
-        criarBotaoVIP(); // <-- chama a função que gera o botão e o Pix
+        criarBotaoVIP();
     } else {
-        // Reabilita botão de agendamento
+        // libera
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
-        // Remove botão VIP, se existir
+        // remove botão/qrCode se existir
         const vipBtn = document.getElementById('upgradeVIP');
         if (vipBtn) vipBtn.remove();
-
-        // Remove área do Pix, se existir
         const pixDiv = document.getElementById('pixArea');
         if (pixDiv) pixDiv.remove();
     }
 }
+
 
 
 function criarBotaoVIP() {
@@ -920,12 +932,19 @@ function criarBotaoVIP() {
 
                 const vipData = await vipRes.json();
                 if (vipData.vip) {
-                    clearInterval(interval);
-                    showToast("Parabéns! Agora você é VIP 🎉", "success");
-                    pixDiv.remove();
-                    // Atualiza interface ou agendamentos, se necessário
-                    if (typeof listarAgendamentos === 'function') listarAgendamentos();
-                }
+    clearInterval(interval);
+    showToast("Parabéns! Agora você é VIP 🎉", "success");
+    pixDiv.remove();
+
+    // força checagem no backend e reabilita agendamento
+    if (typeof checkFreeLimit === 'function') {
+        checkFreeLimit();
+    }
+
+    if (typeof listarAgendamentos === 'function') {
+        listarAgendamentos();
+    }
+}
             }, 8000); // checa a cada 8 segundos
 
         } catch (err) {
@@ -947,6 +966,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
