@@ -822,13 +822,15 @@ loginBtn.addEventListener('click', async () => {
 const MAX_FREE = 3; // limite de agendamentos free
 
 // ---------------- Função unificada de limite e VIP ----------------
-async function atualizarAgendamento() {
+async function atualizarAgendamento(email) {
     const agendamentoForm = document.getElementById('agendamentoForm');
-    const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
-    const emailInput = document.getElementById('email');
+    if (!agendamentoForm) return;
 
-    if (!emailInput?.value) return; // Não tem email
-    const email = emailInput.value.trim().toLowerCase();
+    const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+    if (!submitBtn) return;
+
+    if (!email) return; // Não tem email ainda
+    email = email.trim().toLowerCase();
 
     // Checa se o usuário é VIP
     let isVip = false;
@@ -844,7 +846,7 @@ async function atualizarAgendamento() {
     const agendamentosUser = agendamentosCache.length;
 
     if (isVip || agendamentosUser < MAX_FREE) {
-        // Libera agendamento
+        // Libera botão de agendamento
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
@@ -852,11 +854,11 @@ async function atualizarAgendamento() {
         const vipBtn = document.getElementById('upgradeVIP');
         if (vipBtn) vipBtn.remove();
     } else {
-        // Bloqueia agendamento
+        // Bloqueia botão de agendamento
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        // Cria botão VIP, se ainda não existir
+        // Cria botão VIP se ainda não existir
         if (!document.getElementById('upgradeVIP')) {
             const vipBtn = document.createElement('button');
             vipBtn.id = 'upgradeVIP';
@@ -868,7 +870,7 @@ async function atualizarAgendamento() {
                     const res = await fetch(`${API_URL}/create-pix`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ amount: 00.01, description: "Assinatura VIP", email })
+                        body: JSON.stringify({ amount: 0.01, description: "Assinatura VIP", email })
                     });
 
                     const data = await res.json();
@@ -890,7 +892,7 @@ async function atualizarAgendamento() {
                     agendamentoForm.appendChild(pixDiv);
                     showToast("QR Code gerado! Pague para ativar seu VIP", "success");
 
-                    // Checa status de pagamento a cada 8s
+                    // Verifica status do pagamento a cada 8s
                     const interval = setInterval(async () => {
                         const vipRes = await fetch(`${API_URL}/check-vip/${email}`);
                         const vipData = await vipRes.json();
@@ -898,7 +900,7 @@ async function atualizarAgendamento() {
                             clearInterval(interval);
                             showToast("Parabéns! Agora você é VIP 🎉", "success");
                             pixDiv.remove();
-                            atualizarAgendamento(); // Atualiza botão de agendamento
+                            atualizarAgendamento(email); // Atualiza botão/agendamento
                         }
                     }, 8000);
 
@@ -917,16 +919,19 @@ async function atualizarAgendamento() {
 document.addEventListener("DOMContentLoaded", async () => {
     const emailInput = document.getElementById("email");
 
-    // Pega email do usuário logado automaticamente
-    if (window.loggedUserEmail) emailInput.value = window.loggedUserEmail;
+    if (!emailInput) return;
 
-    // Atualiza botão/agendamento ao carregar
-    await atualizarAgendamento();
+    // Atualiza botão/agendamento apenas após o login
+    emailInput.addEventListener("change", async () => {
+        if (emailInput.value) await atualizarAgendamento(emailInput.value);
+    });
 
-    // Atualiza sempre que o email mudar
-    emailInput?.addEventListener("change", atualizarAgendamento);
+    // Se já houver usuário logado (ex.: via token), libera automaticamente
+    if (window.loggedUserEmail) {
+        emailInput.value = window.loggedUserEmail;
+        await atualizarAgendamento(window.loggedUserEmail);
+    }
 });
-
 
 
         // ---------------- INIT ----------------
@@ -939,6 +944,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     </script>
 </body>
 </html>
+
 
 
 
