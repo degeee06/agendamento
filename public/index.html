@@ -825,34 +825,28 @@ function checkFreeLimit() {
     const agendamentosUser = agendamentosCache.length;
     const agendamentoForm = document.getElementById('agendamentoForm');
 
-    if(agendamentosUser >= MAX_FREE) {
-        // Desabilita botão de agendamento
-        const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+    const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+
+    if (agendamentosUser >= MAX_FREE) {
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50','cursor-not-allowed');
 
-        // Adiciona botão de Upgrade VIP, se ainda não existir
-        if(!document.getElementById('upgradeVIP')) {
+        if(!document.getElementById('upgradeVipBtn')) {
             const vipBtn = document.createElement('button');
-            vipBtn.id = 'upgradeVIP';
+            vipBtn.id = 'upgradeVipBtn'; // mesmo ID do listener
             vipBtn.innerText = 'Upgrade VIP';
             vipBtn.className = 'w-full mt-4 bg-yellow-500 text-white py-3 rounded-lg font-medium hover:opacity-90 transition-all';
-            vipBtn.addEventListener('click', () => {
-                window.location.href = '/upgrade'; // link para página de pagamento
-            });
             agendamentoForm.appendChild(vipBtn);
         }
     } else {
-        // Reabilita botão de agendamento
-        const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50','cursor-not-allowed');
 
-        // Remove botão VIP, se existir
-        const vipBtn = document.getElementById('upgradeVIP');
+        const vipBtn = document.getElementById('upgradeVipBtn');
         if(vipBtn) vipBtn.remove();
     }
 }
+
 
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -925,6 +919,7 @@ document.addEventListener("DOMContentLoaded", () => {
     </script>
 </body>
 </html>
+
 
 
 
