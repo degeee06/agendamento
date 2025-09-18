@@ -872,11 +872,26 @@ async function atualizarEstadoAgendamento() {
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
 
     try {
-        // Puxa dados do backend: quantos agendamentos e se é VIP
+        // Puxa dados do backend
         const res = await fetch(`/check-user/${encodeURIComponent(email)}`);
-        if (!res.ok) throw new Error("Erro ao checar usuário");
 
-        const data = await res.json();
+        if (!res.ok) {
+            // se backend respondeu com erro, mostra e sai
+            const text = await res.text();
+            console.error("Resposta inesperada do backend:", text);
+            throw new Error("Erro ao checar usuário");
+        }
+
+        // tenta parsear como JSON
+        let data;
+        try {
+            data = await res.json();
+        } catch (parseErr) {
+            const text = await res.text();
+            console.error("Resposta não é JSON, veio:", text);
+            throw new Error("Backend não retornou JSON válido.");
+        }
+
         const agendamentosUser = data.agendamentosCount || 0;
         const isVIP = data.vip || false;
 
@@ -906,6 +921,7 @@ async function atualizarEstadoAgendamento() {
         console.error("Erro ao atualizar estado do agendamento:", err);
     }
 }
+
 
 // ---------------- BOTÃO VIP ----------------
 function criarBotaoVIP(email) {
@@ -1034,6 +1050,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+
 
 
 
