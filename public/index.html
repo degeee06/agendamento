@@ -764,6 +764,94 @@ async function checkFreeLimit() {
     }
 }
 
+async function confirmarAgendamento(id) {
+    const user = auth.currentUser;
+    if (!user) {
+        alert("Faça login para confirmar um agendamento.");
+        return;
+    }
+
+    const vipCheck = await fetch(`/check-vip/${user.uid}`).then(r => r.json());
+    if (!vipCheck.isVIP) {
+        alert("Função disponível apenas para usuários VIP.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/confirmar/${id}`, { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+            alert("Agendamento confirmado com sucesso!");
+            carregarAgendamentos(); // recarrega lista
+        } else {
+            alert("Erro ao confirmar agendamento: " + data.message);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão ao confirmar.");
+    }
+}
+
+async function cancelarAgendamento(id) {
+    const user = auth.currentUser;
+    if (!user) {
+        alert("Faça login para cancelar um agendamento.");
+        return;
+    }
+
+    const vipCheck = await fetch(`/check-vip/${user.uid}`).then(r => r.json());
+    if (!vipCheck.isVIP) {
+        alert("Função disponível apenas para usuários VIP.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/cancelar/${id}`, { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+            alert("Agendamento cancelado com sucesso!");
+            carregarAgendamentos();
+        } else {
+            alert("Erro ao cancelar agendamento: " + data.message);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão ao cancelar.");
+    }
+}
+
+async function reagendarAgendamento(id, novaData) {
+    const user = auth.currentUser;
+    if (!user) {
+        alert("Faça login para reagendar.");
+        return;
+    }
+
+    const vipCheck = await fetch(`/check-vip/${user.uid}`).then(r => r.json());
+    if (!vipCheck.isVIP) {
+        alert("Função disponível apenas para usuários VIP.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/reagendar/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ novaData })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert("Agendamento reagendado com sucesso!");
+            carregarAgendamentos();
+        } else {
+            alert("Erro ao reagendar: " + data.message);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erro de conexão ao reagendar.");
+    }
+}
+
 function criarBotaoVIP() {
     const agendamentoForm = document.getElementById('agendamentoForm');
 
@@ -875,6 +963,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
