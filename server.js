@@ -25,7 +25,6 @@ const supabase = createClient(
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 const payment = new Payment(mpClient);
 
-
 let creds;
 try {
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -73,7 +72,6 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-
 // ---------------- Helpers ----------------
 async function checkVip(email) {
   const now = new Date();
@@ -89,7 +87,6 @@ async function checkVip(email) {
   return !!data;
 }
 
-
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
@@ -102,21 +99,6 @@ async function authMiddleware(req, res, next) {
   req.clienteId = data.user.user_metadata.cliente_id;
   if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
   next();
-}
-
-
-async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  let query = supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", cliente)
-    .eq("data", data)
-    .eq("horario", horario)
-    .neq("status", "cancelado");
-
-  if (ignoreId) query = query.neq("id", ignoreId);
-  const { data: agendamentos } = await query;
-  return agendamentos.length === 0;
 }
 
 // ---------------- Rotas ----------------
@@ -307,7 +289,16 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Verifica se é um erro de conflito (mesmo cliente no mesmo horário)
+      if (error.code === "23505") {
+        return res.status(409).json({ 
+          msg: "Este cliente já possui um agendamento neste horário!",
+          code: "conflito_mesmo_cliente"
+        });
+      }
+      throw error;
+    }
 
     // Atualiza Google Sheet
     const doc = await accessSpreadsheet(cliente);
@@ -322,7 +313,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 
 // ---------------- Confirmar / Cancelar / Reagendar ----------------
 app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
@@ -347,27 +337,41 @@ app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=
   res.json({msg:"Agendamento cancelado", agendamento:data});
 });
 
+// ---------------- Reagendar (SEM verificação de conflito) ----------------
 app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)=>{
   const { cliente, id } = req.params;
   const { novaData, novoHorario } = req.body;
   if (!novaData || !novoHorario) return res.status(400).json({msg:"Data e horário obrigatórios"});
   if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-  const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
-  if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
-  const { data } = await supabase.from("agendamentos")
-    .update({data:novaData, horario:novoHorario})
-    .eq("id",id).eq("cliente",cliente).select().single();
-  const doc = await accessSpreadsheet(cliente);
-  await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-  res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
+  
+  // REMOVIDA a verificação de conflito para permitir reagendamentos no mesmo horário
+  // const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
+  // if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
+  
+  try {
+    const { data, error } = await supabase.from("agendamentos")
+      .update({data:novaData, horario:novoHorario})
+      .eq("id",id).eq("cliente",cliente).select().single();
+    
+    if (error) {
+      // Verifica se é um erro de conflito (mesmo cliente no mesmo horário)
+      if (error.code === "23505") {
+        return res.status(409).json({ 
+          msg: "Este cliente já possui um agendamento neste horário!",
+          code: "conflito_mesmo_cliente"
+        });
+      }
+      throw error;
+    }
+    
+    const doc = await accessSpreadsheet(cliente);
+    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
+  } catch (err) {
+    console.error("Erro ao reagendar:", err);
+    res.status(500).json({msg:"Erro interno ao reagendar"});
+  }
 });
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
-
-
