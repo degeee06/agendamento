@@ -1022,9 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Força exibir o painel de login
     const loginSection = document.getElementById('loginSection');
     if (loginSection) {
-        loginSection.style.removeProperty("display");
-        loginSection.style.display = "block";
-        loginSection.classList.remove('hidden', 'opacity-0', 'invisible');
+        loginSection.style.display = "block"; // Garante que a seção de login esteja visível
     }
 
     atualizarEstadoAgendamento();
@@ -1043,3 +1041,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>   
+
