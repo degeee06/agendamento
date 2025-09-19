@@ -730,7 +730,7 @@
         });
 
        // ---------------- AGENDAR ----------------
-form.addEventListener('submit', async (e)=>{
+form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
     const dataToSend = {};
@@ -743,8 +743,14 @@ form.addEventListener('submit', async (e)=>{
     }
 
     // Validar se a data/horário não é no passado
-    const dataHoraAgendamento = new Date(`${dataToSend.Data}T${dataToSend.Horario}`);
-    if (dataHoraAgendamento < new Date()) {
+    // CORREÇÃO: Combinar data e horário corretamente
+    const dataSelecionada = new Date(dataToSend.Data);
+    const [horas, minutos] = dataToSend.Horario.split(':');
+    dataSelecionada.setHours(parseInt(horas), parseInt(minutos), 0, 0);
+    
+    const agora = new Date();
+    
+    if (dataSelecionada < agora) {
         showToast("Não é possível agendar para datas/horários passados!", "warning");
         return;
     }
@@ -788,7 +794,6 @@ form.addEventListener('submit', async (e)=>{
         form.querySelector('button[type="submit"]').disabled = false;
     }
 });
-
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
         statusFilter.addEventListener("change", renderAgendamentos);
@@ -1034,9 +1039,21 @@ form.addEventListener('submit', async (e)=>{
             }
         }
 
-        async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
+      async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
     if (!userToken) {
         showToast("Faça login para reagendar um agendamento.", "warning");
+        return;
+    }
+
+    // Validar se a data/horário não é no passado (CORREÇÃO)
+    const dataSelecionada = new Date(novaData);
+    const [horas, minutos] = novoHorario.split(':');
+    dataSelecionada.setHours(parseInt(horas), parseInt(minutos), 0, 0);
+    
+    const agora = new Date();
+    
+    if (dataSelecionada < agora) {
+        showToast("Não é possível agendar para datas/horários passados!", "warning");
         return;
     }
 
@@ -1188,4 +1205,5 @@ form.addEventListener('submit', async (e)=>{
     </script>
 </body>
 </html>
+
 
