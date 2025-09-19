@@ -762,20 +762,18 @@ async function checkFreeLimit() {
     }
 }
 
+// ---------------- CONFIRMAR AGENDAMENTO ----------------
 async function confirmarAgendamento(cliente, id) {
-    const user = auth.currentUser;
-    if (!user) {
+    if (!userToken) {
         alert("Faça login para confirmar um agendamento.");
         return;
     }
-
-    const token = await user.getIdToken();
 
     try {
         const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
+                "Authorization": `Bearer ${userToken}`,
                 "Content-Type": "application/json"
             }
         });
@@ -783,9 +781,9 @@ async function confirmarAgendamento(cliente, id) {
         const data = await res.json();
         if (res.ok) {
             alert("Agendamento confirmado com sucesso!");
-            carregarAgendamentos();
+            listarAgendamentos();
         } else {
-            alert("Erro ao confirmar: " + data.msg);
+            alert("Erro ao confirmar: " + (data.msg || data.message));
         }
     } catch (e) {
         console.error(e);
@@ -793,20 +791,18 @@ async function confirmarAgendamento(cliente, id) {
     }
 }
 
+// ---------------- CANCELAR AGENDAMENTO ----------------
 async function cancelarAgendamento(cliente, id) {
-    const user = auth.currentUser;
-    if (!user) {
+    if (!userToken) {
         alert("Faça login para cancelar um agendamento.");
         return;
     }
-
-    const token = await user.getIdToken();
 
     try {
         const res = await fetch(`/agendamentos/${cliente}/cancelar/${id}`, {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
+                "Authorization": `Bearer ${userToken}`,
                 "Content-Type": "application/json"
             }
         });
@@ -814,9 +810,9 @@ async function cancelarAgendamento(cliente, id) {
         const data = await res.json();
         if (res.ok) {
             alert("Agendamento cancelado com sucesso!");
-            carregarAgendamentos();
+            listarAgendamentos();
         } else {
-            alert("Erro ao cancelar: " + data.msg);
+            alert("Erro ao cancelar: " + (data.msg || data.message));
         }
     } catch (e) {
         console.error(e);
@@ -824,20 +820,18 @@ async function cancelarAgendamento(cliente, id) {
     }
 }
 
+// ---------------- REAGENDAR AGENDAMENTO ----------------
 async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-    const user = auth.currentUser;
-    if (!user) {
+    if (!userToken) {
         alert("Faça login para reagendar um agendamento.");
         return;
     }
-
-    const token = await user.getIdToken();
 
     try {
         const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
+                "Authorization": `Bearer ${userToken}`,
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ novaData, novoHorario })
@@ -846,15 +840,17 @@ async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
         const data = await res.json();
         if (res.ok) {
             alert("Agendamento reagendado com sucesso!");
-            carregarAgendamentos();
+            listarAgendamentos();
         } else {
-            alert("Erro ao reagendar: " + data.msg);
+            alert("Erro ao reagendar: " + (data.msg || data.message));
         }
     } catch (e) {
         console.error(e);
         alert("Erro de conexão ao reagendar.");
     }
 }
+
+
 
 
 function criarBotaoVIP() {
