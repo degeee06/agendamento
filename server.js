@@ -352,6 +352,8 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   const { novaData, novoHorario } = req.body;
   if (!novaData || !novoHorario) return res.status(400).json({msg:"Data e horário obrigatórios"});
   if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
+  const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
+  if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
   const { data } = await supabase.from("agendamentos")
     .update({data:novaData, horario:novoHorario})
     .eq("id",id).eq("cliente",cliente).select().single();
@@ -362,7 +364,6 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
 
 
 
