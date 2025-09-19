@@ -353,8 +353,7 @@
             },3000);
         }
 
-       // ---------------- RENDER AGENDAMENTOS ----------------
-function renderAgendamentos(isVIP = false) {
+      function renderAgendamentos(isVIP = false) {
     const filtroNome = searchInput.value.toLowerCase();
     const filtroStatus = statusFilter.value;
 
@@ -365,13 +364,10 @@ function renderAgendamentos(isVIP = false) {
             const dataAgendamento = new Date(`${a.data}T${a.horario}`);
             const hoje = new Date();
 
-            // Se for um dia da semana (1-6)
             if (diaSelecionado >= 1 && diaSelecionado <= 6) {
                 return dataAgendamento.getDay() === diaSelecionado &&
                        dataAgendamento >= new Date(hoje.setHours(0,0,0,0));
-            } 
-            // Se for uma semana anterior (valores negativos)
-            else {
+            } else {
                 const semanas = -diaSelecionado;
                 const dataLimite = new Date();
                 dataLimite.setDate(dataLimite.getDate() + semanas * 7);
@@ -433,74 +429,77 @@ function renderAgendamentos(isVIP = false) {
         const btnContainer = document.createElement("div");
         btnContainer.className = "flex gap-2 mt-4";
 
-        // Confirmar (só se ainda não confirmado)
-if (a.status !== "confirmado") {
-    const btnConfirmar = document.createElement("button");
-    btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-    btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
-    btnContainer.appendChild(btnConfirmar);
+        // Confirmar
+        if (a.status !== "confirmado") {
+            const btnConfirmar = document.createElement("button");
+            btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+            btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+            btnConfirmar.addEventListener("click", async () => {
+                await confirmarAgendamento(a.cliente, a.id);
+                await listarAgendamentos(); // 🔄 atualiza status
+            });
+            btnContainer.appendChild(btnConfirmar);
+        }
+
+        // Cancelar
+        const btnCancelar = document.createElement("button");
+        btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+        btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+        btnCancelar.addEventListener("click", async () => {
+            await cancelarAgendamento(a.cliente, a.id);
+            await listarAgendamentos();
+        });
+        btnContainer.appendChild(btnCancelar);
+
+        // Reagendar com modal
+        const btnReagendar = document.createElement("button");
+        btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
+        btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+        btnReagendar.addEventListener("click", () => {
+            const modal = document.createElement("div");
+            modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
+            modal.innerHTML = `
+                <div class="bg-white p-6 rounded-lg w-80 flex flex-col gap-4">
+                    <h3 class="text-lg font-medium">Reagendar Agendamento</h3>
+                    <label>
+                        Nova Data:
+                        <input type="date" id="novaData" class="border p-1 rounded w-full"/>
+                    </label>
+                    <label>
+                        Novo Horário:
+                        <input type="time" id="novoHorario" class="border p-1 rounded w-full"/>
+                    </label>
+                    <div class="flex justify-end gap-2 mt-2">
+                        <button id="cancelarModal" class="px-3 py-1 rounded bg-gray-300">Cancelar</button>
+                        <button id="confirmarModal" class="px-3 py-1 rounded bg-blue-500 text-white">Confirmar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            modal.querySelector("#cancelarModal").addEventListener("click", () => modal.remove());
+
+            modal.querySelector("#confirmarModal").addEventListener("click", async () => {
+                const novaData = modal.querySelector("#novaData").value;
+                const novoHorario = modal.querySelector("#novoHorario").value;
+                if (novaData && novoHorario) {
+                    await reagendarAgendamento(a.cliente, a.id, novaData, novoHorario);
+                    modal.remove();
+                    await listarAgendamentos(); // 🔄 atualiza lista e status
+                } else {
+                    alert("Selecione data e horário");
+                }
+            });
+        });
+        btnContainer.appendChild(btnReagendar);
+
+        div.appendChild(btnContainer);
+        meusAgendamentos.appendChild(div);
+    });
+
+    feather.replace();
 }
 
-// Cancelar
-const btnCancelar = document.createElement("button");
-btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-btnCancelar.addEventListener("click", () => cancelarAgendamento(a.cliente, a.id));
-btnContainer.appendChild(btnCancelar);
-
-// Reagendar
-const btnReagendar = document.createElement("button");
-btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-
-btnReagendar.addEventListener("click", () => {
-    // Cria modal simples
-    const modal = document.createElement("div");
-    modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
-
-    modal.innerHTML = `
-        <div class="bg-white p-6 rounded-lg w-80 flex flex-col gap-4">
-            <h3 class="text-lg font-medium">Reagendar Agendamento</h3>
-            <label>
-                Nova Data:
-                <input type="date" id="novaData" class="border p-1 rounded w-full"/>
-            </label>
-            <label>
-                Novo Horário:
-                <input type="time" id="novoHorario" class="border p-1 rounded w-full"/>
-            </label>
-            <div class="flex justify-end gap-2 mt-2">
-                <button id="cancelarModal" class="px-3 py-1 rounded bg-gray-300">Cancelar</button>
-                <button id="confirmarModal" class="px-3 py-1 rounded bg-blue-500 text-white">Confirmar</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // Cancelar modal
-    modal.querySelector("#cancelarModal").addEventListener("click", () => modal.remove());
-
-    // Confirmar reagendamento
-    modal.querySelector("#confirmarModal").addEventListener("click", () => {
-        const novaData = modal.querySelector("#novaData").value;
-        const novoHorario = modal.querySelector("#novoHorario").value;
-        if (novaData && novoHorario) {
-            reagendarAgendamento(a.cliente, a.id, novaData, novoHorario);
-            modal.remove();
-        } else {
-            alert("Selecione data e horário");
-        }
-    });
-});
-
-btnContainer.appendChild(btnReagendar);
-
-div.appendChild(btnContainer);
-meusAgendamentos.appendChild(div);
-
-feather.replace();
 
 
 
