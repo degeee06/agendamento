@@ -820,7 +820,6 @@ async function cancelarAgendamento(cliente, id) {
     }
 }
 
-// ---------------- REAGENDAR AGENDAMENTO ----------------
 async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
     if (!userToken) {
         alert("Faça login para reagendar um agendamento.");
@@ -840,7 +839,9 @@ async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
         const data = await res.json();
         if (res.ok) {
             alert("Agendamento reagendado com sucesso!");
-            listarAgendamentos();
+
+            // ✅ Força atualizar o cache e re-renderizar
+            await listarAgendamentos(); 
         } else {
             alert("Erro ao reagendar: " + (data.msg || data.message));
         }
@@ -964,6 +965,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
