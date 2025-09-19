@@ -729,7 +729,7 @@
             showToast("Logout realizado com sucesso", "info");
         });
 
-     // ---------------- AGENDAR ----------------
+   // ---------------- AGENDAR ----------------
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
@@ -742,24 +742,19 @@ form.addEventListener('submit', async (e) => {
         return;
     }
 
-    // CORREÇÃO: Validação de data/horário correta
+    // Validar se a data/horário não é no passado
     const dataSelecionada = new Date(dataToSend.Data);
     const [horas, minutos] = dataToSend.Horario.split(':');
-    
-    // Cria a data/hora no fuso horário local
     const dataHoraAgendamento = new Date(dataSelecionada);
     dataHoraAgendamento.setHours(parseInt(horas), parseInt(minutos), 0, 0);
     
-    // Data atual no mesmo fuso horário
     const agora = new Date();
     
-    // Comparação correta (ambas no fuso horário local)
     if (dataHoraAgendamento < agora) {
         showToast("Não é possível agendar para datas/horários passados!", "warning");
         return;
     }
 
-    // Resto do código permanece igual...
     // Mostrar loading
     agendarText.classList.add('hidden');
     agendarSpinner.classList.remove('hidden');
@@ -781,13 +776,8 @@ form.addEventListener('submit', async (e) => {
             listarAgendamentos();
         } else {
             const errorData = await response.json();
-            
-            // Modificação: Verificar se é um erro de conflito específico
-            if (errorData.code === "conflito_mesmo_cliente") {
-                showToast("Este cliente já possui um agendamento neste horário!", "error");
-            } else {
-                showToast(errorData.message || "Não foi possível agendar!", "error");
-            }
+            // REMOVA a verificação de conflito - mostre apenas a mensagem genérica
+            showToast(errorData.message || "Não foi possível agendar!", "error");
         }
     } catch (err) {
         console.error(err);
@@ -1050,18 +1040,14 @@ form.addEventListener('submit', async (e) => {
         return;
     }
 
-    // CORREÇÃO: Validação de data/horário correta
+    // Validar se a data/horário não é no passado
     const dataSelecionada = new Date(novaData);
     const [horas, minutos] = novoHorario.split(':');
-    
-    // Cria a data/hora no fuso horário local
     const dataHoraAgendamento = new Date(dataSelecionada);
     dataHoraAgendamento.setHours(parseInt(horas), parseInt(minutos), 0, 0);
     
-    // Data atual no mesmo fuso horário
     const agora = new Date();
     
-    // Comparação correta (ambas no fuso horário local)
     if (dataHoraAgendamento < agora) {
         showToast("Não é possível agendar para datas/horários passados!", "warning");
         return;
@@ -1088,14 +1074,8 @@ form.addEventListener('submit', async (e) => {
             showToast("Agendamento reagendado com sucesso!", "success");
             listarAgendamentos();
         } else {
-            // Modificação: Verificar se é um erro de conflito específico
-            if (data.code === "conflito_mesmo_cliente") {
-                showToast("Este cliente já possui um agendamento neste horário!", "error");
-            } else if (data.code === "23505") {
-                showToast("Já existe um agendamento para este cliente no mesmo horário.", "error");
-            } else {
-                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
-            }
+            // REMOVA as verificações específicas de conflito
+            showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
         }
     } catch (e) {
         console.error(e);
