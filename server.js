@@ -87,7 +87,6 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ---------------- Helpers ----------------
 const { data: novoAgendamento } = await supabase
   .from("agendamentos")
   .insert([{
@@ -102,8 +101,7 @@ const { data: novoAgendamento } = await supabase
   }])
   .select()
   .single();
-  return !!data;
-}
+
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   let query = supabase
@@ -354,5 +352,6 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
