@@ -458,11 +458,12 @@ function renderAgendamentos(isVIP = false) {
 
         // 🔒 trava se não for VIP e passou do limite
         if (!isVIP && agendamentosCache.length >= MAX_FREE) {
-            [btnContainer.querySelectorAll("button")].forEach(btn => {
-                btn.disabled = true;
-                btn.classList.add("opacity-50", "cursor-not-allowed");
-            });
-        }
+    btnContainer.querySelectorAll("button").forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add("opacity-50", "cursor-not-allowed");
+    });
+}
+
 
         div.appendChild(btnContainer);
         meusAgendamentos.appendChild(div);
@@ -874,6 +875,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
