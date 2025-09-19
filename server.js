@@ -87,21 +87,6 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-const { data: novoAgendamento } = await supabase
-  .from("agendamentos")
-  .insert([{
-    cliente,
-    nome: Nome,
-    email: emailNormalizado,
-    telefone: Telefone,
-    data: dataNormalizada,
-    horario: Horario,
-    status: "pendente",  // sempre pendente
-    confirmado: false,   // sempre falso
-  }])
-  .select()
-  .single();
-
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   let query = supabase
@@ -285,19 +270,20 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("status", "cancelado");
 
     const { data: novoAgendamento } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente,
-        nome: Nome,
-        email: emailNormalizado,
-        telefone: Telefone,
-        data: dataNormalizada,
-        horario: Horario,
-        status: isVip ? "confirmado" : "pendente",
-        confirmado: isVip,
-      }])
-      .select()
-      .single();
+  .from("agendamentos")
+  .insert([{
+    cliente,
+    nome: Nome,
+    email: emailNormalizado,
+    telefone: Telefone,
+    data: dataNormalizada,
+    horario: Horario,
+    status: "pendente",    // sempre pendente
+    confirmado: false,     // sempre falso
+  }])
+  .select()
+  .single();
+
 
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
@@ -352,6 +338,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
