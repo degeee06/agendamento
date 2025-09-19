@@ -353,29 +353,13 @@
             },3000);
         }
 
-      // ---------------- RENDER AGENDAMENTOS ----------------
-function renderAgendamentos(isVIP = false) {
+     function renderAgendamentos() {
     const filtroNome = searchInput.value.toLowerCase();
     const filtroStatus = statusFilter.value;
 
     const filtrados = agendamentosCache
-        .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+        .filter(a => ((a.nome + (a.email || "")).toLowerCase().includes(filtroNome)) &&
                     (filtroStatus ? a.status === filtroStatus : true))
-        .filter(a => {
-            const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-            const hoje = new Date();
-
-            if (diaSelecionado >= 1 && diaSelecionado <= 6) {
-                return dataAgendamento.getDay() === diaSelecionado &&
-                       dataAgendamento >= new Date(hoje.setHours(0,0,0,0));
-            } else {
-                const semanas = -diaSelecionado;
-                const dataLimite = new Date();
-                dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                return dataAgendamento >= new Date(dataLimite.setHours(0,0,0,0)) &&
-                       dataAgendamento < new Date(hoje.setHours(0,0,0,0));
-            }
-        })
         .sort((a,b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`));
 
     if (filtrados.length === 0) {
@@ -394,7 +378,7 @@ function renderAgendamentos(isVIP = false) {
 
     filtrados.forEach(a => {
         const div = document.createElement("div");
-        div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
+        div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300`;
 
         div.innerHTML = `
             <div class="flex justify-between items-start mb-2">
@@ -402,7 +386,11 @@ function renderAgendamentos(isVIP = false) {
                     <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
                     <span class="font-medium">${a.horario}</span>
                 </div>
-                <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
+                <span class="text-sm px-2 py-1 rounded-full ${
+                    a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' :
+                    a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' :
+                    'bg-red-900/30 text-red-300'
+                }">
                     ${a.status}
                 </span>
             </div>
@@ -418,50 +406,41 @@ function renderAgendamentos(isVIP = false) {
             <div class="grid grid-cols-2 gap-2 text-sm">
                 <div class="flex items-center gap-2">
                     <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-                    <span class="truncate">${a.email}</span>
+                    <span class="truncate">${a.email || "-"}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                    <span>${a.telefone}</span>
+                    <span>${a.telefone || "-"}</span>
                 </div>
             </div>
         `;
 
+        // Botões de ação
         const btnContainer = document.createElement("div");
         btnContainer.className = "flex gap-2 mt-4";
 
-        // Confirmar (só se ainda não confirmado)
         if (a.status !== "confirmado") {
             const btnConfirmar = document.createElement("button");
             btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-            btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-            btnConfirmar.addEventListener("click", async () => {
-                await confirmarAgendamento(a.cliente, a.id); // já atualiza Supabase
-                await listarAgendamentos(); // recarrega a lista
-            });
+            btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-1 shadow-md";
+            btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
             btnContainer.appendChild(btnConfirmar);
         }
 
-        // Cancelar
         const btnCancelar = document.createElement("button");
         btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-        btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-        btnCancelar.addEventListener("click", async () => {
-            await cancelarAgendamento(a.cliente, a.id); // atualiza Supabase
-            await listarAgendamentos();
-        });
+        btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 text-white flex items-center gap-1 shadow-md";
+        btnCancelar.addEventListener("click", () => cancelarAgendamento(a.cliente, a.id));
         btnContainer.appendChild(btnCancelar);
 
-        // Reagendar
         const btnReagendar = document.createElement("button");
         btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-        btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-        btnReagendar.addEventListener("click", async () => {
+        btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-1 shadow-md";
+        btnReagendar.addEventListener("click", () => {
             const novaData = prompt("Nova data (AAAA-MM-DD):");
             const novoHorario = prompt("Novo horário (HH:MM):");
             if (novaData && novoHorario) {
-                await reagendarAgendamento(a.cliente, a.id, novaData, novoHorario); // já atualiza Supabase
-                await listarAgendamentos();
+                reagendarAgendamento(a.cliente, a.id, novaData, novoHorario);
             }
         });
         btnContainer.appendChild(btnReagendar);
@@ -473,16 +452,6 @@ function renderAgendamentos(isVIP = false) {
     feather.replace();
 }
 
-async function existeAgendamento(data, horario) {
-    const { data: ags, error } = await supabase
-        .from('agendamentos')
-        .select('*')
-        .eq('data', data)
-        .eq('horario', horario)
-        .in('status', ['pendente','confirmado']); // ignora cancelado
-
-    return ags && ags.length > 0;
-}
 
 
         // ---------------- LISTAR AGENDAMENTOS ----------------
@@ -554,59 +523,40 @@ loginBtn.addEventListener('click', async () => {
 
 
 
-       // ---------------- AGENDAR ----------------
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const dataToSend = {};
-    formData.forEach((v,k)=>dataToSend[k]=v);
+        // ---------------- AGENDAR ----------------
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
 
-    // valida campos obrigatórios
-    if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast("Preencha todos os campos", "warning");
-        return;
-    }
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
 
-    // verifica duplicidade
-    if (await existeAgendamento(dataToSend.Data, dataToSend.Horario)) {
-        showToast("Já existe agendamento nesse horário!", "error");
-        return;
-    }
-
-    try {
-        const response = await fetch(`/agendar/${cliente}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                "Authorization": `Bearer ${userToken}`
-            },
-            body: JSON.stringify(dataToSend)
+     
+            try{
+                const response=await fetch(`/agendar/${cliente}`,{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
+                    body:JSON.stringify(dataToSend)
+                });
+                if(response.ok){ 
+                    showToast("Agendado com sucesso!","success"); 
+                    form.reset(); 
+                    listarAgendamentos(); 
+                } else {
+                    const errorData = await response.json();
+                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                }
+            } catch(err){ 
+                console.error(err); 
+                showToast("Erro ao enviar agendamento","error"); 
+            }
         });
 
-        if (response.ok) {
-            const { data } = await response.json();
-            // insere no Supabase
-            await supabase.from('agendamentos').insert([{
-                id: data.id,
-                nome: data.Nome,
-                email: data.Email,
-                telefone: data.Telefone,
-                data: data.Data,
-                horario: data.Horario,
-                status: 'pendente'
-            }]);
-            showToast("Agendado com sucesso!", "success");
-            form.reset();
-            listarAgendamentos();
-        } else {
-            const errorData = await response.json();
-            showToast(errorData.message || "Não foi possível agendar!", "error");
-        }
-    } catch (err) {
-        console.error(err);
-        showToast("Erro ao enviar agendamento", "error");
-    }
-});
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
         statusFilter.addEventListener("change", renderAgendamentos);
@@ -794,29 +744,34 @@ async function checkFreeLimit() {
     }
 }
 
-// ---------------- CONFIRMAR AGENDAMENTO ----------------
-async function confirmarAgendamento(id) {
+async function confirmarAgendamento(cliente, id) {
+    if (!userToken) {
+        showToast("Faça login para confirmar um agendamento.", "warning");
+        return;
+    }
+
     try {
-        const { data, error } = await supabase
-            .from('agendamentos')
-            .update({ status: 'confirmado', confirmado: true })
-            .eq('id', id);
+        const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ status: "confirmado", confirmado: true })
+        });
 
-        if (error) {
-            console.error('Erro ao confirmar agendamento:', error);
-            return;
+        const data = await res.json();
+
+        if (res.ok) {
+            showToast("Agendamento confirmado com sucesso!", "success");
+            listarAgendamentos();
+        } else {
+            showToast("Erro ao confirmar: " + (data.msg || data.message), "error");
         }
 
-        // Atualiza o cache local
-        const agendamentoIndex = agendamentosCache.findIndex(a => a.id === id);
-        if (agendamentoIndex !== -1) {
-            agendamentosCache[agendamentoIndex].status = 'confirmado';
-            agendamentosCache[agendamentoIndex].confirmado = true;
-        }
-
-        listarAgendamentos(); // Recarrega a tabela/DOM
-    } catch (err) {
-        console.error('Erro inesperado ao confirmar agendamento:', err);
+    } catch (e) {
+        console.error(e);
+        showToast("Erro de conexão ao confirmar.", "error");
     }
 }
 
@@ -838,29 +793,9 @@ async function cancelarAgendamento(cliente, id) {
         });
 
         const data = await res.json();
-
         if (res.ok) {
-            // 🔄 Atualiza status no Supabase
-            const { error } = await supabase
-                .from('agendamentos')
-                .update({ status: 'cancelado', confirmado: false })
-                .eq('id', id);
-
-            if (error) {
-                console.error('Erro ao atualizar Supabase:', error);
-                alert("Erro ao cancelar no banco de dados.");
-                return;
-            }
-
-            // 🔄 Atualiza cache local
-            const agendamentoIndex = agendamentosCache.findIndex(a => a.id === id);
-            if (agendamentoIndex !== -1) {
-                agendamentosCache[agendamentoIndex].status = 'cancelado';
-                agendamentosCache[agendamentoIndex].confirmado = false;
-            }
-
             alert("Agendamento cancelado com sucesso!");
-            listarAgendamentos(); // recarrega a lista com status atualizado
+            listarAgendamentos();
         } else {
             alert("Erro ao cancelar: " + (data.msg || data.message));
         }
@@ -870,34 +805,48 @@ async function cancelarAgendamento(cliente, id) {
     }
 }
 
+async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
+    if (!userToken) {
+        showToast("Faça login para reagendar um agendamento.", "warning");
+        return;
+    }
 
-// ---------------- REAGENDAR AGENDAMENTO ----------------
-async function reagendarAgendamento(id, novaData, novoHorario) {
     try {
-        const { data, error } = await supabase
-            .from('agendamentos')
-            .update({ data: novaData, horario: novoHorario, status: 'pendente', confirmado: false })
-            .eq('id', id);
+        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ 
+                novaData, 
+                novoHorario, 
+                status: "pendente",
+                confirmado: false
+            })
+        });
 
-        if (error) {
-            console.error('Erro ao reagendar agendamento:', error);
-            return;
+        const data = await res.json();
+
+        if (res.ok) {
+            showToast("Agendamento reagendado com sucesso!", "success");
+            listarAgendamentos();
+        } else {
+            // Detecta conflito de horário (erro do índice único)
+            if (data.code === "23505") {
+                showToast("Já existe um agendamento nesse horário para este cliente.", "error");
+            } else {
+                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+            }
         }
 
-        // Atualiza o cache local
-        const agendamentoIndex = agendamentosCache.findIndex(a => a.id === id);
-        if (agendamentoIndex !== -1) {
-            agendamentosCache[agendamentoIndex].data = novaData;
-            agendamentosCache[agendamentoIndex].horario = novoHorario;
-            agendamentosCache[agendamentoIndex].status = 'pendente';
-            agendamentosCache[agendamentoIndex].confirmado = false;
-        }
-
-        listarAgendamentos(); // Recarrega a tabela/DOM
-    } catch (err) {
-        console.error('Erro inesperado ao reagendar agendamento:', err);
+    } catch (e) {
+        console.error(e);
+        showToast("Erro de conexão ao reagendar.", "error");
     }
 }
+
+
 
 
 
@@ -1012,9 +961,6 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
-
-
-
 
 
 
