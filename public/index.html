@@ -774,10 +774,10 @@
                 showToast("Agendado com sucesso!", "success");
                 form.reset();
                 listarAgendamentos();
-            } else {
-                const errorData = await response.json();
-                showToast(errorData.message || "Não foi possível agendar!", "error");
-            }
+           } else {
+    const errorData = await response.json();
+    showToast(errorData.message || "Não foi possível agendar!", "error"); // REMOVA "horário ocupado"
+}
         } catch (err) {
             console.error(err);
             showToast("Erro ao enviar agendamento", "error");
@@ -1071,11 +1071,11 @@
             const data = await res.json();
 
             if (res.ok) {
-                showToast("Agendamento reagendado com sucesso!", "success");
-                listarAgendamentos();
-            } else {
-                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
-            }
+    showToast("Agendamento reagendado com sucesso!", "success");
+    listarAgendamentos();
+} else {
+    showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+}
         } catch (e) {
             console.error(e);
             showToast("Erro de conexão ao reagendar.", "error");
@@ -1192,6 +1192,7 @@
     feather.replace();
     init();
 </script>
+
 
 
 
