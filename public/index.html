@@ -841,16 +841,30 @@ async function checkFreeLimit() {
 
     const agendamentoForm = document.getElementById('agendamentoForm');
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+    const botoes = document.querySelectorAll(".agendamento-card button");
 
     if (!isVIP && agendamentosCache.length >= MAX_FREE) {
-        // bloqueia
+        // 🔒 bloqueia agendar
         submitBtn.disabled = true;
         submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        // 🔒 bloqueia confirmar/cancelar/reagendar
+        botoes.forEach(b => {
+            b.disabled = true;
+            b.classList.add('opacity-50', 'cursor-not-allowed');
+        });
+
         criarBotaoVIP();
     } else {
-        // libera
+        // 🔓 libera agendar
         submitBtn.disabled = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+        // 🔓 libera confirmar/cancelar/reagendar
+        botoes.forEach(b => {
+            b.disabled = false;
+            b.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
 
         // remove botão/qrCode se existir
         const vipBtn = document.getElementById('upgradeVIP');
@@ -859,8 +873,6 @@ async function checkFreeLimit() {
         if (pixDiv) pixDiv.remove();
     }
 }
-
-
 
 function criarBotaoVIP() {
     const agendamentoForm = document.getElementById('agendamentoForm');
@@ -923,7 +935,7 @@ function criarBotaoVIP() {
 
             showToast("QR Code gerado! Pague para ativar seu VIP", "success");
 
-            // Função de polling para checar VIP
+            // 🔄 Função de polling para checar VIP
             async function checkVipStatus(email, pixDiv, tentativas = 0, maxTentativas = 20) {
                 try {
                     const res = await fetch(`/check-vip/${encodeURIComponent(email)}`);
@@ -934,6 +946,7 @@ function criarBotaoVIP() {
                         showToast("Parabéns! Agora você é VIP 🎉", "success");
                         pixDiv.remove();
                         if (typeof listarAgendamentos === 'function') listarAgendamentos();
+                        if (typeof checkFreeLimit === 'function') checkFreeLimit(); // 🔓 libera todas as funções
                         return;
                     }
 
@@ -972,6 +985,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
