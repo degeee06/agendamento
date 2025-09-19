@@ -88,17 +88,20 @@ async function authMiddleware(req, res, next) {
 }
 
 // ---------------- Helpers ----------------
-async function checkVip(email) {
-  const now = new Date();
-  const { data } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email.toLowerCase().trim())
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
+const { data: novoAgendamento } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente,
+    nome: Nome,
+    email: emailNormalizado,
+    telefone: Telefone,
+    data: dataNormalizada,
+    horario: Horario,
+    status: "pendente",  // sempre pendente
+    confirmado: false,   // sempre falso
+  }])
+  .select()
+  .single();
   return !!data;
 }
 
@@ -351,4 +354,5 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
