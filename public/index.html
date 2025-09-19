@@ -433,36 +433,34 @@ function renderAgendamentos(isVIP = false) {
         const btnContainer = document.createElement("div");
         btnContainer.className = "flex gap-2 mt-4";
 
-        // Confirmar
-        if (!a.confirmado) {
-            const btnConfirmar = document.createElement("button");
-            btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-            btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-            btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.id));
-            btnContainer.appendChild(btnConfirmar);
-        }
-
-        // Cancelar
-        const btnCancelar = document.createElement("button");
-        btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-        btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-        btnCancelar.addEventListener("click", () => cancelarAgendamento(a.id));
-        btnContainer.appendChild(btnCancelar);
-
-        // Reagendar
-        const btnReagendar = document.createElement("button");
-        btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-        btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-        btnReagendar.addEventListener("click", () => reagendarAgendamento(a.id));
-        btnContainer.appendChild(btnReagendar);
-
-        // 🔒 trava se não for VIP e passou do limite
-        if (!isVIP && agendamentosCache.length >= MAX_FREE) {
-    btnContainer.querySelectorAll("button").forEach(btn => {
-        btn.disabled = true;
-        btn.classList.add("opacity-50", "cursor-not-allowed");
-    });
+        // Confirmar (só se ainda não confirmado)
+if (a.status !== "confirmado") {
+    const btnConfirmar = document.createElement("button");
+    btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+    btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
+    btnContainer.appendChild(btnConfirmar);
 }
+
+// Cancelar
+const btnCancelar = document.createElement("button");
+btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+btnCancelar.addEventListener("click", () => cancelarAgendamento(a.cliente, a.id));
+btnContainer.appendChild(btnCancelar);
+
+// Reagendar
+const btnReagendar = document.createElement("button");
+btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
+btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+btnReagendar.addEventListener("click", () => {
+    const novaData = prompt("Nova data (AAAA-MM-DD):");
+    const novoHorario = prompt("Novo horário (HH:MM):");
+    if (novaData && novoHorario) {
+        reagendarAgendamento(a.cliente, a.id, novaData, novoHorario);
+    }
+});
+btnContainer.appendChild(btnReagendar);
 
 
         div.appendChild(btnContainer);
@@ -970,6 +968,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
