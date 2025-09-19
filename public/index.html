@@ -820,8 +820,12 @@ loginBtn.addEventListener('click', async () => {
             showToast("Exportado para PDF com sucesso", "success");
         });
 
+        }
+
+      <script>
 const MAX_FREE = 3; // limite de agendamentos free
 
+// ---------------- VERIFICA LIMITE FREE ----------------
 async function checkFreeLimit() {
     const emailInput = document.getElementById('email');
     const email = emailInput?.value?.trim();
@@ -860,8 +864,6 @@ async function checkFreeLimit() {
     }
 }
 
-
-
 // ---------------- FUNÇÃO PRINCIPAL ----------------
 async function atualizarEstadoAgendamento() {
     const emailInput = document.getElementById('email');
@@ -872,17 +874,14 @@ async function atualizarEstadoAgendamento() {
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
 
     try {
-        // Puxa dados do backend
         const res = await fetch(`/check-user/${encodeURIComponent(email)}`);
 
         if (!res.ok) {
-            // se backend respondeu com erro, mostra e sai
             const text = await res.text();
             console.error("Resposta inesperada do backend:", text);
             throw new Error("Erro ao checar usuário");
         }
 
-        // tenta parsear como JSON
         let data;
         try {
             data = await res.json();
@@ -899,8 +898,6 @@ async function atualizarEstadoAgendamento() {
             // Bloqueia agendamento
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-            // Mostra botão VIP
             criarBotaoVIP(email);
         } else {
             // Libera agendamento
@@ -922,12 +919,10 @@ async function atualizarEstadoAgendamento() {
     }
 }
 
-
 // ---------------- BOTÃO VIP ----------------
 function criarBotaoVIP(email) {
     const agendamentoForm = document.getElementById('agendamentoForm');
 
-    // Remove botão antigo
     const antigoBtn = document.getElementById('upgradeVIP');
     if (antigoBtn) antigoBtn.remove();
 
@@ -970,7 +965,6 @@ function criarBotaoVIP(email) {
 
             showToast("QR Code gerado! Pague para ativar seu VIP", "success");
 
-            // Checagem automática do pagamento com limite de tentativas
             async function checkVipStatus(tentativas = 0, maxTentativas = 20) {
                 try {
                     const vipRes = await fetch(`/check-vip/${encodeURIComponent(email)}`);
@@ -980,7 +974,7 @@ function criarBotaoVIP(email) {
                     if (vipData.vip) {
                         showToast("Parabéns! Agora você é VIP 🎉", "success");
                         pixDiv.remove();
-                        atualizarEstadoAgendamento(); // atualiza tudo
+                        atualizarEstadoAgendamento();
                         return;
                     }
 
@@ -1008,8 +1002,6 @@ function criarBotaoVIP(email) {
     agendamentoForm.appendChild(vipBtn);
 }
 
-
-
 // ---------------- HABILITA BOTÕES DE AGENDAMENTO ----------------
 function habilitarAcoesVIP() {
     const agendamentos = document.querySelectorAll('.agendamento-card');
@@ -1023,22 +1015,21 @@ function habilitarAcoesVIP() {
             }
         });
     });
-} // <-- FECHA A FUNÇÃO AQUI
+}
 
-<script>
+// ---------------- AO CARREGAR A PÁGINA ----------------
 document.addEventListener('DOMContentLoaded', () => {
-    // ---------------- LOGIN E AGENDAMENTO ----------------
+    // Força exibir o painel de login
     const loginSection = document.getElementById('loginSection');
     if (loginSection) {
-        // garante que aparece
-        loginSection.style.display = '';
-        loginSection.classList.remove('hidden');
+        loginSection.style.removeProperty("display");
+        loginSection.style.display = "block";
+        loginSection.classList.remove('hidden', 'opacity-0', 'invisible');
     }
 
-    // Atualiza estado do agendamento apenas se o usuário já colocou email
     atualizarEstadoAgendamento();
 
-    // ---------------- ANIMAÇÕES E ICONES ----------------
+    // Animações e ícones
     if (typeof AOS !== "undefined") {
         AOS.init({
             duration: 800,
@@ -1051,25 +1042,4 @@ document.addEventListener('DOMContentLoaded', () => {
         feather.replace();
     }
 });
-</script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+</script>   
