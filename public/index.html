@@ -453,22 +453,55 @@ btnContainer.appendChild(btnCancelar);
 const btnReagendar = document.createElement("button");
 btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
 btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+
 btnReagendar.addEventListener("click", () => {
-    const novaData = prompt("Nova data (AAAA-MM-DD):");
-    const novoHorario = prompt("Novo horário (HH:MM):");
-    if (novaData && novoHorario) {
-        reagendarAgendamento(a.cliente, a.id, novaData, novoHorario);
-    }
+    // Cria modal simples
+    const modal = document.createElement("div");
+    modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
+
+    modal.innerHTML = `
+        <div class="bg-white p-6 rounded-lg w-80 flex flex-col gap-4">
+            <h3 class="text-lg font-medium">Reagendar Agendamento</h3>
+            <label>
+                Nova Data:
+                <input type="date" id="novaData" class="border p-1 rounded w-full"/>
+            </label>
+            <label>
+                Novo Horário:
+                <input type="time" id="novoHorario" class="border p-1 rounded w-full"/>
+            </label>
+            <div class="flex justify-end gap-2 mt-2">
+                <button id="cancelarModal" class="px-3 py-1 rounded bg-gray-300">Cancelar</button>
+                <button id="confirmarModal" class="px-3 py-1 rounded bg-blue-500 text-white">Confirmar</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Cancelar modal
+    modal.querySelector("#cancelarModal").addEventListener("click", () => modal.remove());
+
+    // Confirmar reagendamento
+    modal.querySelector("#confirmarModal").addEventListener("click", () => {
+        const novaData = modal.querySelector("#novaData").value;
+        const novoHorario = modal.querySelector("#novoHorario").value;
+        if (novaData && novoHorario) {
+            reagendarAgendamento(a.cliente, a.id, novaData, novoHorario);
+            modal.remove();
+        } else {
+            alert("Selecione data e horário");
+        }
+    });
 });
+
 btnContainer.appendChild(btnReagendar);
 
+div.appendChild(btnContainer);
+meusAgendamentos.appendChild(div);
 
-        div.appendChild(btnContainer);
-        meusAgendamentos.appendChild(div);
-    });
+feather.replace();
 
-    feather.replace();
-}
 
 
 
@@ -965,6 +998,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
