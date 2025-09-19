@@ -729,56 +729,65 @@
             showToast("Logout realizado com sucesso", "info");
         });
 
-        // ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+       // ---------------- AGENDAR ----------------
+form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const formData = new FormData(form);
+    const dataToSend = {};
+    formData.forEach((v, k) => dataToSend[k] = v);
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
+    // Verifica campos obrigatórios
+    if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+        showToast("Preencha todos os campos", "warning");
+        return;
+    }
 
-            // Validar se a data/horário não é no passado
-            const dataHoraAgendamento = new Date(`${dataToSend.Data}T${dataToSend.Horario}`);
-            if (dataHoraAgendamento < new Date()) {
-                showToast("Não é possível agendar para datas/horários passados!", "warning");
-                return;
-            }
+    // Validar se a data/horário não é no passado
+    const dataHoraAgendamento = new Date(`${dataToSend.Data}T${dataToSend.Horario}`);
+    if (dataHoraAgendamento < new Date()) {
+        showToast("Não é possível agendar para datas/horários passados!", "warning");
+        return;
+    }
 
-            // Mostrar loading
-            agendarText.classList.add('hidden');
-            agendarSpinner.classList.remove('hidden');
-            form.querySelector('button[type="submit"]').disabled = true;
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
-            } finally {
-                // Esconder loading
-                agendarText.classList.remove('hidden');
-                agendarSpinner.classList.add('hidden');
-                form.querySelector('button[type="submit"]').disabled = false;
-            }
+    // Mostrar loading
+    agendarText.classList.add('hidden');
+    agendarSpinner.classList.remove('hidden');
+    form.querySelector('button[type="submit"]').disabled = true;
+
+    try {
+        const response = await fetch(`/agendar/${cliente}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                "Authorization": `Bearer ${userToken}`
+            },
+            body: JSON.stringify(dataToSend)
         });
+
+        if (response.ok) {
+            showToast("Agendado com sucesso!", "success");
+            form.reset();
+            listarAgendamentos();
+        } else {
+            const errorData = await response.json();
+            
+            // Modificação: Verificar se é um erro de conflito específico
+            if (errorData.code === "conflito_mesmo_cliente") {
+                showToast("Este cliente já possui um agendamento neste horário!", "error");
+            } else {
+                showToast(errorData.message || "Não foi possível agendar!", "error");
+            }
+        }
+    } catch (err) {
+        console.error(err);
+        showToast("Erro ao enviar agendamento", "error");
+    } finally {
+        // Esconder loading
+        agendarText.classList.remove('hidden');
+        agendarSpinner.classList.add('hidden');
+        form.querySelector('button[type="submit"]').disabled = false;
+    }
+});
 
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
@@ -1026,45 +1035,46 @@
         }
 
         async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-            if (!userToken) {
-                showToast("Faça login para reagendar um agendamento.", "warning");
-                return;
-            }
+    if (!userToken) {
+        showToast("Faça login para reagendar um agendamento.", "warning");
+        return;
+    }
 
-            try {
-                const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ 
-                        novaData, 
-                        novoHorario, 
-                        status: "pendente",
-                        confirmado: false
-                    })
-                });
+    try {
+        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                novaData,
+                novoHorario,
+                status: "pendente",
+                confirmado: false
+            })
+        });
 
-                const data = await res.json();
+        const data = await res.json();
 
-                if (res.ok) {
-                    showToast("Agendamento reagendado com sucesso!", "success");
-                    listarAgendamentos();
-                } else {
-                    // Detecta conflito de horário (erro do índice único)
-                    if (data.code === "23505") {
-                        showToast("Já existe um agendamento nesse horário para este cliente.", "error");
-                    } else {
-                        showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
-                    }
-                }
-
-            } catch (e) {
-                console.error(e);
-                showToast("Erro de conexão ao reagendar.", "error");
+        if (res.ok) {
+            showToast("Agendamento reagendado com sucesso!", "success");
+            listarAgendamentos();
+        } else {
+            // Modificação: Verificar se é um erro de conflito específico
+            if (data.code === "conflito_mesmo_cliente") {
+                showToast("Este cliente já possui um agendamento neste horário!", "error");
+            } else if (data.code === "23505") {
+                showToast("Já existe um agendamento para este cliente no mesmo horário.", "error");
+            } else {
+                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
             }
         }
+    } catch (e) {
+        console.error(e);
+        showToast("Erro de conexão ao reagendar.", "error");
+    }
+}
 
         function criarBotaoVIP() {
             const agendamentoForm = document.getElementById('agendamentoForm');
@@ -1178,3 +1188,4 @@
     </script>
 </body>
 </html>
+
