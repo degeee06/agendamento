@@ -258,8 +258,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         });
     }
 
-    const livre = await horarioDisponivel(cliente, dataNormalizada, Horario);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
+
 
     await supabase
       .from("agendamentos")
@@ -338,6 +337,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
