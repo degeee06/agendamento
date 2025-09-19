@@ -73,6 +73,23 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
+
+// ---------------- Helpers ----------------
+async function checkVip(email) {
+  const now = new Date();
+  const { data } = await supabase
+    .from("pagamentos")
+    .select("valid_until")
+    .eq("email", email.toLowerCase().trim())
+    .eq("status", "approved")
+    .gt("valid_until", now.toISOString())
+    .order("valid_until", { ascending: false })
+    .limit(1)
+    .single();
+  return !!data;
+}
+
+
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
@@ -347,6 +364,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
