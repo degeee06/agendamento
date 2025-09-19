@@ -764,27 +764,30 @@ async function checkFreeLimit() {
     }
 }
 
-async function confirmarAgendamento(id) {
+async function confirmarAgendamento(cliente, id) {
     const user = auth.currentUser;
     if (!user) {
         alert("Faça login para confirmar um agendamento.");
         return;
     }
 
-    const vipCheck = await fetch(`/check-vip/${user.uid}`).then(r => r.json());
-    if (!vipCheck.isVIP) {
-        alert("Função disponível apenas para usuários VIP.");
-        return;
-    }
+    const token = await user.getIdToken();
 
     try {
-        const res = await fetch(`/confirmar/${id}`, { method: "POST" });
+        const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            }
+        });
+
         const data = await res.json();
-        if (data.success) {
+        if (res.ok) {
             alert("Agendamento confirmado com sucesso!");
-            carregarAgendamentos(); // recarrega lista
+            carregarAgendamentos();
         } else {
-            alert("Erro ao confirmar agendamento: " + data.message);
+            alert("Erro ao confirmar: " + data.msg);
         }
     } catch (e) {
         console.error(e);
@@ -792,27 +795,30 @@ async function confirmarAgendamento(id) {
     }
 }
 
-async function cancelarAgendamento(id) {
+async function cancelarAgendamento(cliente, id) {
     const user = auth.currentUser;
     if (!user) {
         alert("Faça login para cancelar um agendamento.");
         return;
     }
 
-    const vipCheck = await fetch(`/check-vip/${user.uid}`).then(r => r.json());
-    if (!vipCheck.isVIP) {
-        alert("Função disponível apenas para usuários VIP.");
-        return;
-    }
+    const token = await user.getIdToken();
 
     try {
-        const res = await fetch(`/cancelar/${id}`, { method: "POST" });
+        const res = await fetch(`/agendamentos/${cliente}/cancelar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            }
+        });
+
         const data = await res.json();
-        if (data.success) {
+        if (res.ok) {
             alert("Agendamento cancelado com sucesso!");
             carregarAgendamentos();
         } else {
-            alert("Erro ao cancelar agendamento: " + data.message);
+            alert("Erro ao cancelar: " + data.msg);
         }
     } catch (e) {
         console.error(e);
@@ -820,37 +826,38 @@ async function cancelarAgendamento(id) {
     }
 }
 
-async function reagendarAgendamento(id, novaData) {
+async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
     const user = auth.currentUser;
     if (!user) {
-        alert("Faça login para reagendar.");
+        alert("Faça login para reagendar um agendamento.");
         return;
     }
 
-    const vipCheck = await fetch(`/check-vip/${user.uid}`).then(r => r.json());
-    if (!vipCheck.isVIP) {
-        alert("Função disponível apenas para usuários VIP.");
-        return;
-    }
+    const token = await user.getIdToken();
 
     try {
-        const res = await fetch(`/reagendar/${id}`, {
+        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ novaData })
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ novaData, novoHorario })
         });
+
         const data = await res.json();
-        if (data.success) {
+        if (res.ok) {
             alert("Agendamento reagendado com sucesso!");
             carregarAgendamentos();
         } else {
-            alert("Erro ao reagendar: " + data.message);
+            alert("Erro ao reagendar: " + data.msg);
         }
     } catch (e) {
         console.error(e);
         alert("Erro de conexão ao reagendar.");
     }
 }
+
 
 function criarBotaoVIP() {
     const agendamentoForm = document.getElementById('agendamentoForm');
@@ -963,6 +970,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
