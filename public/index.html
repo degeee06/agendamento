@@ -605,28 +605,21 @@
         confirmarBtn.parentNode.replaceChild(novoConfirmarBtn, confirmarBtn);
 
         novoConfirmarBtn.addEventListener("click", () => {
-            const novaData = modal.querySelector("#novaData").value;
-            const novoHorario = modal.querySelector("#novoHorario").value;
+        const novaData = modal.querySelector("#novaData").value;
+        const novoHorario = modal.querySelector("#novoHorario").value;
 
-            if (!novaData || !novoHorario) {
-                showToast("Preencha data e horário corretamente!", "warning");
-                return;
-            }
+        if (!novaData || !novoHorario) {
+            alert("Preencha data e horário corretamente!");
+            return;
+        }
 
-            // Validar se a data/horário não é no passado
-            const dataHoraAgendamento = new Date(`${novaData}T${novoHorario}`);
-            if (dataHoraAgendamento < new Date()) {
-                showToast("Não é possível agendar para datas/horários passados!", "warning");
-                return;
-            }
+        reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
+        modal.classList.add("hidden");
+    });
 
-            reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
-            modal.classList.add("hidden");
-        });
-
-        // Mostra modal
-        modal.classList.remove("hidden");
-    }
+    // Mostra modal
+    modal.classList.remove("hidden");
+}
 
     // ---------------- LISTAR AGENDAMENTOS ----------------
     async function listarAgendamentos(){
@@ -729,65 +722,39 @@
         showToast("Logout realizado com sucesso", "info");
     });
 
-    // ---------------- AGENDAR ----------------
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(form);
-        const dataToSend = {};
-        formData.forEach((v, k) => dataToSend[k] = v);
+  // ---------------- AGENDAR ----------------
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
 
-        // Verifica campos obrigatórios
-        if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-            showToast("Preencha todos os campos", "warning");
-            return;
-        }
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
 
-        // Validar se a data/horário não é no passado
-        const dataSelecionada = new Date(dataToSend.Data);
-        const [horas, minutos] = dataToSend.Horario.split(':');
-        const dataHoraAgendamento = new Date(dataSelecionada);
-        dataHoraAgendamento.setHours(parseInt(horas), parseInt(minutos), 0, 0);
-        
-        const agora = new Date();
-        
-        if (dataHoraAgendamento < agora) {
-            showToast("Não é possível agendar para datas/horários passados!", "warning");
-            return;
-        }
-
-        // Mostrar loading
-        agendarText.classList.add('hidden');
-        agendarSpinner.classList.remove('hidden');
-        form.querySelector('button[type="submit"]').disabled = true;
-
-        try {
-            const response = await fetch(`/agendar/${cliente}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    "Authorization": `Bearer ${userToken}`
-                },
-                body: JSON.stringify(dataToSend)
-            });
-
-            if (response.ok) {
-                showToast("Agendado com sucesso!", "success");
-                form.reset();
-                listarAgendamentos();
-           } else {
-    const errorData = await response.json();
-    showToast(errorData.message || "Não foi possível agendar!", "error"); // REMOVA "horário ocupado"
-}
-        } catch (err) {
-            console.error(err);
-            showToast("Erro ao enviar agendamento", "error");
-        } finally {
-            // Esconder loading
-            agendarText.classList.remove('hidden');
-            agendarSpinner.classList.add('hidden');
-            form.querySelector('button[type="submit"]').disabled = false;
-        }
-    });
+     
+            try{
+                const response=await fetch(`/agendar/${cliente}`,{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
+                    body:JSON.stringify(dataToSend)
+                });
+                if(response.ok){ 
+                    showToast("Agendado com sucesso!","success"); 
+                    form.reset(); 
+                    listarAgendamentos(); 
+                } else {
+                    const errorData = await response.json();
+                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                }
+            } catch(err){ 
+                console.error(err); 
+                showToast("Erro ao enviar agendamento","error"); 
+            }
+        });
 
     // ---------------- FILTROS ----------------
     searchInput.addEventListener("input", renderAgendamentos);
@@ -1034,53 +1001,47 @@
         }
     }
 
-    async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-        if (!userToken) {
-            showToast("Faça login para reagendar um agendamento.", "warning");
-            return;
-        }
-
-        // Validar se a data/horário não é no passado
-        const dataSelecionada = new Date(novaData);
-        const [horas, minutos] = novoHorario.split(':');
-        const dataHoraAgendamento = new Date(dataSelecionada);
-        dataHoraAgendamento.setHours(parseInt(horas), parseInt(minutos), 0, 0);
-        
-        const agora = new Date();
-        
-        if (dataHoraAgendamento < agora) {
-            showToast("Não é possível agendar para datas/horários passados!", "warning");
-            return;
-        }
-
-        try {
-            const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${userToken}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    novaData,
-                    novoHorario,
-                    status: "pendente",
-                    confirmado: false
-                })
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-    showToast("Agendamento reagendado com sucesso!", "success");
-    listarAgendamentos();
-} else {
-    showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
-}
-        } catch (e) {
-            console.error(e);
-            showToast("Erro de conexão ao reagendar.", "error");
-        }
+   async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
+    if (!userToken) {
+        showToast("Faça login para reagendar um agendamento.", "warning");
+        return;
     }
+
+    try {
+        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ 
+                novaData, 
+                novoHorario, 
+                status: "pendente",
+                confirmado: false
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            showToast("Agendamento reagendado com sucesso!", "success");
+            listarAgendamentos();
+        } else {
+            // Detecta conflito de horário (erro do índice único)
+            if (data.code === "23505") {
+                showToast("Já existe um agendamento nesse horário para este cliente.", "error");
+            } else {
+                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+            }
+        }
+
+    } catch (e) {
+        console.error(e);
+        showToast("Erro de conexão ao reagendar.", "error");
+    }
+}
+
 
     function criarBotaoVIP() {
         const agendamentoForm = document.getElementById('agendamentoForm');
