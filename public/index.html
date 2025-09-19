@@ -795,45 +795,29 @@ async function checkFreeLimit() {
 }
 
 // ---------------- CONFIRMAR AGENDAMENTO ----------------
-async function confirmarAgendamento(cliente, id) {
-    if (!userToken) {
-        alert("Faça login para confirmar um agendamento.");
-        return;
-    }
-
+async function confirmarAgendamento(id) {
     try {
-        const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            }
-        });
+        const { data, error } = await supabase
+            .from('agendamentos')
+            .update({ status: 'confirmado', confirmado: true })
+            .eq('id', id);
 
-        const data = await res.json();
-        if (res.ok) {
-            // Atualiza status no Supabase
-            await atualizarStatusSupabase(id, 'confirmado');
-
-            alert("Agendamento confirmado com sucesso!");
-            listarAgendamentos();
-        } else {
-            alert("Erro ao confirmar: " + (data.msg || data.message));
+        if (error) {
+            console.error('Erro ao confirmar agendamento:', error);
+            return;
         }
-    } catch (e) {
-        console.error(e);
-        alert("Erro de conexão ao confirmar.");
+
+        // Atualiza o cache local
+        const agendamentoIndex = agendamentosCache.findIndex(a => a.id === id);
+        if (agendamentoIndex !== -1) {
+            agendamentosCache[agendamentoIndex].status = 'confirmado';
+            agendamentosCache[agendamentoIndex].confirmado = true;
+        }
+
+        listarAgendamentos(); // Recarrega a tabela/DOM
+    } catch (err) {
+        console.error('Erro inesperado ao confirmar agendamento:', err);
     }
-}
-
-// ---------------- FUNÇÃO AUXILIAR PARA SUPABASE ----------------
-async function atualizarStatusSupabase(id, status) {
-    const { error } = await supabase
-        .from('agendamentos') // nome da sua tabela
-        .update({ status })
-        .eq('id', id);
-
-    if (error) console.error("Erro ao atualizar Supabase:", error);
 }
 
 
@@ -854,11 +838,26 @@ async function cancelarAgendamento(cliente, id) {
         });
 
         const data = await res.json();
+
         if (res.ok) {
             // 🔄 Atualiza status no Supabase
-            await supabase.from('agendamentos')
-                .update({ status: 'cancelado' })
+            const { error } = await supabase
+                .from('agendamentos')
+                .update({ status: 'cancelado', confirmado: false })
                 .eq('id', id);
+
+            if (error) {
+                console.error('Erro ao atualizar Supabase:', error);
+                alert("Erro ao cancelar no banco de dados.");
+                return;
+            }
+
+            // 🔄 Atualiza cache local
+            const agendamentoIndex = agendamentosCache.findIndex(a => a.id === id);
+            if (agendamentoIndex !== -1) {
+                agendamentosCache[agendamentoIndex].status = 'cancelado';
+                agendamentosCache[agendamentoIndex].confirmado = false;
+            }
 
             alert("Agendamento cancelado com sucesso!");
             listarAgendamentos(); // recarrega a lista com status atualizado
@@ -872,39 +871,31 @@ async function cancelarAgendamento(cliente, id) {
 }
 
 
-// ---------------- REAGENDAR ----------------
-async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-    // verifica duplicidade
-    if (await existeAgendamento(novaData, novoHorario)) {
-        showToast("Já existe agendamento nesse horário!", "error");
-        return;
-    }
-
+// ---------------- REAGENDAR AGENDAMENTO ----------------
+async function reagendarAgendamento(id, novaData, novoHorario) {
     try {
-        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ novaData, novoHorario })
-        });
+        const { data, error } = await supabase
+            .from('agendamentos')
+            .update({ data: novaData, horario: novoHorario, status: 'pendente', confirmado: false })
+            .eq('id', id);
 
-        const data = await res.json();
-        if (res.ok) {
-            // atualiza no Supabase
-            await supabase.from('agendamentos')
-                .update({ data: novaData, horario: novoHorario, status: 'pendente' })
-                .eq('id', id);
-
-            showToast("Agendamento reagendado com sucesso!", "success");
-            listarAgendamentos();
-        } else {
-            showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+        if (error) {
+            console.error('Erro ao reagendar agendamento:', error);
+            return;
         }
-    } catch (e) {
-        console.error(e);
-        showToast("Erro de conexão ao reagendar.", "error");
+
+        // Atualiza o cache local
+        const agendamentoIndex = agendamentosCache.findIndex(a => a.id === id);
+        if (agendamentoIndex !== -1) {
+            agendamentosCache[agendamentoIndex].data = novaData;
+            agendamentosCache[agendamentoIndex].horario = novoHorario;
+            agendamentosCache[agendamentoIndex].status = 'pendente';
+            agendamentosCache[agendamentoIndex].confirmado = false;
+        }
+
+        listarAgendamentos(); // Recarrega a tabela/DOM
+    } catch (err) {
+        console.error('Erro inesperado ao reagendar agendamento:', err);
     }
 }
 
@@ -1021,6 +1012,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
