@@ -237,6 +237,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
+    // Checa VIP (para limite de agendamentos/dia)
     const isVip = await checkVip(emailNormalizado);
 
     if (!isVip) {
@@ -258,8 +259,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         });
     }
 
-
-
+    // Limpeza de agendamentos cancelados (opcional)
     await supabase
       .from("agendamentos")
       .delete()
@@ -268,22 +268,31 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    const { data: novoAgendamento } = await supabase
-  .from("agendamentos")
-  .insert([{
-    cliente,
-    nome: Nome,
-    email: emailNormalizado,
-    telefone: Telefone,
-    data: dataNormalizada,
-    horario: Horario,
-    status: "pendente",    // sempre pendente
-    confirmado: false,     // sempre falso
-  }])
-  .select()
-  .single();
+    // Debug: log dos dados que vão ser inseridos
+    console.log({
+      cliente, Nome, Email, Telefone, Data, Horario,
+      dataNormalizada, emailNormalizado
+    });
 
+    // Inserção sem checagem de horário disponível
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente,
+        nome: Nome,
+        email: emailNormalizado,
+        telefone: Telefone,
+        data: dataNormalizada,
+        horario: Horario,
+        status: "pendente",   // sempre pendente
+        confirmado: false,    // sempre falso
+      }])
+      .select()
+      .single();
 
+    if (error) throw error;
+
+    // Atualiza Google Sheet
     const doc = await accessSpreadsheet(cliente);
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
@@ -296,6 +305,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ---------------- Confirmar / Cancelar / Reagendar ----------------
 app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
@@ -337,6 +347,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
