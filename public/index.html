@@ -845,8 +845,13 @@ async function cancelarAgendamento(cliente, id) {
 
         const data = await res.json();
         if (res.ok) {
+            // 🔄 Atualiza status no Supabase
+            await supabase.from('agendamentos')
+                .update({ status: 'cancelado' })
+                .eq('id', id);
+
             alert("Agendamento cancelado com sucesso!");
-            listarAgendamentos();
+            listarAgendamentos(); // recarrega a lista com status atualizado
         } else {
             alert("Erro ao cancelar: " + (data.msg || data.message));
         }
@@ -855,6 +860,7 @@ async function cancelarAgendamento(cliente, id) {
         alert("Erro de conexão ao cancelar.");
     }
 }
+
 
 // ---------------- REAGENDAR ----------------
 async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
@@ -1005,6 +1011,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
