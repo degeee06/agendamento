@@ -473,6 +473,16 @@ function renderAgendamentos(isVIP = false) {
     feather.replace();
 }
 
+async function existeAgendamento(data, horario) {
+    const { data: ags, error } = await supabase
+        .from('agendamentos')
+        .select('*')
+        .eq('data', data)
+        .eq('horario', horario)
+        .in('status', ['pendente','confirmado']); // ignora cancelado
+
+    return ags && ags.length > 0;
+}
 
 
         // ---------------- LISTAR AGENDAMENTOS ----------------
@@ -1011,6 +1021,7 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
+
 
 
 
