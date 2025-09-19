@@ -828,47 +828,8 @@ loginBtn.addEventListener('click', async () => {
 
         }
 
-      <script>
-const MAX_FREE = 3; // limite de agendamentos free
-
-// ---------------- VERIFICA LIMITE FREE ----------------
-async function checkFreeLimit() {
-    const emailInput = document.getElementById('email');
-    const email = emailInput?.value?.trim();
-    let isVIP = false;
-
-    if (email) {
-        try {
-            const res = await fetch(`/check-vip/${encodeURIComponent(email)}`);
-            if (res.ok) {
-                const data = await res.json();
-                isVIP = data.vip === true;
-            }
-        } catch (e) {
-            console.error("Erro ao verificar VIP:", e);
-        }
-    }
-
-    const agendamentoForm = document.getElementById('agendamentoForm');
-    const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
-
-    if (!isVIP && agendamentosCache.length >= MAX_FREE) {
-        // bloqueia
-        submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        criarBotaoVIP();
-    } else {
-        // libera
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-
-        // remove botão/qrCode se existir
-        const vipBtn = document.getElementById('upgradeVIP');
-        if (vipBtn) vipBtn.remove();
-        const pixDiv = document.getElementById('pixArea');
-        if (pixDiv) pixDiv.remove();
-    }
-}
+            // ---------------- CONFIG ----------------
+const MAX_FREE = 3; // limite gratuito
 
 // ---------------- FUNÇÃO PRINCIPAL ----------------
 async function atualizarEstadoAgendamento() {
@@ -880,23 +841,11 @@ async function atualizarEstadoAgendamento() {
     const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
 
     try {
+        // Puxa dados do backend: quantos agendamentos e se é VIP
         const res = await fetch(`/check-user/${encodeURIComponent(email)}`);
+        if (!res.ok) throw new Error("Erro ao checar usuário");
 
-        if (!res.ok) {
-            const text = await res.text();
-            console.error("Resposta inesperada do backend:", text);
-            throw new Error("Erro ao checar usuário");
-        }
-
-        let data;
-        try {
-            data = await res.json();
-        } catch (parseErr) {
-            const text = await res.text();
-            console.error("Resposta não é JSON, veio:", text);
-            throw new Error("Backend não retornou JSON válido.");
-        }
-
+        const data = await res.json();
         const agendamentosUser = data.agendamentosCount || 0;
         const isVIP = data.vip || false;
 
@@ -904,6 +853,8 @@ async function atualizarEstadoAgendamento() {
             // Bloqueia agendamento
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            // Mostra botão VIP
             criarBotaoVIP(email);
         } else {
             // Libera agendamento
@@ -929,6 +880,7 @@ async function atualizarEstadoAgendamento() {
 function criarBotaoVIP(email) {
     const agendamentoForm = document.getElementById('agendamentoForm');
 
+    // Remove botão antigo
     const antigoBtn = document.getElementById('upgradeVIP');
     if (antigoBtn) antigoBtn.remove();
 
@@ -971,6 +923,7 @@ function criarBotaoVIP(email) {
 
             showToast("QR Code gerado! Pague para ativar seu VIP", "success");
 
+            // Checagem automática do pagamento com limite de tentativas
             async function checkVipStatus(tentativas = 0, maxTentativas = 20) {
                 try {
                     const vipRes = await fetch(`/check-vip/${encodeURIComponent(email)}`);
@@ -980,7 +933,7 @@ function criarBotaoVIP(email) {
                     if (vipData.vip) {
                         showToast("Parabéns! Agora você é VIP 🎉", "success");
                         pixDiv.remove();
-                        atualizarEstadoAgendamento();
+                        atualizarEstadoAgendamento(); // atualiza tudo
                         return;
                     }
 
@@ -1023,29 +976,7 @@ function habilitarAcoesVIP() {
     });
 }
 
-// ---------------- AO CARREGAR A PÁGINA ----------------
+// ---------------- INIT ----------------
 document.addEventListener('DOMContentLoaded', () => {
-    // Força exibir o painel de login
-    const loginSection = document.getElementById('loginSection');
-    if (loginSection) {
-        loginSection.style.display = "block"; // Garante que a seção de login esteja visível
-    }
-
     atualizarEstadoAgendamento();
-
-    // Animações e ícones
-    if (typeof AOS !== "undefined") {
-        AOS.init({
-            duration: 800,
-            easing: 'ease-out-quart',
-            once: true
-        });
-    }
-
-    if (typeof feather !== "undefined") {
-        feather.replace();
-    }
 });
-</script>   
-
-
