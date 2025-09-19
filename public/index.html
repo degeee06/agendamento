@@ -298,444 +298,453 @@
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
     <script type="module">
-        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        let userToken = null;
-        let agendamentosCache = [];
-        let diaSelecionado = 1;
+    let userToken = null;
+    let agendamentosCache = [];
+    let diaSelecionado = 1;
 
-        const form = document.getElementById('agendamentoForm');
-        const loginBtn = document.getElementById('loginBtn');
-        const loginSection = document.getElementById('loginSection');
-        const meusAgendamentos = document.getElementById('meusAgendamentos');
-        const searchInput = document.getElementById("searchInput");
-        const statusFilter = document.getElementById("statusFilter");
-        const exportCSVBtn = document.getElementById("exportCSVBtn");
-        const exportPDFBtn = document.getElementById("exportPDFBtn");
+    const form = document.getElementById('agendamentoForm');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginSection = document.getElementById('loginSection');
+    const meusAgendamentos = document.getElementById('meusAgendamentos');
+    const searchInput = document.getElementById("searchInput");
+    const statusFilter = document.getElementById("statusFilter");
+    const exportCSVBtn = document.getElementById("exportCSVBtn");
+    const exportPDFBtn = document.getElementById("exportPDFBtn");
 
-        const pathParts = window.location.pathname.split('/');
-        const cliente = pathParts[1] || '';
+    const pathParts = window.location.pathname.split('/');
+    const cliente = pathParts[1] || '';
 
-        function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+    function formatData(data) {
+        const [y, m, d] = data.split("-");
+        return ${d}/${m}/${y};
+    }
 
-        // ---------------- TOASTS ----------------
-        let activeToasts = [];
-        function showToast(message, type = "success") {
-            const colors = {
-                success: "bg-gradient-to-r from-green-500 to-teal-400",
-                error: "bg-gradient-to-r from-red-500 to-pink-500",
-                info: "bg-gradient-to-r from-blue-500 to-cyan-400",
-                warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
-            };
-            
-            const container = document.getElementById("toast-container");
-            if (activeToasts.length >= 3) {
-                const oldest = activeToasts.shift();
-                oldest.remove();
-            }
-            
-            const toast = document.createElement("div");
-            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
-            toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
-            container.appendChild(toast);
-            activeToasts.push(toast);
-            feather.replace();
-            
-            requestAnimationFrame(()=>{
-                toast.classList.remove("opacity-0","translate-x-5"); 
-                toast.classList.add("opacity-100","translate-x-0");
-            });
-            
-            setTimeout(()=>{
-                toast.classList.add("opacity-0","translate-x-5"); 
-                setTimeout(()=>{
-                    toast.remove(); 
-                    activeToasts=activeToasts.filter(t=>t!==toast);
-                },300);
-            },3000);
+    // ---------------- TOASTS ----------------
+    let activeToasts = [];
+    function showToast(message, type = "success") {
+        const colors = {
+            success: "bg-gradient-to-r from-green-500 to-teal-400",
+            error: "bg-gradient-to-r from-red-500 to-pink-500",
+            info: "bg-gradient-to-r from-blue-500 to-cyan-400",
+            warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
+        };
+
+        const container = document.getElementById("toast-container");
+        if (activeToasts.length >= 3) {
+            const oldest = activeToasts.shift();
+            oldest.remove();
         }
 
-        // ---------------- RENDER AGENDAMENTOS ----------------
-        function renderAgendamentos() {
-            const filtroNome = searchInput.value.toLowerCase();
-            const filtroStatus = statusFilter.value;
+        const toast = document.createElement("div");
+        toast.className = p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2;
+        toast.innerHTML = <i data-feather="${type === "success" ? "check-circle" : type === "error" ? "alert-circle" : "info"}" class="w-5 h-5"></i> <span>${message}</span>;
+        container.appendChild(toast);
+        activeToasts.push(toast);
+        feather.replace();
 
-            const filtrados = agendamentosCache
-                .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                            (filtroStatus ? a.status === filtroStatus : true))
-                .filter(a => {
-                    const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-                    const hoje = new Date();
-                    
-                    // Se for um dia da semana (1-6)
-                    if(diaSelecionado >= 1 && diaSelecionado <= 6) {
-                        return dataAgendamento.getDay() === diaSelecionado && 
-                               dataAgendamento >= new Date(hoje.setHours(0,0,0,0));
-                    } 
-                    // Se for uma semana anterior (valores negativos)
-                    else {
-                        const semanas = -diaSelecionado;
-                        const dataLimite = new Date();
-                        dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                        return dataAgendamento >= new Date(dataLimite.setHours(0,0,0,0)) && 
-                               dataAgendamento < new Date(hoje.setHours(0,0,0,0));
-                    }
-                })
-                .sort((a,b) => {
-  const dateA = new Date(`${a.data}T${a.horario}`);
-  const dateB = new Date(`${b.data}T${b.horario}`);
-  return dateA - dateB;
-});
+        requestAnimationFrame(() => {
+            toast.classList.remove("opacity-0", "translate-x-5");
+            toast.classList.add("opacity-100", "translate-x-0");
+        });
 
-            if (filtrados.length === 0) {
-                meusAgendamentos.innerHTML = `
-                    <div class='text-center py-8'>
-                        <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                            <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                        </div>
-                        <p class="text-gray-300">Nenhum agendamento encontrado</p>
-                    </div>
-                `;
-                return;
-            }
+        setTimeout(() => {
+            toast.classList.add("opacity-0", "translate-x-5");
+            setTimeout(() => {
+                toast.remove();
+                activeToasts = activeToasts.filter(t => t !== toast);
+            }, 300);
+        }, 3000);
+    }
 
-            meusAgendamentos.innerHTML = "";
+    // ---------------- RENDER AGENDAMENTOS ----------------
+    function renderAgendamentos() {
+        const filtroNome = searchInput.value.toLowerCase();
+        const filtroStatus = statusFilter.value;
 
-            filtrados.forEach(a => {
-                const div = document.createElement("div");
-                div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
-                
-                div.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-                            <span class="font-medium">${a.horario}</span>
-                        </div>
-                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
-                            ${a.status}
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                            <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-medium">${a.nome}</h3>
-                            <p class="text-sm text-gray-300">${formatData(a.data)}</p>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-                            <span class="truncate">${a.email}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                            <span>${a.telefone}</span>
-                        </div>
-                    </div>
-                `;
+        const filtrados = agendamentosCache
+            .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+                        (filtroStatus ? a.status === filtroStatus : true))
+            .filter(a => {
+                const dataAgendamento = new Date(${a.data}T${a.horario});
+                const hoje = new Date();
 
-                // Container para botões
-                const btnContainer = document.createElement("div");
-                btnContainer.className = "flex gap-2 mt-4";
-
-                // Confirmar
-                if(!a.confirmado) {
-                    const btn = document.createElement("button");
-                    btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                    btn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-                    btn.addEventListener("click", async () => {
-                        btn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Confirmando...`;
-                        feather.replace();
-                        try {
-                            const res = await fetch(`/confirmar/${cliente}/${a.id}`, {
-                                method: "POST",
-                                headers: { "Authorization": `Bearer ${userToken}` }
-                            });
-                            if (res.ok) {
-                                btn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
-                                setTimeout(() => {
-                                    showToast("Agendamento confirmado!", "success");
-                                    listarAgendamentos();
-                                }, 300);
-                            } else {
-                                btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                                feather.replace();
-                                showToast("Erro ao confirmar", "error");
-                            }
-                        } catch (e) {
-                            console.error(e);
-                            btn.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                            feather.replace();
-                            showToast("Erro ao confirmar", "error");
-                        }
-                    });
-                    btnContainer.appendChild(btn);
+                // Se for um dia da semana (1-6)
+                if (diaSelecionado >= 1 && diaSelecionado <= 6) {
+                    return dataAgendamento.getDay() === diaSelecionado &&
+                           dataAgendamento >= new Date(hoje.setHours(0, 0, 0, 0));
                 }
+                // Se for uma semana anterior (valores negativos)
+                else {
+                    const semanas = -diaSelecionado;
+                    const dataLimite = new Date();
+                    dataLimite.setDate(dataLimite.getDate() + semanas * 7);
+                    return dataAgendamento >= new Date(dataLimite.setHours(0, 0, 0, 0)) &&
+                           dataAgendamento < new Date(hoje.setHours(0, 0, 0, 0));
+                }
+            })
+            .sort((a, b) => {
+                const dateA = new Date(${a.data}T${a.horario});
+                const dateB = new Date(${b.data}T${b.horario});
+                return dateA - dateB;
+            });
 
-                // Reagendar
-                const reBtn = document.createElement("button");
-                reBtn.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-                reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+        if (filtrados.length === 0) {
+            meusAgendamentos.innerHTML = `
+                <div class='text-center py-8'>
+                    <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
+                        <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
+                    </div>
+                    <p class="text-gray-300">Nenhum agendamento encontrado</p>
+                </div>
+            `;
+            return;
+        }
 
-                // Cancelar
-                const cancelBtn = document.createElement("button");
-                cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-                cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-                cancelBtn.addEventListener("click", async () => {
-                    if(!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
-                    
-                    cancelBtn.innerHTML = `<i data-feather="loader" class="w-4 h-4 animate-spin"></i> Cancelando...`;
+        meusAgendamentos.innerHTML = "";
+
+        filtrados.forEach(a => {
+            const div = document.createElement("div");
+            div.className = agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status};
+
+            div.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex items-center gap-2">
+                        <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
+                        <span class="font-medium">${a.horario}</span>
+                    </div>
+                    <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
+                        ${a.status}
+                    </span>
+                </div>
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                        <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-medium">${a.nome}</h3>
+                        <p class="text-sm text-gray-300">${formatData(a.data)}</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center gap-2">
+                        <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
+                        <span class="truncate">${a.email}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
+                        <span>${a.telefone}</span>
+                    </div>
+                </div>
+            `;
+
+            // Container para botões
+            const btnContainer = document.createElement("div");
+            btnContainer.className = "flex gap-2 mt-4";
+
+            // Confirmar
+            if (!a.confirmado) {
+                const btn = document.createElement("button");
+                btn.innerHTML = <i data-feather="check" class="w-4 h-4"></i> Confirmar;
+                btn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+                btn.addEventListener("click", async () => {
+                    btn.innerHTML = <i data-feather="loader" class="w-4 h-4 animate-spin"></i> Confirmando...;
                     feather.replace();
                     try {
-                        const res = await fetch(`/cancelar/${cliente}/${a.id}`, {
+                        const res = await fetch(/confirmar/${cliente}/${a.id}, {
                             method: "POST",
-                            headers: { "Authorization": `Bearer ${userToken}` }
+                            headers: { "Authorization": Bearer ${userToken} }
                         });
                         if (res.ok) {
-                            cancelBtn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+                            btn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
                             setTimeout(() => {
-                                showToast("Agendamento cancelado!", "success");
+                                showToast("Agendamento confirmado!", "success");
                                 listarAgendamentos();
                             }, 300);
                         } else {
-                            cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                            btn.innerHTML = <i data-feather="check" class="w-4 h-4"></i> Confirmar;
                             feather.replace();
-                            const errorData = await res.json();
-                            showToast(errorData.message || "Erro ao cancelar", "error");
+                            showToast("Erro ao confirmar", "error");
                         }
                     } catch (e) {
                         console.error(e);
-                        cancelBtn.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                        btn.innerHTML = <i data-feather="check" class="w-4 h-4"></i> Confirmar;
                         feather.replace();
-                        showToast("Erro ao cancelar agendamento", "error");
+                        showToast("Erro ao confirmar", "error");
                     }
                 });
+                btnContainer.appendChild(btn);
+            }
 
-                btnContainer.appendChild(cancelBtn);
+            // Reagendar
+            const reBtn = document.createElement("button");
+            reBtn.innerHTML = <i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar;
+            reBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
 
-                reBtn.addEventListener("click", () => {
-                    if(div.querySelector(".reagendar-form")) return;
+            // Cancelar
+            const cancelBtn = document.createElement("button");
+            cancelBtn.innerHTML = <i data-feather="x" class="w-4 h-4"></i> Cancelar;
+            cancelBtn.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
+            cancelBtn.addEventListener("click", async () => {
+                if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
 
-                    const miniForm = document.createElement("div");
-                    miniForm.className = "reagendar-form mt-3 p-3 bg-white/10 rounded-lg";
-
-                    miniForm.innerHTML = `
-                        <div class="grid grid-cols-2 gap-2 mb-2">
-                            <div>
-                                <label class="block text-xs mb-1">Nova Data</label>
-                                <input type="date" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
-                            </div>
-                            <div>
-                                <label class="block text-xs mb-1">Novo Horário</label>
-                                <input type="time" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
-                            </div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="confirmar-mini flex-1 bg-green-600 hover:bg-green-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1">
-                                <i data-feather="check" class="w-3 h-3"></i> Confirmar
-                            </button>
-                            <button class="cancelar-mini flex-1 bg-gray-600 hover:bg-gray-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1">
-                                <i data-feather="x" class="w-3 h-3"></i> Cancelar
-                            </button>
-                        </div>
-                    `;
-
-                    div.appendChild(miniForm);
-                    feather.replace();
-
-                    // Cancelar
-                    miniForm.querySelector(".cancelar-mini").addEventListener("click", () => {
-                        miniForm.remove();
+                cancelBtn.innerHTML = <i data-feather="loader" class="w-4 h-4 animate-spin"></i> Cancelando...;
+                feather.replace();
+                try {
+                    const res = await fetch(/cancelar/${cliente}/${a.id}, {
+                        method: "POST",
+                        headers: { "Authorization": Bearer ${userToken} }
                     });
-
-                    // Confirmar
-                    miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
-    const novaData = miniForm.querySelector('input[type="date"]').value;
-    const novoHorario = miniForm.querySelector('input[type="time"]').value;
-    if(!novaData || !novoHorario){ showToast("Preencha data e hora","warning"); return; }
-
-    try {
-        const res = await fetch(`/reagendar/${cliente}/${a.id}`, {  // <-- use 'a.id' do Supabase
-            method: "POST",
-            headers: { 
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ novaData, novoHorario })
-        });
-
-        if(res.ok){
-            showToast("Agendamento reagendado!","success");
-            listarAgendamentos();
-        } else showToast("Erro ao reagendar","error");
-    } catch(e){
-        console.error(e);
-        showToast("Erro ao reagendar","error");
-    }
-});
-
-                });
-                btnContainer.appendChild(reBtn);
-                feather.replace();
-
-                div.appendChild(btnContainer);
-                meusAgendamentos.appendChild(div);
-                feather.replace();
+                    if (res.ok) {
+                        cancelBtn.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+                        setTimeout(() => {
+                            showToast("Agendamento cancelado!", "success");
+                            listarAgendamentos();
+                        }, 300);
+                    } else {
+                        cancelBtn.innerHTML = <i data-feather="x" class="w-4 h-4"></i> Cancelar;
+                        feather.replace();
+                        const errorData = await res.json();
+                        showToast(errorData.message || "Erro ao cancelar", "error");
+                    }
+                } catch (e) {
+                    console.error(e);
+                    cancelBtn.innerHTML = <i data-feather="x" class="w-4 h-4"></i> Cancelar;
+                    feather.replace();
+                    showToast("Erro ao cancelar agendamento", "error");
+                }
             });
-        }
 
-        // ---------------- LISTAR AGENDAMENTOS ----------------
-        async function listarAgendamentos(){
-    if(!userToken) return;
-    try{
-        const res = await fetch(`/agendamentos/${cliente}`, {
-    headers: { "Authorization": `Bearer ${userToken}` }
-});
-        const { agendamentos } = await res.json();
-        agendamentosCache = agendamentos;
-        meusAgendamentos.style.display = 'block';
-        document.getElementById('filtersSection').style.display = 'block';
-        document.getElementById('diasTabs').style.display = 'flex';
-        initTabsDias();
-        renderAgendamentos(); 
-        checkFreeLimit();
-    } catch(e){
-        console.error(e);
-        showToast("Erro ao listar agendamentos","error");
-    }
-}
+            btnContainer.appendChild(cancelBtn);
 
+            reBtn.addEventListener("click", () => {
+                if (div.querySelector(".reagendar-form")) return;
 
+                const miniForm = document.createElement("div");
+                miniForm.className = "reagendar-form mt-3 p-3 bg-white/10 rounded-lg";
 
-        // ---------------- LOGIN ----------------
-loginBtn.addEventListener('click', async () => {
-    const email = document.getElementById('email').value;
-    const senha = document.getElementById('senha').value;
-    if(!email || !senha) {
-        showToast("Preencha email e senha", "warning");
-        return;
-    }
-    
-    try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-        if(error){ 
-            showToast(error.message,"error"); 
-            return; 
-        }
+                miniForm.innerHTML = `
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="block text-xs mb-1">Nova Data</label>
+                            <input type="date" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
+                        </div>
+                        <div>
+                            <label class="block text-xs mb-1">Novo Horário</label>
+                            <input type="time" class="w-full p-2 text-sm rounded bg-white/20 border border-white/30" />
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="confirmar-mini flex-1 bg-green-600 hover:bg-green-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1">
+                            <i data-feather="check" class="w-3 h-3"></i> Confirmar
+                        </button>
+                        <button class="cancelar-mini flex-1 bg-gray-600 hover:bg-gray-700 text-white px-2 py-1.5 rounded text-sm flex items-center justify-center gap-1">
+                            <i data-feather="x" class="w-3 h-3"></i> Cancelar
+                        </button>
+                    </div>
+                `;
 
-        userToken = data.session.access_token;
-        loginSection.style.display = 'none';
-        form.style.display = 'block';
+                div.appendChild(miniForm);
+                feather.replace();
 
-        listarAgendamentos().then(() => {
-            // ------------------- Seleciona o dia atual -------------------
-            let hoje = new Date().getDay(); // 0 = Domingo ... 6 = Sábado
-            if (hoje === 0) {
-                hoje = 1; // se for domingo, pula pra segunda
-            }
+                // Cancelar
+                miniForm.querySelector(".cancelar-mini").addEventListener("click", () => {
+                    miniForm.remove();
+                });
 
-            const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-            if (btnHoje) {
-                btnHoje.click();
-            } else {
-                // fallback: sempre garante segunda
-                document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-            }
+                // Confirmar
+                miniForm.querySelector(".confirmar-mini").addEventListener("click", async () => {
+                    const novaData = miniForm.querySelector('input[type="date"]').value;
+                    const novoHorario = miniForm.querySelector('input[type="time"]').value;
+                    if (!novaData || !novoHorario) {
+                        showToast("Preencha data e hora", "warning");
+                        return;
+                    }
+
+                    try {
+                        const res = await fetch(/reagendar/${cliente}/${a.id}, {
+                            method: "POST",
+                            headers: {
+                                "Authorization": Bearer ${userToken},
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({ novaData, novoHorario })
+                        });
+
+                        if (res.ok) {
+                            showToast("Agendamento reagendado!", "success");
+                            listarAgendamentos();
+                        } else showToast("Erro ao reagendar", "error");
+                    } catch (e) {
+                        console.error(e);
+                        showToast("Erro ao reagendar", "error");
+                    }
+                });
+            });
+            btnContainer.appendChild(reBtn);
+            feather.replace();
+
+            div.appendChild(btnContainer);
+            meusAgendamentos.appendChild(div);
+            feather.replace();
         });
-
-        showToast("Login realizado com sucesso!", "success");
-
-    } catch(e) {
-        console.error(e);
-        showToast("Erro ao fazer login", "error");
     }
-});
 
+    // ---------------- LISTAR AGENDAMENTOS ----------------
+    async function listarAgendamentos() {
+        if (!userToken) return;
+        try {
+            const res = await fetch(/agendamentos/${cliente}, {
+                headers: { "Authorization": Bearer ${userToken} }
+            });
+            const { agendamentos } = await res.json();
+            agendamentosCache = agendamentos;
+            meusAgendamentos.style.display = 'block';
+            document.getElementById('filtersSection').style.display = 'block';
+            document.getElementById('diasTabs').style.display = 'flex';
+            initTabsDias();
+            renderAgendamentos();
+            checkFreeLimit();
+        } catch (e) {
+            console.error(e);
+            showToast("Erro ao listar agendamentos", "error");
+        }
+    }
 
+    // ---------------- LOGIN ----------------
+    loginBtn.addEventListener('click', async () => {
+        const email = document.getElementById('email').value;
+        const senha = document.getElementById('senha').value;
+        if (!email || !senha) {
+            showToast("Preencha email e senha", "warning");
+            return;
+        }
 
-        // ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
-
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+            if (error) {
+                showToast(error.message, "error");
                 return;
             }
 
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+            userToken = data.session.access_token;
+            loginSection.style.display = 'none';
+            form.style.display = 'block';
+
+            listarAgendamentos().then(() => {
+                // ------------------- Seleciona o dia atual -------------------
+                let hoje = new Date().getDay(); // 0 = Domingo ... 6 = Sábado
+                if (hoje === 0) {
+                    hoje = 1; // se for domingo, pula pra segunda
                 }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
+
+                const btnHoje = document.querySelector(.tab-dia[data-dia="${hoje}"]);
+                if (btnHoje) {
+                    btnHoje.click();
+                } else {
+                    // fallback: sempre garante segunda
+                    document.querySelector(.tab-dia[data-dia="1"])?.click();
+                }
+            });
+
+            showToast("Login realizado com sucesso!", "success");
+
+        } catch (e) {
+            console.error(e);
+            showToast("Erro ao fazer login", "error");
+        }
+    });
+
+    // ---------------- AGENDAR ----------------
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const dataToSend = {};
+        formData.forEach((v, k) => dataToSend[k] = v);
+
+        // Verifica campos obrigatórios
+        if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+            showToast("Preencha todos os campos", "warning");
+            return;
+        }
+
+        try {
+            const response = await fetch(/agendar/${cliente}, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', "Authorization": Bearer ${userToken} },
+                body: JSON.stringify(dataToSend)
+            });
+            if (response.ok) {
+                showToast("Agendado com sucesso!", "success");
+                form.reset();
+                listarAgendamentos();
+            } else {
+                const errorData = await response.json();
+                showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
             }
+        } catch (err) {
+            console.error(err);
+            showToast("Erro ao enviar agendamento", "error");
+        }
+    });
+
+    // ---------------- FILTROS ----------------
+    searchInput.addEventListener("input", renderAgendamentos);
+    statusFilter.addEventListener("change", renderAgendamentos);
+
+    // ---------------- TABS ----------------
+    function initTabsDias() {
+        const tabsDia = document.querySelectorAll(".tab-dia");
+        const tabsSemana = document.querySelectorAll(".tab-semana");
+
+        tabsDia.forEach(btn => {
+            btn.addEventListener("click", () => {
+                tabsDia.forEach(b => {
+                    b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+                    b.classList.add("bg-white/10", "hover:bg-white/20");
+                });
+                tabsSemana.forEach(b => {
+                    b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+                    b.classList.add("bg-white/5", "hover:bg-white/10");
+                });
+
+                btn.classList.remove("bg-white/10", "hover:bg-white/20");
+                btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+                diaSelecionado = parseInt(btn.dataset.dia);
+                renderAgendamentos();
+                checkFreeLimit();
+            });
         });
 
-        // ---------------- FILTROS ----------------
-        searchInput.addEventListener("input", renderAgendamentos);
-        statusFilter.addEventListener("change", renderAgendamentos);
-
-        // ---------------- TABS ----------------
-        function initTabsDias(){
-            const tabsDia=document.querySelectorAll(".tab-dia");
-            const tabsSemana=document.querySelectorAll(".tab-semana");
-            
-            tabsDia.forEach(btn=>{
-                btn.addEventListener("click",()=>{
-                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
-                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
-                    
-                    btn.classList.remove("bg-white/10", "hover:bg-white/20");
-                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-                    diaSelecionado=parseInt(btn.dataset.dia);
-                    renderAgendamentos();
-                    checkFreeLimit();
+        tabsSemana.forEach(btn => {
+            btn.addEventListener("click", () => {
+                tabsDia.forEach(b => {
+                    b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+                    b.classList.add("bg-white/10", "hover:bg-white/20");
                 });
-            });
-
-            tabsSemana.forEach(btn=>{
-                btn.addEventListener("click",()=>{
-                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
-                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-purple-500", "to-pink-500", "active"));
-                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
-                    
-                    btn.classList.remove("bg-white/5", "hover:bg-white/10");
-                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-                    
-                    const semanas = parseInt(btn.dataset.semana);
-                    const dataLimite = new Date();
-                    dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                    diaSelecionado = dataLimite.getDay();
-                    renderAgendamentos();
-                    checkFreeLimit();
+                tabsSemana.forEach(b => {
+                    b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+                    b.classList.add("bg-white/5", "hover:bg-white/10");
                 });
+
+                btn.classList.remove("bg-white/5", "hover:bg-white/10");
+                btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+
+                const semanas = parseInt(btn.dataset.semana);
+                const dataLimite = new Date();
+                dataLimite.setDate(dataLimite.getDate() + semanas * 7);
+                diaSelecionado = dataLimite.getDay();
+                renderAgendamentos();
+                checkFreeLimit();
             });
-        }
+        });
+    }
+
 
         // ---------------- EXPORT ----------------
         exportCSVBtn.addEventListener("click", ()=>{
@@ -980,3 +989,4 @@ function habilitarAcoesVIP() {
 document.addEventListener('DOMContentLoaded', () => {
     atualizarEstadoAgendamento();
 });
+
