@@ -353,7 +353,8 @@
             },3000);
         }
 
-      function renderAgendamentos(isVIP = false) {
+      // ---------------- RENDER AGENDAMENTOS ----------------
+function renderAgendamentos(isVIP = false) {
     const filtroNome = searchInput.value.toLowerCase();
     const filtroStatus = statusFilter.value;
 
@@ -429,14 +430,14 @@
         const btnContainer = document.createElement("div");
         btnContainer.className = "flex gap-2 mt-4";
 
-        // Confirmar
+        // Confirmar (só se ainda não confirmado)
         if (a.status !== "confirmado") {
             const btnConfirmar = document.createElement("button");
             btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
             btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
             btnConfirmar.addEventListener("click", async () => {
-                await confirmarAgendamento(a.cliente, a.id);
-                await listarAgendamentos(); // 🔄 atualiza status
+                await confirmarAgendamento(a.cliente, a.id); // já atualiza Supabase
+                await listarAgendamentos(); // recarrega a lista
             });
             btnContainer.appendChild(btnConfirmar);
         }
@@ -446,50 +447,22 @@
         btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
         btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
         btnCancelar.addEventListener("click", async () => {
-            await cancelarAgendamento(a.cliente, a.id);
+            await cancelarAgendamento(a.cliente, a.id); // atualiza Supabase
             await listarAgendamentos();
         });
         btnContainer.appendChild(btnCancelar);
 
-        // Reagendar com modal
+        // Reagendar
         const btnReagendar = document.createElement("button");
         btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
         btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white flex items-center gap-1 shadow-md hover:shadow-lg transition-all";
-        btnReagendar.addEventListener("click", () => {
-            const modal = document.createElement("div");
-            modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
-            modal.innerHTML = `
-                <div class="bg-white p-6 rounded-lg w-80 flex flex-col gap-4">
-                    <h3 class="text-lg font-medium">Reagendar Agendamento</h3>
-                    <label>
-                        Nova Data:
-                        <input type="date" id="novaData" class="border p-1 rounded w-full"/>
-                    </label>
-                    <label>
-                        Novo Horário:
-                        <input type="time" id="novoHorario" class="border p-1 rounded w-full"/>
-                    </label>
-                    <div class="flex justify-end gap-2 mt-2">
-                        <button id="cancelarModal" class="px-3 py-1 rounded bg-gray-300">Cancelar</button>
-                        <button id="confirmarModal" class="px-3 py-1 rounded bg-blue-500 text-white">Confirmar</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-
-            modal.querySelector("#cancelarModal").addEventListener("click", () => modal.remove());
-
-            modal.querySelector("#confirmarModal").addEventListener("click", async () => {
-                const novaData = modal.querySelector("#novaData").value;
-                const novoHorario = modal.querySelector("#novoHorario").value;
-                if (novaData && novoHorario) {
-                    await reagendarAgendamento(a.cliente, a.id, novaData, novoHorario);
-                    modal.remove();
-                    await listarAgendamentos(); // 🔄 atualiza lista e status
-                } else {
-                    alert("Selecione data e horário");
-                }
-            });
+        btnReagendar.addEventListener("click", async () => {
+            const novaData = prompt("Nova data (AAAA-MM-DD):");
+            const novoHorario = prompt("Novo horário (HH:MM):");
+            if (novaData && novoHorario) {
+                await reagendarAgendamento(a.cliente, a.id, novaData, novoHorario); // já atualiza Supabase
+                await listarAgendamentos();
+            }
         });
         btnContainer.appendChild(btnReagendar);
 
@@ -499,8 +472,6 @@
 
     feather.replace();
 }
-
-
 
 
 
@@ -573,40 +544,59 @@ loginBtn.addEventListener('click', async () => {
 
 
 
-        // ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+       // ---------------- AGENDAR ----------------
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const dataToSend = {};
+    formData.forEach((v,k)=>dataToSend[k]=v);
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
+    // valida campos obrigatórios
+    if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+        showToast("Preencha todos os campos", "warning");
+        return;
+    }
 
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
-            }
+    // verifica duplicidade
+    if (await existeAgendamento(dataToSend.Data, dataToSend.Horario)) {
+        showToast("Já existe agendamento nesse horário!", "error");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/agendar/${cliente}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                "Authorization": `Bearer ${userToken}`
+            },
+            body: JSON.stringify(dataToSend)
         });
 
+        if (response.ok) {
+            const { data } = await response.json();
+            // insere no Supabase
+            await supabase.from('agendamentos').insert([{
+                id: data.id,
+                nome: data.Nome,
+                email: data.Email,
+                telefone: data.Telefone,
+                data: data.Data,
+                horario: data.Horario,
+                status: 'pendente'
+            }]);
+            showToast("Agendado com sucesso!", "success");
+            form.reset();
+            listarAgendamentos();
+        } else {
+            const errorData = await response.json();
+            showToast(errorData.message || "Não foi possível agendar!", "error");
+        }
+    } catch (err) {
+        console.error(err);
+        showToast("Erro ao enviar agendamento", "error");
+    }
+});
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
         statusFilter.addEventListener("change", renderAgendamentos);
@@ -812,6 +802,9 @@ async function confirmarAgendamento(cliente, id) {
 
         const data = await res.json();
         if (res.ok) {
+            // Atualiza status no Supabase
+            await atualizarStatusSupabase(id, 'confirmado');
+
             alert("Agendamento confirmado com sucesso!");
             listarAgendamentos();
         } else {
@@ -822,6 +815,17 @@ async function confirmarAgendamento(cliente, id) {
         alert("Erro de conexão ao confirmar.");
     }
 }
+
+// ---------------- FUNÇÃO AUXILIAR PARA SUPABASE ----------------
+async function atualizarStatusSupabase(id, status) {
+    const { error } = await supabase
+        .from('agendamentos') // nome da sua tabela
+        .update({ status })
+        .eq('id', id);
+
+    if (error) console.error("Erro ao atualizar Supabase:", error);
+}
+
 
 // ---------------- CANCELAR AGENDAMENTO ----------------
 async function cancelarAgendamento(cliente, id) {
@@ -852,9 +856,11 @@ async function cancelarAgendamento(cliente, id) {
     }
 }
 
+// ---------------- REAGENDAR ----------------
 async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-    if (!userToken) {
-        alert("Faça login para reagendar um agendamento.");
+    // verifica duplicidade
+    if (await existeAgendamento(novaData, novoHorario)) {
+        showToast("Já existe agendamento nesse horário!", "error");
         return;
     }
 
@@ -870,19 +876,21 @@ async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
 
         const data = await res.json();
         if (res.ok) {
-            alert("Agendamento reagendado com sucesso!");
+            // atualiza no Supabase
+            await supabase.from('agendamentos')
+                .update({ data: novaData, horario: novoHorario, status: 'pendente' })
+                .eq('id', id);
 
-            // ✅ Força atualizar o cache e re-renderizar
-            await listarAgendamentos(); 
+            showToast("Agendamento reagendado com sucesso!", "success");
+            listarAgendamentos();
         } else {
-            alert("Erro ao reagendar: " + (data.msg || data.message));
+            showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
         }
     } catch (e) {
         console.error(e);
-        alert("Erro de conexão ao reagendar.");
+        showToast("Erro de conexão ao reagendar.", "error");
     }
 }
-
 
 
 
@@ -997,9 +1005,6 @@ function criarBotaoVIP() {
     </script>
 </body>
 </html>
-
-
-
 
 
 
