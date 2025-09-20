@@ -380,26 +380,17 @@ const mailersend = new MailerSend({
 
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
-    const emailData = {
-      from: {
-        email: "worldgsuporte@gmail.com",
-        name: "Agenda"
-      },
-      to: [
-        {
-          email: destinatario,
-          name: nome
-        }
-      ],
+    await mailersend.email.send({
+      from: { email: "seu-email@dominio.com", name: "Agenda" },
+      to: [{ email: destinatario, name: nome }],
       subject: "Confirme seu horário",
       text: `Olá ${nome}, confirme seu horário: ${linkConfirmacao}`,
       html: `<p>Olá ${nome},</p>
              <p>Seu horário foi agendado.</p>
              <p>Clique para confirmar:</p>
              <a href="${linkConfirmacao}">✅ Confirmar Horário</a>`
-    };
+    });
 
-    await mailersend.email.send(emailData);
     console.log("E-mail enviado para", destinatario);
   } catch (err) {
     console.error("Erro ao enviar e-mail:", err);
@@ -409,6 +400,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
