@@ -372,30 +372,44 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
 });
 
+import MailerSend from "mailersend";
+
+const mailersend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY,
+});
+
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
-    const sentFrom = new Sender("seu-email@dominio.com", "Agenda");
-    const recipients = [new Recipient(destinatario, nome)];
+    const emailData = {
+      from: {
+        email: "seu-email@dominio.com",
+        name: "Agenda"
+      },
+      to: [
+        {
+          email: destinatario,
+          name: nome
+        }
+      ],
+      subject: "Confirme seu horário",
+      text: `Olá ${nome}, confirme seu horário: ${linkConfirmacao}`,
+      html: `<p>Olá ${nome},</p>
+             <p>Seu horário foi agendado.</p>
+             <p>Clique para confirmar:</p>
+             <a href="${linkConfirmacao}">✅ Confirmar Horário</a>`
+    };
 
-    const emailParams = new EmailParams()
-      .setFrom(sentFrom)
-      .setTo(recipients)
-      .setSubject("Confirme seu horário")
-      .setHtml(`<p>Olá ${nome},</p>
-                <p>Seu horário foi agendado.</p>
-                <p>Clique para confirmar:</p>
-                <a href="${linkConfirmacao}">✅ Confirmar Horário</a>`)
-      .setText(`Olá ${nome}, confirme seu horário: ${linkConfirmacao}`);
-
-    await mailersend.email.send(emailParams);
+    await mailersend.email.send(emailData);
     console.log("E-mail enviado para", destinatario);
   } catch (err) {
     console.error("Erro ao enviar e-mail:", err);
   }
 }
 
+
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
