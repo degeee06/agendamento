@@ -374,21 +374,33 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
     const mailOptions = {
-      from: '"Agenda" <seu_email@gmail.com>', // Pode ser SEU GMAIL mesmo!
+      from: `"Agenda" <${process.env.ELASTIC_EMAIL_USER}>`, // ✅ CORRETO!
       to: destinatario,
-      subject: "✅ Confirme seu horário",
+      subject: "✅ Confirme seu horário - Agenda",
       html: `
         <p>Olá <strong>${nome}</strong>,</p>
-        <p>Seu horário foi agendado com sucesso!</p>
-        <p>Clique para confirmar:</p>
-        <a href="${linkConfirmacao}" style="...">✅ Confirmar Horário</a>
+        <p>Seu horário foi agendado com sucesso! 🎉</p>
+        <p>Clique no link abaixo para confirmar:</p>
+        <a href="${linkConfirmacao}" style="
+          display: inline-block;
+          padding: 12px 24px;
+          background-color: #007bff;
+          color: white;
+          text-decoration: none;
+          border-radius: 5px;
+          font-weight: bold;
+        ">✅ Confirmar Horário</a>
+        
+        <p style="margin-top: 20px; color: #666; font-size: 12px;">
+          Se você não solicitou este agendamento, por favor ignore este e-mail.
+        </p>
       `
     };
 
     await transporter.sendMail(mailOptions);
-    console.log("E-mail enviado via Elastic Email!");
+    console.log("E-mail enviado via Elastic Email para:", destinatario);
   } catch (err) {
-    console.error("Erro:", err);
+    console.error("Erro ao enviar e-mail:", err);
   }
 }
 
@@ -396,6 +408,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
