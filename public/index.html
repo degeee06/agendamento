@@ -401,7 +401,7 @@
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
         const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhbmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let userToken = null;
@@ -703,8 +703,12 @@
                     return;
                 }
                 
-                const { agendamentos } = await res.json();
-                agendamentosCache = agendamentos;
+                if (!res.ok) {
+                    throw new Error(`Erro HTTP: ${res.status}`);
+                }
+                
+                const data = await res.json();
+                agendamentosCache = data.agendamentos || [];
                 meusAgendamentos.style.display = 'block';
                 document.getElementById('filtersSection').style.display = 'block';
                 document.getElementById('diasTabs').style.display = 'flex';
@@ -825,8 +829,9 @@
                 });
 
                 if (!pagamentoResponse.ok) {
-                    const errorData = await pagamentoResponse.json();
-                    throw new Error(errorData.error || 'Erro ao criar pagamento');
+                    const errorText = await pagamentoResponse.text();
+                    console.error("Erro no pagamento:", errorText);
+                    throw new Error('Erro ao criar pagamento');
                 }
 
                 const pagamentoData = await pagamentoResponse.json();
@@ -919,7 +924,7 @@
                 pagamentoPendente = true;
                 
             } catch(err) { 
-                console.error(err); 
+                console.error("Erro ao processar pagamento:", err); 
                 showToast("Erro ao processar pagamento","error"); 
             } finally {
                 // Esconder loading
