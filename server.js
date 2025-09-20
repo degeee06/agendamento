@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-
+import nodemailer from "nodemailer";
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +20,15 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+const transporter = nodemailer.createTransport({
+  host: "smtp.elasticemail.com",
+  port: 2525,
+  auth: {
+    user: process.env.ELASTIC_EMAIL_USER, // Seu e-mail
+    pass: process.env.ELASTIC_EMAIL_API_KEY // API Key
+  }
+});
 
 // Inicializa Mercado Pago
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
@@ -362,8 +371,32 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
 });
 
+async function enviarEmail(destinatario, nome, linkConfirmacao) {
+  try {
+    const mailOptions = {
+      from: '"Agenda" <seu_email@gmail.com>', // Pode ser SEU GMAIL mesmo!
+      to: destinatario,
+      subject: "✅ Confirme seu horário",
+      html: `
+        <p>Olá <strong>${nome}</strong>,</p>
+        <p>Seu horário foi agendado com sucesso!</p>
+        <p>Clique para confirmar:</p>
+        <a href="${linkConfirmacao}" style="...">✅ Confirmar Horário</a>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log("E-mail enviado via Elastic Email!");
+  } catch (err) {
+    console.error("Erro:", err);
+  }
+}
+
+
+
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
