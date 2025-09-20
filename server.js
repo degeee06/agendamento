@@ -373,44 +373,49 @@ app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
         umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7);
 
         // Agendamentos de hoje
-        const { data: agendamentosHoje } = await supabase
+        const { data: agendamentosHoje, error: errorHoje } = await supabase
             .from("agendamentos")
             .select("*")
             .eq("cliente", cliente)
             .eq("data", hoje)
             .neq("status", "cancelado");
 
-        // Total de agendamentos
-        const { count: totalAgendamentos } = await supabase
+        if (errorHoje) throw errorHoje;
+
+        // Total de agendamentos - FORMA CORRIGIDA
+        const { data: todosAgendamentos, error: errorTotal } = await supabase
             .from("agendamentos")
-            .select("*", { count: 'exact' })
+            .select("*")
             .eq("cliente", cliente)
             .neq("status", "cancelado");
 
+        if (errorTotal) throw errorTotal;
+
         // Agendamentos da semana
-        const { data: agendamentosSemana } = await supabase
+        const { data: agendamentosSemana, error: errorSemana } = await supabase
             .from("agendamentos")
             .select("*")
             .eq("cliente", cliente)
             .gte("data", umaSemanaAtras.toISOString().split('T')[0])
             .neq("status", "cancelado");
 
+        if (errorSemana) throw errorSemana;
+
         // Estatísticas por status
-        const { data: todosAgendamentos } = await supabase
-            .from("agendamentos")
-            .select("status")
-            .eq("cliente", cliente);
+        const confirmados = todosAgendamentos.filter(a => a.status === 'confirmado').length;
+        const pendentes = todosAgendamentos.filter(a => a.status === 'pendente').length;
+        const cancelados = todosAgendamentos.filter(a => a.status === 'cancelado').length;
 
         const estatisticas = {
             hoje: agendamentosHoje?.length || 0,
-            total: totalAgendamentos || 0,
+            total: todosAgendamentos?.length || 0,
             semana: agendamentosSemana?.length || 0,
             status: {
-                confirmado: todosAgendamentos?.filter(a => a.status === 'confirmado').length || 0,
-                pendente: todosAgendamentos?.filter(a => a.status === 'pendente').length || 0,
-                cancelado: todosAgendamentos?.filter(a => a.status === 'cancelado').length || 0
+                confirmado: confirmados,
+                pendente: pendentes,
+                cancelado: cancelados
             },
-            taxaConfirmacao: Math.round((todosAgendamentos?.filter(a => a.status === 'confirmado').length / totalAgendamentos) * 100) || 0
+            taxaConfirmacao: totalAgendamentos > 0 ? Math.round((confirmados / todosAgendamentos.length) * 100) : 0
         };
 
         res.json(estatisticas);
@@ -467,6 +472,7 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
