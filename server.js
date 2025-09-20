@@ -5,7 +5,9 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
+import mailersendPkg from "mailersend";
+const { MailerSend, EmailParams, Sender, Recipient } = mailersendPkg;
+
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
@@ -394,6 +396,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
