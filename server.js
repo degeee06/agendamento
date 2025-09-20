@@ -420,6 +420,7 @@ app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
     }
 });
 
+
 // ---------------- TOP CLIENTES ----------------
 app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
     try {
@@ -464,49 +465,9 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
     }
 });
 
-// ---------------- TOP CLIENTES ----------------
-app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
-    try {
-        const { cliente } = req.params;
-        if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-        const { data: agendamentos } = await supabase
-            .from("agendamentos")
-            .select("nome, email, telefone")
-            .eq("cliente", cliente)
-            .neq("status", "cancelado");
-
-        // Contagem por cliente
-        const clientesCount = agendamentos.reduce((acc, agendamento) => {
-            const key = agendamento.email;
-            acc[key] = (acc[key] || 0) + 1;
-            return acc;
-        }, {});
-
-        // Ordenar por quantidade
-        const topClientes = Object.entries(clientesCount)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 10)
-            .map(([email, count]) => {
-                const agendamento = agendamentos.find(a => a.email === email);
-                return {
-                    nome: agendamento?.nome || 'Não informado',
-                    email: email,
-                    telefone: agendamento?.telefone || 'Não informado',
-                    agendamentos: count
-                };
-            });
-
-        res.json(topClientes);
-    } catch (error) {
-        console.error("Erro ao buscar top clientes:", error);
-        res.status(500).json({ msg: "Erro interno" });
-    }
-});
-
-
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
