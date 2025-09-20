@@ -25,7 +25,6 @@ const supabase = createClient(
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 const payment = new Payment(mpClient);
 
-
 let creds;
 try {
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -73,23 +72,6 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-
-// ---------------- Helpers ----------------
-async function checkVip(email) {
-  const now = new Date();
-  const { data } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email.toLowerCase().trim())
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
-  return !!data;
-}
-
-
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
@@ -103,7 +85,6 @@ async function authMiddleware(req, res, next) {
   if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
   next();
 }
-
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   let query = supabase
@@ -149,7 +130,7 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// Cria PIX
+// Cria PIX para agendamento
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email } = req.body;
   if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
@@ -158,27 +139,93 @@ app.post("/create-pix", async (req, res) => {
     const result = await payment.create({
       body: {
         transaction_amount: Number(amount),
-        description: description || "Pagamento VIP",
+        description: description || "Pagamento de Agendamento",
         payment_method_id: "pix",
         payer: { email },
       },
     });
 
-    // Salva pagamento como pending com valid_until nulo
+    // Salva pagamento como pending
     await supabase.from("pagamentos").upsert(
-      [{ id: result.id, email, amount: Number(amount), status: "pending", valid_until: null }],
+      [{ 
+        id: result.id, 
+        email, 
+        amount: Number(amount), 
+        status: "pending", 
+        valid_until: null,
+        description: description || "Pagamento de Agendamento"
+      }],
       { onConflict: ["id"] }
     );
 
     res.json({
-      id: result.id,
+      payment_id: result.id,
       status: result.status,
       qr_code: result.point_of_interaction.transaction_data.qr_code,
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Verifica status do pagamento
+app.get("/check-payment/:paymentId", async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    
+    // Primeiro verifica no banco de dados
+    const { data: paymentData, error: dbError } = await supabase
+      .from("pagamentos")
+      .select("*")
+      .eq("id", paymentId)
+      .single();
+
+    if (dbError) {
+      console.error("Erro ao buscar pagamento no banco:", dbError);
+      return res.status(500).json({ error: "Erro ao verificar pagamento" });
+    }
+
+    // Se já está aprovado no banco, retorna
+    if (paymentData.status === "approved") {
+      return res.json({ status: "approved", payment: paymentData });
+    }
+
+    // Se não está aprovado, verifica no Mercado Pago
+    try {
+      const paymentDetails = await payment.get({ id: paymentId });
+      
+      // Atualiza status no banco se mudou
+      if (paymentDetails.status !== paymentData.status) {
+        let valid_until = paymentData.valid_until;
+        
+        if (["approved", "paid"].includes(paymentDetails.status.toLowerCase())) {
+          const vipExpires = new Date();
+          vipExpires.setDate(vipExpires.getDate() + 30);
+          valid_until = vipExpires.toISOString();
+        }
+
+        await supabase
+          .from("pagamentos")
+          .update({ 
+            status: paymentDetails.status, 
+            valid_until 
+          })
+          .eq("id", paymentId);
+      }
+
+      res.json({ status: paymentDetails.status, payment: paymentDetails });
+
+    } catch (mpError) {
+      console.error("Erro ao verificar pagamento no Mercado Pago:", mpError);
+      // Se não conseguir verificar no MP, retorna o status do banco
+      res.json({ status: paymentData.status, payment: paymentData });
+    }
+
+  } catch (err) {
+    console.error("Erro em /check-payment:", err);
+    res.status(500).json({ error: "Erro interno ao verificar pagamento" });
   }
 });
 
@@ -254,36 +301,11 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
-    // Checa VIP (para limite de agendamentos/dia)
-    const isVip = await checkVip(emailNormalizado);
-
-    if (!isVip) {
-      const startDay = new Date(Data); startDay.setHours(0,0,0,0);
-      const endDay = new Date(Data); endDay.setHours(23,59,59,999);
-
-      const { data: agendamentosHoje } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("cliente", cliente)
-        .ilike("email", emailNormalizado)
-        .in("status", ["pendente", "confirmado"])
-        .gte("created_at", startDay.toISOString())
-        .lte("created_at", endDay.toISOString());
-
-      if (agendamentosHoje.length >= 3)
-        return res.status(402).json({
-          msg: "Você atingiu o limite de 3 agendamentos/dia. Faça upgrade para VIP.",
-        });
+    // Verifica se o horário está disponível
+    const disponivel = await horarioDisponivel(cliente, dataNormalizada, Horario);
+    if (!disponivel) {
+      return res.status(400).json({ msg: "Horário indisponível para agendamento" });
     }
-
-    // Limpeza de agendamentos cancelados (opcional)
-    await supabase
-      .from("agendamentos")
-      .delete()
-      .eq("cliente", cliente)
-      .eq("data", dataNormalizada)
-      .eq("horario", Horario)
-      .eq("status", "cancelado");
 
     // Debug: log dos dados que vão ser inseridos
     console.log({
@@ -291,7 +313,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       dataNormalizada, emailNormalizado
     });
 
-    // Inserção sem checagem de horário disponível
+    // Inserção do agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -301,19 +323,27 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         telefone: Telefone,
         data: dataNormalizada,
         horario: Horario,
-        status: "pendente",   // sempre pendente
-        confirmado: false,    // sempre falso
+        status: "pendente",
+        confirmado: false,
       }])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Erro ao inserir agendamento:", error);
+      return res.status(500).json({ msg: "Erro ao criar agendamento" });
+    }
 
     // Atualiza Google Sheet
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-    await sheet.addRow(novoAgendamento);
+    try {
+      const doc = await accessSpreadsheet(cliente);
+      const sheet = doc.sheetsByIndex[0];
+      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+      await sheet.addRow(novoAgendamento);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+      // Não falha a requisição por erro no sheet
+    }
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
@@ -323,162 +353,196 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-
 // ---------------- Confirmar / Cancelar / Reagendar ----------------
 app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
-  const { cliente, id } = req.params;
-  if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-  const { data } = await supabase.from("agendamentos")
-    .update({confirmado:true,status:"confirmado"})
-    .eq("id",id).eq("cliente",cliente).select().single();
-  const doc = await accessSpreadsheet(cliente);
-  await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-  res.json({msg:"Agendamento confirmado", agendamento:data});
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({confirmado:true,status:"confirmado"})
+      .eq("id",id).eq("cliente",cliente).select().single();
+    
+    if (error) throw error;
+    
+    // Atualiza Google Sheet
+    try {
+      const doc = await accessSpreadsheet(cliente);
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+    
+    res.json({msg:"Agendamento confirmado", agendamento:data});
+  } catch (error) {
+    console.error("Erro ao confirmar agendamento:", error);
+    res.status(500).json({msg:"Erro interno"});
+  }
 });
 
 app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=>{
-  const { cliente, id } = req.params;
-  if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-  const { data } = await supabase.from("agendamentos")
-    .update({status:"cancelado", confirmado:false})
-    .eq("id",id).eq("cliente",cliente).select().single();
-  const doc = await accessSpreadsheet(cliente);
-  await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-  res.json({msg:"Agendamento cancelado", agendamento:data});
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({status:"cancelado", confirmado:false})
+      .eq("id",id).eq("cliente",cliente).select().single();
+    
+    if (error) throw error;
+    
+    // Atualiza Google Sheet
+    try {
+      const doc = await accessSpreadsheet(cliente);
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+    
+    res.json({msg:"Agendamento cancelado", agendamento:data});
+  } catch (error) {
+    console.error("Erro ao cancelar agendamento:", error);
+    res.status(500).json({msg:"Erro interno"});
+  }
 });
 
 app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)=>{
-  const { cliente, id } = req.params;
-  const { novaData, novoHorario } = req.body;
-  if (!novaData || !novoHorario) return res.status(400).json({msg:"Data e horário obrigatórios"});
-  if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-  const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
-  if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
-  const { data } = await supabase.from("agendamentos")
-    .update({data:novaData, horario:novoHorario})
-    .eq("id",id).eq("cliente",cliente).select().single();
-  const doc = await accessSpreadsheet(cliente);
-  await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-  res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
+  try {
+    const { cliente, id } = req.params;
+    const { novaData, novoHorario } = req.body;
+    if (!novaData || !novoHorario) return res.status(400).json({msg:"Data e horário obrigatórios"});
+    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
+    
+    const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
+    if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({data:novaData, horario:novoHorario})
+      .eq("id",id).eq("cliente",cliente).select().single();
+    
+    if (error) throw error;
+    
+    // Atualiza Google Sheet
+    try {
+      const doc = await accessSpreadsheet(cliente);
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+    
+    res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
+  } catch (error) {
+    console.error("Erro ao reagendar:", error);
+    res.status(500).json({msg:"Erro interno"});
+  }
 });
 
 // ---------------- ESTATÍSTICAS ----------------
 app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
-    try {
-        const { cliente } = req.params;
-        if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+  try {
+    const { cliente } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-        const hoje = new Date().toISOString().split('T')[0];
-        const umaSemanaAtras = new Date();
-        umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7);
+    const hoje = new Date().toISOString().split('T')[0];
+    const umaSemanaAtras = new Date();
+    umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7);
 
-        // Agendamentos de hoje
-        const { data: agendamentosHoje, error: errorHoje } = await supabase
-            .from("agendamentos")
-            .select("*")
-            .eq("cliente", cliente)
-            .eq("data", hoje)
-            .neq("status", "cancelado");
+    // Agendamentos de hoje
+    const { data: agendamentosHoje, error: errorHoje } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .eq("data", hoje)
+      .neq("status", "cancelado");
 
-        if (errorHoje) throw errorHoje;
+    if (errorHoje) throw errorHoje;
 
-        // Total de agendamentos - FORMA CORRIGIDA
-        const { data: todosAgendamentos, error: errorTotal } = await supabase
-            .from("agendamentos")
-            .select("*")
-            .eq("cliente", cliente)
-            .neq("status", "cancelado");
+    // Total de agendamentos
+    const { data: todosAgendamentos, error: errorTotal } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .neq("status", "cancelado");
 
-        if (errorTotal) throw errorTotal;
+    if (errorTotal) throw errorTotal;
 
-        // Agendamentos da semana
-        const { data: agendamentosSemana, error: errorSemana } = await supabase
-            .from("agendamentos")
-            .select("*")
-            .eq("cliente", cliente)
-            .gte("data", umaSemanaAtras.toISOString().split('T')[0])
-            .neq("status", "cancelado");
+    // Agendamentos da semana
+    const { data: agendamentosSemana, error: errorSemana } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .gte("data", umaSemanaAtras.toISOString().split('T')[0])
+      .neq("status", "cancelado");
 
-        if (errorSemana) throw errorSemana;
+    if (errorSemana) throw errorSemana;
 
-        // Estatísticas por status
-        const confirmados = todosAgendamentos.filter(a => a.status === 'confirmado').length;
-        const pendentes = todosAgendamentos.filter(a => a.status === 'pendente').length;
-        const cancelados = todosAgendamentos.filter(a => a.status === 'cancelado').length;
+    // Estatísticas por status
+    const confirmados = todosAgendamentos.filter(a => a.status === 'confirmado').length;
+    const pendentes = todosAgendamentos.filter(a => a.status === 'pendente').length;
+    const cancelados = todosAgendamentos.filter(a => a.status === 'cancelado').length;
 
-        const estatisticas = {
-            hoje: agendamentosHoje?.length || 0,
-            total: todosAgendamentos?.length || 0,
-            semana: agendamentosSemana?.length || 0,
-            status: {
-                confirmado: confirmados,
-                pendente: pendentes,
-                cancelado: cancelados
-            },
-            taxaConfirmacao: totalAgendamentos > 0 ? Math.round((confirmados / todosAgendamentos.length) * 100) : 0
-        };
+    const estatisticas = {
+      hoje: agendamentosHoje?.length || 0,
+      total: todosAgendamentos?.length || 0,
+      semana: agendamentosSemana?.length || 0,
+      status: {
+        confirmado: confirmados,
+        pendente: pendentes,
+        cancelado: cancelados
+      },
+      taxaConfirmacao: todosAgendamentos.length > 0 ? Math.round((confirmados / todosAgendamentos.length) * 100) : 0
+    };
 
-        res.json(estatisticas);
-    } catch (error) {
-        console.error("Erro ao buscar estatísticas:", error);
-        res.status(500).json({ msg: "Erro interno" });
-    }
+    res.json(estatisticas);
+  } catch (error) {
+    console.error("Erro ao buscar estatísticas:", error);
+    res.status(500).json({ msg: "Erro interno" });
+  }
 });
-
 
 // ---------------- TOP CLIENTES ----------------
 app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
-    try {
-        const { cliente } = req.params;
-        if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+  try {
+    const { cliente } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-        const { data: agendamentos } = await supabase
-            .from("agendamentos")
-            .select("nome, email, telefone")
-            .eq("cliente", cliente)
-            .neq("status", "cancelado");
+    const { data: agendamentos } = await supabase
+      .from("agendamentos")
+      .select("nome, email, telefone")
+      .eq("cliente", cliente)
+      .neq("status", "cancelado");
 
-        if (!agendamentos) {
-            return res.json([]);
-        }
-
-        // Contagem por cliente
-        const clientesCount = agendamentos.reduce((acc, agendamento) => {
-            const key = agendamento.email;
-            acc[key] = (acc[key] || 0) + 1;
-            return acc;
-        }, {});
-
-        // Ordenar por quantidade
-        const topClientes = Object.entries(clientesCount)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 10)
-            .map(([email, count]) => {
-                const agendamento = agendamentos.find(a => a.email === email);
-                return {
-                    nome: agendamento?.nome || 'Não informado',
-                    email: email,
-                    telefone: agendamento?.telefone || 'Não informado',
-                    agendamentos: count
-                };
-            });
-
-        res.json(topClientes);
-    } catch (error) {
-        console.error("Erro ao buscar top clientes:", error);
-        res.status(500).json({ msg: "Erro interno" });
+    if (!agendamentos) {
+      return res.json([]);
     }
+
+    // Contagem por cliente
+    const clientesCount = agendamentos.reduce((acc, agendamento) => {
+      const key = agendamento.email;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Ordenar por quantidade
+    const topClientes = Object.entries(clientesCount)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([email, count]) => {
+        const agendamento = agendamentos.find(a => a.email === email);
+        return {
+          nome: agendamento?.nome || 'Não informado',
+          email: email,
+          telefone: agendamento?.telefone || 'Não informado',
+          agendamentos: count
+        };
+      });
+
+    res.json(topClientes);
+  } catch (error) {
+    console.error("Erro ao buscar top clientes:", error);
+    res.status(500).json({ msg: "Erro interno" });
+  }
 });
 
 // ---------------- Servidor ----------------
-app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
-
-
-
-
-
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
