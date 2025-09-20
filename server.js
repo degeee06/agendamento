@@ -131,10 +131,8 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 // Cria PIX para agendamento
+// Modificar no server.js - Rota /create-pix
 app.post("/create-pix", async (req, res) => {
-  const { amount, description, email } = req.body;
-  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
-
   try {
     const result = await payment.create({
       body: {
@@ -142,8 +140,38 @@ app.post("/create-pix", async (req, res) => {
         description: description || "Pagamento de Agendamento",
         payment_method_id: "pix",
         payer: { email },
+        // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
+        date_of_expiration: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
       },
     });
+  }
+});
+
+// Adicionar função para limpar agendamentos expirados
+async function limparAgendamentosExpirados() {
+  const quinzeMinutosAtras = new Date(Date.now() - 15 * 60 * 1000);
+  
+  const { data: agendamentosExpirados } = await supabase
+    .from("agendamentos")
+    .select("id, cliente, email, data, horario")
+    .eq("status", "pendente")
+    .lt("created_at", quinzeMinutosAtras.toISOString());
+
+  for (const agendamento of agendamentosExpirados) {
+    // Cancela agendamento não pago
+    await supabase
+      .from("agendamentos")
+      .update({ status: "cancelado" })
+      .eq("id", agendamento.id);
+    
+    console.log(`Agendamento ${agendamento.id} cancelado por falta de pagamento`);
+  }
+}
+
+// Executar a cada 5 minutos
+setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
+
+
 
     // Salva pagamento como pending
     await supabase.from("pagamentos").upsert(
@@ -546,3 +574,4 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
