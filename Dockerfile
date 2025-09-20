@@ -13,8 +13,10 @@ RUN npm install
 # Copia todo o restante da aplicação
 COPY . .
 
-# Porta que o Render vai expor (use a mesma do seu server.js)
+# Expõe a porta que seu server.js usa
 EXPOSE 10000
+
+# Variáveis de ambiente podem ser definidas no Render, não aqui
 
 # Comando para iniciar o server
 CMD ["node", "server.js"]
