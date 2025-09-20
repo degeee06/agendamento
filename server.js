@@ -6,14 +6,14 @@ import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import mailersendPkg from "mailersend";
-const { MailerSend, EmailParams, Sender, Recipient } = mailersendPkg;
 
+const { MailerSend, EmailParams, Sender, Recipient } = mailersendPkg;
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
-const mailersend = new MailerSend({ apiKey: process.env.MAILERSEND_API_KEY });
+const mailersend = MailerSend({ apiKey: process.env.MAILERSEND_API_KEY });
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -379,15 +379,13 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
       .setFrom(sentFrom)
       .setTo(recipients)
       .setSubject("Confirme seu horário")
-      .setHtml(`
-        <p>Olá ${nome},</p>
-        <p>Seu horário foi agendado.</p>
-        <p>Clique para confirmar:</p>
-        <a href="${linkConfirmacao}">✅ Confirmar Horário</a>
-      `);
+      .setHtml(`<p>Olá ${nome},</p>
+                <p>Seu horário foi agendado.</p>
+                <p>Clique para confirmar:</p>
+                <a href="${linkConfirmacao}">✅ Confirmar Horário</a>`)
+      .setText(`Olá ${nome}, confirme seu horário: ${linkConfirmacao}`);
 
     await mailersend.email.send(emailParams);
-
     console.log("E-mail enviado para", destinatario);
   } catch (err) {
     console.error("Erro ao enviar e-mail:", err);
@@ -396,6 +394,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
