@@ -377,9 +377,14 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
-    await mailersend.messages.send({
+    // Verificar se mailersend está inicializado corretamente
+    if (!mailersend || !mailersend.messages) {
+      throw new Error("MailerSend não foi inicializado corretamente");
+    }
+
+    const response = await mailersend.messages.send({
       from: {
-        email: "worldgsuporte@gmail.com", // precisa ser um domínio verificado no MailerSend
+        email: "worldgsuporte@gmail.com",
         name: "Agenda"
       },
       to: [
@@ -390,15 +395,28 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
       ],
       subject: "Confirme seu horário",
       text: `Olá ${nome}, confirme seu horário: ${linkConfirmacao}`,
-      html: `<p>Olá ${nome},</p>
-             <p>Seu horário foi agendado.</p>
-             <p>Clique para confirmar:</p>
-             <a href="${linkConfirmacao}">✅ Confirmar Horário</a>`
+      html: `
+        <p>Olá ${nome},</p>
+        <p>Seu horário foi agendado.</p>
+        <p>Clique para confirmar:</p>
+        <a href="${linkConfirmacao}" style="
+          display: inline-block;
+          padding: 10px 20px;
+          background-color: #007bff;
+          color: white;
+          text-decoration: none;
+          border-radius: 5px;
+        ">✅ Confirmar Horário</a>
+      `
     });
 
-    console.log("E-mail enviado para", destinatario);
+    console.log("E-mail enviado para", destinatario, "Status:", response);
+    return response;
   } catch (err) {
     console.error("Erro ao enviar e-mail:", err);
+    // Log mais detalhado para debugging
+    console.error("Erro details:", err.response?.data || err.message);
+    throw err; // Re-throw para que o chamador saiba que houve erro
   }
 }
 
@@ -407,6 +425,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
