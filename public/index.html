@@ -458,6 +458,9 @@ function init() {
         form.style.display = 'block';
         logoutBtn.style.display = 'flex';
         listarAgendamentos();
+        
+        // ✅ ADICIONE ESTA LINHA - Verificar VIP automaticamente ao carregar
+        checkFreeLimit();
     }
 }
         // ---------------- TOASTS ----------------
@@ -744,6 +747,7 @@ loginBtn.addEventListener('click', async () => {
             document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
 
             carregarDashboard();
+            checkFreeLimit();
         });
 
         showToast("Login realizado com sucesso!", "success");
@@ -1220,6 +1224,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
