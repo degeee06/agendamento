@@ -5,17 +5,12 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import MailerSend from "mailersend";
-
-
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
-const mailersend = new MailerSend({
-  apiKey: process.env.MAILERSEND_API_KEY,
-});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -296,36 +291,31 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       dataNormalizada, emailNormalizado
     });
 
-    // Inserção no Supabase
-const { data: novoAgendamento, error } = await supabase
-  .from("agendamentos")
-  .insert([{
-    cliente,
-    nome: Nome,
-    email: emailNormalizado,
-    telefone: Telefone,
-    data: dataNormalizada,
-    horario: Horario,
-    status: "pendente",
-    confirmado: false,
-  }])
-  .select()
-  .single();
+    // Inserção sem checagem de horário disponível
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente,
+        nome: Nome,
+        email: emailNormalizado,
+        telefone: Telefone,
+        data: dataNormalizada,
+        horario: Horario,
+        status: "pendente",   // sempre pendente
+        confirmado: false,    // sempre falso
+      }])
+      .select()
+      .single();
 
-if (error) throw error;
+    if (error) throw error;
 
-// Atualiza Google Sheet
-const doc = await accessSpreadsheet(cliente);
-const sheet = doc.sheetsByIndex[0];
-await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-await sheet.addRow(novoAgendamento);
+    // Atualiza Google Sheet
+    const doc = await accessSpreadsheet(cliente);
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+    await sheet.addRow(novoAgendamento);
 
-// Enviar e-mail pelo MailerSend
-const linkConfirmacao = `${process.env.FRONTEND_URL}/confirmar?id=${novoAgendamento.id}`;
-await enviarEmail(emailNormalizado, Nome, linkConfirmacao);
-
-res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
-
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
   } catch (err) {
     console.error("Erro no /agendar:", err);
@@ -372,78 +362,8 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
 });
 
-
-
-
-async function enviarEmail(destinatario, nome, linkConfirmacao) {
-  try {
-    // Verificar se mailersend está inicializado corretamente
-    if (!mailersend || !mailersend.messages) {
-      throw new Error("MailerSend não foi inicializado corretamente");
-    }
-
-    const response = await mailersend.messages.send({
-      from: {
-        email: "worldgsuporte@gmail.com",
-        name: "Agenda"
-      },
-      to: [
-        {
-          email: destinatario,
-          name: nome
-        }
-      ],
-      subject: "Confirme seu horário",
-      text: `Olá ${nome}, confirme seu horário: ${linkConfirmacao}`,
-      html: `
-        <p>Olá ${nome},</p>
-        <p>Seu horário foi agendado.</p>
-        <p>Clique para confirmar:</p>
-        <a href="${linkConfirmacao}" style="
-          display: inline-block;
-          padding: 10px 20px;
-          background-color: #007bff;
-          color: white;
-          text-decoration: none;
-          border-radius: 5px;
-        ">✅ Confirmar Horário</a>
-      `
-    });
-
-    console.log("E-mail enviado para", destinatario, "Status:", response);
-    return response;
-  } catch (err) {
-    console.error("Erro ao enviar e-mail:", err);
-    // Log mais detalhado para debugging
-    console.error("Erro details:", err.response?.data || err.message);
-    throw err; // Re-throw para que o chamador saiba que houve erro
-  }
-}
-
-
-
-
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
