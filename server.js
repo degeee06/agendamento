@@ -21,12 +21,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Configuração CORRETA para SMTP
 const transporter = nodemailer.createTransport({
   host: "smtp.elasticemail.com",
-  port: 2525,
+  port: 2525,  // ou 587, 465
+  secure: false,  // true para porta 465, false para outras
   auth: {
-    user: process.env.ELASTIC_EMAIL_USER, // Seu e-mail
-    pass: process.env.ELASTIC_EMAIL_API_KEY // API Key
+    user: process.env.ELASTIC_EMAIL_SMTP_USER,    // SEU USERNAME SMTP
+    pass: process.env.ELASTIC_EMAIL_SMTP_PASSWORD // SUA SENHA SMTP
   }
 });
 
@@ -374,13 +376,13 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
     const mailOptions = {
-      from: `"Agenda" <${process.env.ELASTIC_EMAIL_USER}>`, // ✅ CORRETO!
+      from: `"Agenda" <${process.env.ELASTIC_EMAIL_SMTP_USER}>`,
       to: destinatario,
-      subject: "✅ Confirme seu horário - Agenda",
+      subject: "✅ Confirme seu horário",
       html: `
         <p>Olá <strong>${nome}</strong>,</p>
-        <p>Seu horário foi agendado com sucesso! 🎉</p>
-        <p>Clique no link abaixo para confirmar:</p>
+        <p>Seu horário foi agendado com sucesso!</p>
+        <p>Clique para confirmar:</p>
         <a href="${linkConfirmacao}" style="
           display: inline-block;
           padding: 12px 24px;
@@ -390,24 +392,20 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
           border-radius: 5px;
           font-weight: bold;
         ">✅ Confirmar Horário</a>
-        
-        <p style="margin-top: 20px; color: #666; font-size: 12px;">
-          Se você não solicitou este agendamento, por favor ignore este e-mail.
-        </p>
       `
     };
 
     await transporter.sendMail(mailOptions);
-    console.log("E-mail enviado via Elastic Email para:", destinatario);
+    console.log("E-mail enviado via Elastic Email!");
   } catch (err) {
-    console.error("Erro ao enviar e-mail:", err);
+    console.error("Erro:", err);
   }
 }
 
 
-
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
