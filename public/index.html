@@ -741,14 +741,16 @@ loginBtn.addEventListener('click', async () => {
         logoutBtn.style.display = 'flex';
 
         listarAgendamentos().then(() => {
-            let hoje = new Date().getDay();
-            if (hoje === 0) hoje = 1;
-            document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
-            document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
+    let hoje = new Date().getDay();
+    if (hoje === 0) hoje = 1;
+    document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
+    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
 
-            carregarDashboard();
-            checkFreeLimit();
-        });
+    carregarDashboard();
+    
+    // ✅ ADICIONE ESTA LINHA - Verificar VIP após login
+    checkFreeLimit();
+});
 
         showToast("Login realizado com sucesso!", "success");
 
@@ -1224,6 +1226,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
