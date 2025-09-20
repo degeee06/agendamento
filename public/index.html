@@ -450,10 +450,10 @@ function init() {
         dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
     }
     
-    // Verificar se já está logado
+    // Verificar se já está logado - RESTAURAR userToken PRIMEIRO
     const token = localStorage.getItem('userToken');
     if (token) {
-        userToken = token;
+        userToken = token; // ✅ RESTAURA O TOKEN ANTES DE USAR
         loginSection.style.display = 'none';
         form.style.display = 'block';
         logoutBtn.style.display = 'flex';
@@ -1242,6 +1242,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
