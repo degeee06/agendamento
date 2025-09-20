@@ -378,8 +378,16 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
     await mailersend.messages.send({
-      from: { email: "worldgsuporte@gmail.com", name: "Agenda" },
-      to: [{ email: destinatario, name: nome }],
+      from: {
+        email: "worldgsuporte@gmail.com", // precisa ser um domínio verificado no MailerSend
+        name: "Agenda"
+      },
+      to: [
+        {
+          email: destinatario,
+          name: nome
+        }
+      ],
       subject: "Confirme seu horário",
       text: `Olá ${nome}, confirme seu horário: ${linkConfirmacao}`,
       html: `<p>Olá ${nome},</p>
@@ -399,6 +407,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
