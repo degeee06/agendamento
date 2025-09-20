@@ -340,7 +340,7 @@
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
-    <script type="module">
+   <script type="module">
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
     const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
@@ -605,21 +605,21 @@
         confirmarBtn.parentNode.replaceChild(novoConfirmarBtn, confirmarBtn);
 
         novoConfirmarBtn.addEventListener("click", () => {
-        const novaData = modal.querySelector("#novaData").value;
-        const novoHorario = modal.querySelector("#novoHorario").value;
+            const novaData = modal.querySelector("#novaData").value;
+            const novoHorario = modal.querySelector("#novoHorario").value;
 
-        if (!novaData || !novoHorario) {
-            alert("Preencha data e horário corretamente!");
-            return;
-        }
+            if (!novaData || !novoHorario) {
+                showToast("Preencha data e horário corretamente!", "warning");
+                return;
+            }
 
-        reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
-        modal.classList.add("hidden");
-    });
+            reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
+            modal.classList.add("hidden");
+        });
 
-    // Mostra modal
-    modal.classList.remove("hidden");
-}
+        // Mostra modal
+        modal.classList.remove("hidden");
+    }
 
     // ---------------- LISTAR AGENDAMENTOS ----------------
     async function listarAgendamentos(){
@@ -722,39 +722,52 @@
         showToast("Logout realizado com sucesso", "info");
     });
 
-  // ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+    // ---------------- AGENDAR ----------------
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const dataToSend = {};
+        formData.forEach((v, k) => dataToSend[k] = v);
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
+        // Verifica campos obrigatórios
+        if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+            showToast("Preencha todos os campos", "warning");
+            return;
+        }
 
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
+        // Mostrar loading
+        agendarText.classList.add('hidden');
+        agendarSpinner.classList.remove('hidden');
+        form.querySelector('button[type="submit"]').disabled = true;
+
+        try {
+            const response = await fetch(`/agendar/${cliente}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    "Authorization": `Bearer ${userToken}`
+                },
+                body: JSON.stringify(dataToSend)
+            });
+
+            if (response.ok) {
+                showToast("Agendado com sucesso!", "success");
+                form.reset();
+                listarAgendamentos();
+            } else {
+                const errorData = await response.json();
+                showToast(errorData.message || "Não foi possível agendar!", "error");
             }
-        });
+        } catch (err) {
+            console.error(err);
+            showToast("Erro ao enviar agendamento", "error");
+        } finally {
+            // Esconder loading
+            agendarText.classList.remove('hidden');
+            agendarSpinner.classList.add('hidden');
+            form.querySelector('button[type="submit"]').disabled = false;
+        }
+    });
 
     // ---------------- FILTROS ----------------
     searchInput.addEventListener("input", renderAgendamentos);
@@ -792,7 +805,7 @@
                 const semanas = parseInt(btn.dataset.semana);
                 const dataLimite = new Date();
                 dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                diaSelecionado = semanas; // Usar o valor numérico diretamente para semanas
+                diaSelecionado = semanas;
                 renderAgendamentos();
             });
         });
@@ -1001,47 +1014,41 @@
         }
     }
 
-   async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-    if (!userToken) {
-        showToast("Faça login para reagendar um agendamento.", "warning");
-        return;
-    }
+    async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
+        if (!userToken) {
+            showToast("Faça login para reagendar um agendamento.", "warning");
+            return;
+        }
 
-    try {
-        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ 
-                novaData, 
-                novoHorario, 
-                status: "pendente",
-                confirmado: false
-            })
-        });
+        try {
+            const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${userToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ 
+                    novaData, 
+                    novoHorario, 
+                    status: "pendente",
+                    confirmado: false
+                })
+            });
 
-        const data = await res.json();
+            const data = await res.json();
 
-        if (res.ok) {
-            showToast("Agendamento reagendado com sucesso!", "success");
-            listarAgendamentos();
-        } else {
-            // Detecta conflito de horário (erro do índice único)
-            if (data.code === "23505") {
-                showToast("Já existe um agendamento nesse horário para este cliente.", "error");
+            if (res.ok) {
+                showToast("Agendamento reagendado com sucesso!", "success");
+                listarAgendamentos();
             } else {
                 showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
             }
+
+        } catch (e) {
+            console.error(e);
+            showToast("Erro de conexão ao reagendar.", "error");
         }
-
-    } catch (e) {
-        console.error(e);
-        showToast("Erro de conexão ao reagendar.", "error");
     }
-}
-
 
     function criarBotaoVIP() {
         const agendamentoForm = document.getElementById('agendamentoForm');
