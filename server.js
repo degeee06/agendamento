@@ -5,15 +5,13 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import MailerSend from "mailersend";
+import { MailerSend, EmailParams } from "mailersend";
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
-const mailersend = new MailerSend({
-  apiKey: process.env.MAILERSEND_API_KEY
-});
+const mailersend = new MailerSend({ apiKey: process.env.MAILERSEND_API_KEY });
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -370,29 +368,30 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
 });
 
-// Função para enviar e-mail
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
-    await mailersend.email.send({
-      from: "Agenda <worldgsuporte@gmail.com>",
-      to: [{ email: destinatario, name: nome }],
-      subject: "Confirme seu horário",
-      html: `
+    const emailParams = new EmailParams()
+      .setFrom("Agenda <seu-email@seudominio.com>")
+      .setTo([{ email: destinatario, name: nome }])
+      .setSubject("Confirme seu horário")
+      .setHtml(`
         <p>Olá ${nome},</p>
         <p>Seu horário foi agendado.</p>
         <p>Clique para confirmar:</p>
         <a href="${linkConfirmacao}">✅ Confirmar Horário</a>
-      `
-    });
+      `);
+
+    await mailersend.send(emailParams);
+
     console.log("E-mail enviado para", destinatario);
   } catch (err) {
     console.error("Erro ao enviar e-mail:", err);
   }
 }
 
-
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
