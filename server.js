@@ -381,9 +381,9 @@ app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
             .neq("status", "cancelado");
 
         // Total de agendamentos
-        const { data: totalAgendamentos } = await supabase
+        const { count: totalAgendamentos } = await supabase
             .from("agendamentos")
-            .select("id")
+            .select("*", { count: 'exact' })
             .eq("cliente", cliente)
             .neq("status", "cancelado");
 
@@ -396,26 +396,70 @@ app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
             .neq("status", "cancelado");
 
         // Estatísticas por status
-        const { data: porStatus } = await supabase
+        const { data: todosAgendamentos } = await supabase
             .from("agendamentos")
             .select("status")
             .eq("cliente", cliente);
 
         const estatisticas = {
-            hoje: agendamentosHoje.length,
-            total: totalAgendamentos.length,
-            semana: agendamentosSemana.length,
+            hoje: agendamentosHoje?.length || 0,
+            total: totalAgendamentos || 0,
+            semana: agendamentosSemana?.length || 0,
             status: {
-                confirmado: porStatus.filter(a => a.status === 'confirmado').length,
-                pendente: porStatus.filter(a => a.status === 'pendente').length,
-                cancelado: porStatus.filter(a => a.status === 'cancelado').length
+                confirmado: todosAgendamentos?.filter(a => a.status === 'confirmado').length || 0,
+                pendente: todosAgendamentos?.filter(a => a.status === 'pendente').length || 0,
+                cancelado: todosAgendamentos?.filter(a => a.status === 'cancelado').length || 0
             },
-            taxaConfirmacao: Math.round((porStatus.filter(a => a.status === 'confirmado').length / totalAgendamentos.length) * 100) || 0
+            taxaConfirmacao: Math.round((todosAgendamentos?.filter(a => a.status === 'confirmado').length / totalAgendamentos) * 100) || 0
         };
 
         res.json(estatisticas);
     } catch (error) {
         console.error("Erro ao buscar estatísticas:", error);
+        res.status(500).json({ msg: "Erro interno" });
+    }
+});
+
+// ---------------- TOP CLIENTES ----------------
+app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
+    try {
+        const { cliente } = req.params;
+        if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+        const { data: agendamentos } = await supabase
+            .from("agendamentos")
+            .select("nome, email, telefone")
+            .eq("cliente", cliente)
+            .neq("status", "cancelado");
+
+        if (!agendamentos) {
+            return res.json([]);
+        }
+
+        // Contagem por cliente
+        const clientesCount = agendamentos.reduce((acc, agendamento) => {
+            const key = agendamento.email;
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+        }, {});
+
+        // Ordenar por quantidade
+        const topClientes = Object.entries(clientesCount)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 10)
+            .map(([email, count]) => {
+                const agendamento = agendamentos.find(a => a.email === email);
+                return {
+                    nome: agendamento?.nome || 'Não informado',
+                    email: email,
+                    telefone: agendamento?.telefone || 'Não informado',
+                    agendamentos: count
+                };
+            });
+
+        res.json(topClientes);
+    } catch (error) {
+        console.error("Erro ao buscar top clientes:", error);
         res.status(500).json({ msg: "Erro interno" });
     }
 });
@@ -463,6 +507,7 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
