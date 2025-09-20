@@ -687,26 +687,38 @@ function init() {
 
 
         // ---------------- LISTAR AGENDAMENTOS ----------------
-        async function listarAgendamentos(){
-            if(!userToken) return;
-            try{
-                const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: { "Authorization": `Bearer ${userToken}` }
-                });
-                const { agendamentos } = await res.json();
-                agendamentosCache = agendamentos;
-                meusAgendamentos.style.display = 'block';
-                document.getElementById('filtersSection').style.display = 'block';
-                document.getElementById('diasTabs').style.display = 'flex';
-                initTabsDias();
-                renderAgendamentos(); 
-                checkFreeLimit();
-            } catch(e){
-                console.error(e);
-                showToast("Erro ao listar agendamentos","error");
-            }
+        // ---------------- LISTAR AGENDAMENTOS ----------------
+async function listarAgendamentos(){
+    if(!userToken) {
+        console.error("Token não disponível");
+        return;
+    }
+    
+    try{
+        const res = await fetch(`/agendamentos/${cliente}`, {
+            headers: { "Authorization": `Bearer ${userToken}` }
+        });
+        
+        if (res.status === 401) {
+            // Token expirado ou inválido
+            showToast("Sessão expirada. Faça login novamente.", "error");
+            logoutBtn.click(); // Força logout
+            return;
         }
-
+        
+        const { agendamentos } = await res.json();
+        agendamentosCache = agendamentos;
+        meusAgendamentos.style.display = 'block';
+        document.getElementById('filtersSection').style.display = 'block';
+        document.getElementById('diasTabs').style.display = 'flex';
+        initTabsDias();
+        renderAgendamentos(); 
+        checkFreeLimit();
+    } catch(e){
+        console.error("Erro ao listar agendamentos:", e);
+        showToast("Erro ao listar agendamentos","error");
+    }
+}
       // ---------------- LOGIN ----------------
 loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value;
@@ -768,16 +780,21 @@ loginBtn.addEventListener('click', async () => {
 });
 
 
-        // ---------------- LOGOUT ----------------
+
+// ---------------- LOGOUT ----------------
 logoutBtn.addEventListener('click', async () => {
     try {
         await supabase.auth.signOut();
         localStorage.removeItem('userToken');
-        localStorage.removeItem('userEmail'); // ✅ limpar email também
+        localStorage.removeItem('userEmail');
+        userToken = null; // ✅ LIMPA A VARIÁVEL GLOBAL TAMBÉM
 
         form.style.display = 'none';
         loginSection.style.display = 'block';
         logoutBtn.style.display = 'none';
+        meusAgendamentos.style.display = 'none';
+        document.getElementById('filtersSection').style.display = 'none';
+        document.getElementById('diasTabs').style.display = 'none';
 
         showToast("Logout realizado com sucesso!", "success");
     } catch (e) {
@@ -785,7 +802,6 @@ logoutBtn.addEventListener('click', async () => {
         showToast("Erro ao fazer logout", "error");
     }
 });
-
 
         // ---------------- AGENDAR ----------------
         form.addEventListener('submit', async (e)=>{
@@ -1226,6 +1242,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
