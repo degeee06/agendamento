@@ -291,21 +291,40 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       dataNormalizada, emailNormalizado
     });
 
-    // Inserção sem checagem de horário disponível
-    const { data: novoAgendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente,
-        nome: Nome,
-        email: emailNormalizado,
-        telefone: Telefone,
-        data: dataNormalizada,
-        horario: Horario,
-        status: "pendente",   // sempre pendente
-        confirmado: false,    // sempre falso
-      }])
-      .select()
-      .single();
+
+    // Inserção no Supabase
+const { data: novoAgendamento, error } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente,
+    nome: Nome,
+    email: emailNormalizado,
+    telefone: Telefone,
+    data: dataNormalizada,
+    horario: Horario,
+    status: "pendente",
+    confirmado: false,
+  }])
+  .select()
+  .single();
+
+if (error) throw error;
+
+// Enviar e-mail pelo Resend
+const linkConfirmacao = `${process.env.FRONTEND_URL}/confirmar?id=${novoAgendamento.id}`;
+
+await resend.emails.send({
+  from: "Agenda <worldgsuporte@gmail.com>",
+  to: emailNormalizado,
+  subject: "Confirme seu horário",
+  html: `
+    <p>Olá ${Nome},</p>
+    <p>Seu horário foi agendado para <b>${dataNormalizada} às ${Horario}</b>.</p>
+    <p>Clique abaixo para confirmar:</p>
+    <a href="${linkConfirmacao}">✅ Confirmar Horário</a>
+  `,
+});
+
 
     if (error) throw error;
 
@@ -364,62 +383,9 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 
 
-// ---------------- ENVIAR EMAIL ----------------
-app.post("/agendar", async (req, res) => {
-  const { cliente, nome, email, telefone, data, horario } = req.body;
-
-  try {
-    // Salvar agendamento
-    const { data: agendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{ cliente, nome, email, telefone, data, horario }])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Link de confirmação
-    const linkConfirmacao = `${process.env.FRONTEND_URL}/confirmar?id=${agendamento.id}`;
-
-    // Enviar e-mail
-    await resend.emails.send({
-      from: "Agenda <worldgsuporte@gmail.com>",
-      to: email,
-      subject: "Confirme seu horário",
-      html: `
-        <p>Olá ${nome},</p>
-        <p>Seu horário foi agendado para <b>${data} às ${horario}</b>.</p>
-        <p>Clique abaixo para confirmar:</p>
-        <a href="${linkConfirmacao}">✅ Confirmar Horário</a>
-      `,
-    });
-
-    res.json({ ok: true, agendamento });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ---------------- CONFIRMAR AGENDAMENTO ----------------
-app.get("/confirmar", async (req, res) => {
-  const { id } = req.query;
-
-  try {
-    const { error } = await supabase
-      .from("agendamentos")
-      .update({ status: "confirmado", confirmado: true })
-      .eq("id", id);
-
-    if (error) throw error;
-
-    res.send("<h2>✅ Seu horário foi confirmado com sucesso!</h2>");
-  } catch (err) {
-    res.status(500).send("Erro ao confirmar: " + err.message);
-  }
-});
-
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
