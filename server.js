@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import mailersendPkg from "mailersend";
+import MailerSend from "mailersend";
 
 const { MailerSend, EmailParams, Sender, Recipient } = mailersendPkg;
 
@@ -13,7 +13,9 @@ const { MailerSend, EmailParams, Sender, Recipient } = mailersendPkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
-const mailersend = MailerSend({ apiKey: process.env.MAILERSEND_API_KEY });
+const mailersend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY,
+});
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -394,6 +396,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
