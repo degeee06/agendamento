@@ -100,6 +100,59 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   return agendamentos.length === 0;
 }
 
+// ==== FUNÇÃO PARA LIMPAR AGENDAMENTOS EXPIRADOS ====
+async function limparAgendamentosExpirados() {
+  try {
+    const quinzeMinutosAtras = new Date(Date.now() - 15 * 60 * 1000);
+    
+    console.log("🔄 Verificando agendamentos expirados...");
+    
+    const { data: agendamentosExpirados, error } = await supabase
+      .from("agendamentos")
+      .select("id, cliente, email, data, horario, created_at")
+      .eq("status", "pendente")
+      .lt("created_at", quinzeMinutosAtras.toISOString());
+
+    if (error) {
+      console.error("Erro ao buscar agendamentos expirados:", error);
+      return;
+    }
+
+    if (agendamentosExpirados && agendamentosExpirados.length > 0) {
+      console.log(`📋 Encontrados ${agendamentosExpirados.length} agendamentos expirados`);
+      
+      for (const agendamento of agendamentosExpirados) {
+        // Cancela agendamento não pago
+        const { error: updateError } = await supabase
+          .from("agendamentos")
+          .update({ status: "cancelado", confirmado: false })
+          .eq("id", agendamento.id);
+        
+        if (updateError) {
+          console.error(`❌ Erro ao cancelar agendamento ${agendamento.id}:`, updateError);
+        } else {
+          console.log(`✅ Agendamento ${agendamento.id} cancelado por falta de pagamento`);
+          
+          // Atualiza Google Sheet
+          try {
+            const doc = await accessSpreadsheet(agendamento.cliente);
+            await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
+              status: "cancelado",
+              confirmado: false
+            });
+          } catch (sheetError) {
+            console.error("Erro ao atualizar Google Sheets:", sheetError);
+          }
+        }
+      }
+    } else {
+      console.log("✅ Nenhum agendamento expirado encontrado");
+    }
+  } catch (err) {
+    console.error("Erro na limpeza de agendamentos expirados:", err);
+  }
+}
+
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
 app.get("/:cliente", async (req, res) => {
@@ -130,10 +183,15 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// Cria PIX para agendamento
-// Modificar no server.js - Rota /create-pix
+// ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
+  const { amount, description, email } = req.body;
+  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
+
   try {
+    // ⏰ Calcula data de expiração (15 minutos)
+    const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    
     const result = await payment.create({
       body: {
         transaction_amount: Number(amount),
@@ -141,56 +199,51 @@ app.post("/create-pix", async (req, res) => {
         payment_method_id: "pix",
         payer: { email },
         // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
-        date_of_expiration: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        date_of_expiration: dateOfExpiration
       },
     });
-  }
-});
 
-// Adicionar função para limpar agendamentos expirados
-async function limparAgendamentosExpirados() {
-  const quinzeMinutosAtras = new Date(Date.now() - 15 * 60 * 1000);
-  
-  const { data: agendamentosExpirados } = await supabase
-    .from("agendamentos")
-    .select("id, cliente, email, data, horario")
-    .eq("status", "pendente")
-    .lt("created_at", quinzeMinutosAtras.toISOString());
+    console.log("💰 Pagamento criado no Mercado Pago:", result.id, result.status, "Expira:", dateOfExpiration);
 
-  for (const agendamento of agendamentosExpirados) {
-    // Cancela agendamento não pago
-    await supabase
-      .from("agendamentos")
-      .update({ status: "cancelado" })
-      .eq("id", agendamento.id);
-    
-    console.log(`Agendamento ${agendamento.id} cancelado por falta de pagamento`);
-  }
-}
-
-// Executar a cada 5 minutos
-setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
-
-
-
-    // Salva pagamento como pending
-    await supabase.from("pagamentos").upsert(
-      [{ 
+    // INSERÇÃO NO BANCO
+    const { error: insertError } = await supabase
+      .from("pagamentos")
+      .insert([{ 
         id: result.id, 
-        email, 
+        email: email.toLowerCase().trim(), 
         amount: Number(amount), 
-        status: "pending", 
+        status: result.status || 'pending', 
         valid_until: null,
         description: description || "Pagamento de Agendamento"
-      }],
-      { onConflict: ["id"] }
-    );
+      }]);
+
+    if (insertError) {
+      console.error("Erro ao inserir pagamento no Supabase:", insertError);
+      
+      // Tenta atualizar se já existir
+      const { error: updateError } = await supabase
+        .from("pagamentos")
+        .update({ 
+          status: result.status || 'pending',
+          amount: Number(amount),
+          description: description || "Pagamento de Agendamento"
+        })
+        .eq("id", result.id);
+        
+      if (updateError) {
+        console.error("Erro ao atualizar pagamento no Supabase:", updateError);
+        return res.status(500).json({ error: "Erro ao salvar pagamento" });
+      }
+    }
+
+    console.log("💾 Pagamento salvo no Supabase:", result.id);
 
     res.json({
       payment_id: result.id,
       status: result.status,
       qr_code: result.point_of_interaction.transaction_data.qr_code,
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+      expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
     });
   } catch (err) {
     console.error("Erro ao criar PIX:", err);
@@ -208,11 +261,23 @@ app.get("/check-payment/:paymentId", async (req, res) => {
       .from("pagamentos")
       .select("*")
       .eq("id", paymentId)
-      .single();
+      .maybeSingle();  // Usa maybeSingle para evitar erro quando não encontra
 
-    if (dbError) {
+    if (dbError && dbError.code !== 'PGRST116') {
       console.error("Erro ao buscar pagamento no banco:", dbError);
       return res.status(500).json({ error: "Erro ao verificar pagamento" });
+    }
+
+    // Se não encontrou no banco, verifica no Mercado Pago
+    if (!paymentData) {
+      console.log("Pagamento não encontrado no banco, verificando no Mercado Pago...");
+      try {
+        const paymentDetails = await payment.get({ id: paymentId });
+        return res.json({ status: paymentDetails.status, payment: paymentDetails });
+      } catch (mpError) {
+        console.error("Erro ao verificar pagamento no Mercado Pago:", mpError);
+        return res.status(404).json({ error: "Pagamento não encontrado" });
+      }
     }
 
     // Se já está aprovado no banco, retorna
@@ -238,7 +303,8 @@ app.get("/check-payment/:paymentId", async (req, res) => {
           .from("pagamentos")
           .update({ 
             status: paymentDetails.status, 
-            valid_until 
+            valid_until,
+            updated_at: new Date().toISOString()
           })
           .eq("id", paymentId);
       }
@@ -306,8 +372,11 @@ app.post("/webhook", async (req, res) => {
       .update({ status, valid_until })
       .eq("id", paymentId);
 
-    if (updateError) console.error("Erro ao atualizar Supabase:", updateError.message);
-    else console.log(`Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
+    if (updateError) {
+      console.error("Erro ao atualizar Supabase:", updateError.message);
+    } else {
+      console.log(`✅ Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
+    }
 
     res.sendStatus(200);
   } catch (err) {
@@ -334,12 +403,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     if (!disponivel) {
       return res.status(400).json({ msg: "Horário indisponível para agendamento" });
     }
-
-    // Debug: log dos dados que vão ser inseridos
-    console.log({
-      cliente, Nome, Email, Telefone, Data, Horario,
-      dataNormalizada, emailNormalizado
-    });
 
     // Inserção do agendamento
     const { data: novoAgendamento, error } = await supabase
@@ -572,6 +635,15 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- Servidor ----------------
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+// ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
+// Executar a cada 5 minutos (300000 ms)
+setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
 
+// Executar imediatamente ao iniciar o servidor
+setTimeout(limparAgendamentosExpirados, 2000);
+
+// ---------------- Servidor ----------------
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+  console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
+});
