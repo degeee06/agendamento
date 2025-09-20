@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import { MailerSend, EmailParams } from "mailersend";
+import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
@@ -370,9 +370,12 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
+    const sentFrom = new Sender("seu-email@dominio.com", "Agenda");
+    const recipients = [new Recipient(destinatario, nome)];
+
     const emailParams = new EmailParams()
-      .setFrom("Agenda <seu-email@seudominio.com>")
-      .setTo([{ email: destinatario, name: nome }])
+      .setFrom(sentFrom)
+      .setTo(recipients)
       .setSubject("Confirme seu horário")
       .setHtml(`
         <p>Olá ${nome},</p>
@@ -381,7 +384,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
         <a href="${linkConfirmacao}">✅ Confirmar Horário</a>
       `);
 
-    await mailersend.send(emailParams);
+    await mailersend.email.send(emailParams);
 
     console.log("E-mail enviado para", destinatario);
   } catch (err) {
@@ -391,6 +394,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
