@@ -377,7 +377,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
-    await mailersend.emails.send({
+    await mailersend.messages.send({
       from: { email: "seu-email@dominio-verificado.com", name: "Agenda" },
       to: [{ email: destinatario, name: nome }],
       subject: "Confirme seu horário",
@@ -399,6 +399,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
