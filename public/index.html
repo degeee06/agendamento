@@ -704,7 +704,7 @@ function init() {
             }
         }
 
-       // ---------------- LOGIN ----------------
+      // ---------------- LOGIN ----------------
 loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value;
     const senha = document.getElementById('senha').value;
@@ -714,7 +714,6 @@ loginBtn.addEventListener('click', async () => {
     }
     
     try {
-        // Mostrar loading
         loginText.classList.add('hidden');
         loginSpinner.classList.remove('hidden');
         loginBtn.disabled = true;
@@ -722,7 +721,6 @@ loginBtn.addEventListener('click', async () => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
         if(error){ 
             showToast(error.message,"error"); 
-            // Esconder loading
             loginText.classList.remove('hidden');
             loginSpinner.classList.add('hidden');
             loginBtn.disabled = false;
@@ -730,34 +728,26 @@ loginBtn.addEventListener('click', async () => {
         }
 
         userToken = data.session.access_token;
-        // Salvar token no localStorage
+
+        // ✅ Salvar também o email junto com o token
         localStorage.setItem('userToken', userToken);
-        
+        localStorage.setItem('userEmail', email);
+
         loginSection.style.display = 'none';
         form.style.display = 'block';
         logoutBtn.style.display = 'flex';
 
         listarAgendamentos().then(() => {
-            // Seleciona o dia atual
             let hoje = new Date().getDay();
-            if (hoje === 0) {
-                hoje = 1;
-            }
+            if (hoje === 0) hoje = 1;
+            document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
+            document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
 
-            const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-            if (btnHoje) {
-                btnHoje.click();
-            } else {
-                document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-            }
-            
-            // ✅ CORRETO: Chamar o dashboard DENTRO do .then()
-            carregarDashboard(); // ← Carrega o dashboard após login
+            carregarDashboard();
         });
 
         showToast("Login realizado com sucesso!", "success");
 
-        // Esconder loading
         loginText.classList.remove('hidden');
         loginSpinner.classList.add('hidden');
         loginBtn.disabled = false;
@@ -765,27 +755,31 @@ loginBtn.addEventListener('click', async () => {
     } catch(e) {
         console.error(e);
         showToast("Erro ao fazer login", "error");
-        // Esconder loading
         loginText.classList.remove('hidden');
         loginSpinner.classList.add('hidden');
         loginBtn.disabled = false;
     }
 });
 
+
         // ---------------- LOGOUT ----------------
-        logoutBtn.addEventListener('click', () => {
-            userToken = null;
-            localStorage.removeItem('userToken');
-            loginSection.style.display = 'block';
-            form.style.display = 'none';
-            meusAgendamentos.style.display = 'none';
-            document.getElementById('filtersSection').style.display = 'none';
-            document.getElementById('diasTabs').style.display = 'none';
-            logoutBtn.style.display = 'none';
-            agendamentosCache = [];
-            
-            showToast("Logout realizado com sucesso", "info");
-        });
+logoutBtn.addEventListener('click', async () => {
+    try {
+        await supabase.auth.signOut();
+        localStorage.removeItem('userToken');
+        localStorage.removeItem('userEmail'); // ✅ limpar email também
+
+        form.style.display = 'none';
+        loginSection.style.display = 'block';
+        logoutBtn.style.display = 'none';
+
+        showToast("Logout realizado com sucesso!", "success");
+    } catch (e) {
+        console.error(e);
+        showToast("Erro ao fazer logout", "error");
+    }
+});
+
 
         // ---------------- AGENDAR ----------------
         form.addEventListener('submit', async (e)=>{
@@ -967,56 +961,46 @@ loginBtn.addEventListener('click', async () => {
         const MAX_FREE = 3; // limite de agendamentos free
 
         async function checkFreeLimit() {
-            const emailInput = document.getElementById('email');
-            const email = emailInput?.value?.trim();
-            let isVIP = false;
+    // pega do localStorage em vez do campo #email
+    const email = localStorage.getItem('userEmail');
+    let isVIP = false;
 
-            if (email) {
-                try {
-                    const res = await fetch(`/check-vip/${encodeURIComponent(email)}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        isVIP = data.vip === true;
-                    }
-                } catch (e) {
-                    console.error("Erro ao verificar VIP:", e);
-                }
+    if (email) {
+        try {
+            const res = await fetch(`/check-vip/${encodeURIComponent(email)}`);
+            if (res.ok) {
+                const data = await res.json();
+                isVIP = data.vip === true;
             }
-
-            const agendamentoForm = document.getElementById('agendamentoForm');
-            const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
-            const botoes = document.querySelectorAll(".agendamento-card button");
-
-            if (!isVIP && agendamentosCache.length >= MAX_FREE) {
-                // 🔒 bloqueia agendar
-                submitBtn.disabled = true;
-                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-                // 🔒 bloqueia confirmar/cancelar/reagendar
-                botoes.forEach(b => {
-                    b.disabled = true;
-                    b.classList.add('opacity-50', 'cursor-not-allowed');
-                });
-
-                criarBotaoVIP();
-            } else {
-                // 🔓 libera agendar
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-
-                // 🔓 libera confirmar/cancelar/reagendar
-                botoes.forEach(b => {
-                    b.disabled = false;
-                    b.classList.remove('opacity-50', 'cursor-not-allowed');
-                });
-
-                // remove botão/qrCode se existir
-                const vipBtn = document.getElementById('upgradeVIP');
-                if (vipBtn) vipBtn.remove();
-                const pixDiv = document.getElementById('pixArea');
-                if (pixDiv) pixDiv.remove();
-            }
+        } catch (e) {
+            console.error("Erro ao verificar VIP:", e);
         }
+    }
+
+    const agendamentoForm = document.getElementById('agendamentoForm');
+    const submitBtn = agendamentoForm.querySelector('button[type="submit"]');
+    const botoes = document.querySelectorAll(".agendamento-card button");
+
+    if (!isVIP && agendamentosCache.length >= MAX_FREE) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        botoes.forEach(b => {
+            b.disabled = true;
+            b.classList.add('opacity-50', 'cursor-not-allowed');
+        });
+        criarBotaoVIP();
+    } else {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        botoes.forEach(b => {
+            b.disabled = false;
+            b.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
+        document.getElementById('upgradeVIP')?.remove();
+        document.getElementById('pixArea')?.remove();
+    }
+}
+
 
         async function confirmarAgendamento(cliente, id) {
             if (!userToken) {
@@ -1236,6 +1220,7 @@ loginBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
