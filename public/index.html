@@ -374,7 +374,7 @@
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
-        // ---------------- INICIALIZAÇÃO ----------------
+
 // ---------------- INICIALIZAÇÃO ----------------
 function init() {
     // Configurar máscara de telefone
@@ -614,12 +614,6 @@ function init() {
                     return;
                 }
 
-                // Validar se a data/horário não é no passado
-                const dataHoraAgendamento = new Date(`${novaData}T${novoHorario}`);
-                if (dataHoraAgendamento < new Date()) {
-                    showToast("Não é possível agendar para datas/horários passados!", "warning");
-                    return;
-                }
 
                 reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
                 modal.classList.add("hidden");
@@ -743,12 +737,7 @@ function init() {
                 return;
             }
 
-            // Validar se a data/horário não é no passado
-            const dataHoraAgendamento = new Date(`${dataToSend.Data}T${dataToSend.Horario}`);
-            if (dataHoraAgendamento < new Date()) {
-                showToast("Não é possível agendar para datas/horários passados!", "warning");
-                return;
-            }
+   
 
             // Mostrar loading
             agendarText.classList.add('hidden');
@@ -1179,3 +1168,4 @@ function init() {
     </script>
 </body>
 </html>
+
