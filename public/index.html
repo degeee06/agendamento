@@ -704,124 +704,73 @@ function init() {
             }
         }
 
-        // ---------------- LOGIN ----------------
-        loginBtn.addEventListener('click', async () => {
-            const email = document.getElementById('email').value;
-            const senha = document.getElementById('senha').value;
-            if(!email || !senha) {
-                showToast("Preencha email e senha", "warning");
-                return;
+       // ---------------- LOGIN ----------------
+loginBtn.addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const senha = document.getElementById('senha').value;
+    if(!email || !senha) {
+        showToast("Preencha email e senha", "warning");
+        return;
+    }
+    
+    try {
+        // Mostrar loading
+        loginText.classList.add('hidden');
+        loginSpinner.classList.remove('hidden');
+        loginBtn.disabled = true;
+        
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+        if(error){ 
+            showToast(error.message,"error"); 
+            // Esconder loading
+            loginText.classList.remove('hidden');
+            loginSpinner.classList.add('hidden');
+            loginBtn.disabled = false;
+            return; 
+        }
+
+        userToken = data.session.access_token;
+        // Salvar token no localStorage
+        localStorage.setItem('userToken', userToken);
+        
+        loginSection.style.display = 'none';
+        form.style.display = 'block';
+        logoutBtn.style.display = 'flex';
+
+        listarAgendamentos().then(() => {
+            // Seleciona o dia atual
+            let hoje = new Date().getDay();
+            if (hoje === 0) {
+                hoje = 1;
+            }
+
+            const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
+            if (btnHoje) {
+                btnHoje.click();
+            } else {
+                document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
             }
             
-            try {
-                // Mostrar loading
-                loginText.classList.add('hidden');
-                loginSpinner.classList.remove('hidden');
-                loginBtn.disabled = true;
-                
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-                if(error){ 
-                    showToast(error.message,"error"); 
-                    // Esconder loading
-                    loginText.classList.remove('hidden');
-                    loginSpinner.classList.add('hidden');
-                    loginBtn.disabled = false;
-                    return; 
-                }
-
-                userToken = data.session.access_token;
-                // Salvar token no localStorage
-                localStorage.setItem('userToken', userToken);
-                
-                loginSection.style.display = 'none';
-                form.style.display = 'block';
-                logoutBtn.style.display = 'flex';
-
-                listarAgendamentos().then(() => {
-// ---------------- DASHBOARD ----------------
-async function carregarDashboard() {
-    if (!userToken) return;
-
-    try {
-        // Carregar estatísticas
-        const [resStats, resClientes] = await Promise.all([
-            fetch(`/estatisticas/${cliente}`, {
-                headers: { "Authorization": `Bearer ${userToken}` }
-            }),
-            fetch(`/top-clientes/${cliente}`, {
-                headers: { "Authorization": `Bearer ${userToken}` }
-            })
-        ]);
-
-        const estatisticas = await resStats.json();
-        const topClientes = await resClientes.json();
-
-        // Atualizar cards
-        document.getElementById('statHoje').textContent = estatisticas.hoje;
-        document.getElementById('statSemana').textContent = estatisticas.semana;
-        document.getElementById('statTotal').textContent = estatisticas.total;
-        document.getElementById('statTaxa').textContent = estatisticas.taxaConfirmacao + '%';
-
-        // Renderizar top clientes
-        renderTopClientes(topClientes);
-        
-        // Mostrar dashboard
-        document.getElementById('dashboardSection').style.display = 'block';
-
-    } catch (error) {
-        console.error("Erro ao carregar dashboard:", error);
-    }
-}
-
-function renderTopClientes(clientes) {
-    const container = document.getElementById('topClientes');
-    container.innerHTML = '';
-
-    clientes.forEach((cliente, index) => {
-        const div = document.createElement('div');
-        div.className = 'flex justify-between items-center p-2 bg-white/5 rounded';
-        div.innerHTML = `
-            <div class="flex-1">
-                <div class="font-medium">${cliente.nome}</div>
-                <div class="text-sm text-gray-400">${cliente.agendamentos} agendamentos</div>
-            </div>
-            <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
-                ${index + 1}
-            </div>
-        `;
-        container.appendChild(div);
-    });
-}
-                    // Seleciona o dia atual
-                    let hoje = new Date().getDay();
-                    if (hoje === 0) {
-                        hoje = 1;
-                    }
-
-                    const btnHoje = document.querySelector(`.tab-dia[data-dia="${hoje}"]`);
-                    if (btnHoje) {
-                        btnHoje.click();
-                    } else {
-                        document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-                    }
-                });
-
-                showToast("Login realizado com sucesso!", "success");
-
-                // Esconder loading
-                loginText.classList.remove('hidden');
-                loginSpinner.classList.add('hidden');
-                loginBtn.disabled = false;
-
-            } catch(e) {
-                console.error(e);
-                showToast("Erro ao fazer login", "error");
-                // Esconder loading
-                loginText.classList.remove('hidden');
-                loginSpinner.classList.add('hidden');
-                loginBtn.disabled = false;
-            }
+            // ✅ CORRETO: Chamar o dashboard DENTRO do .then()
+            carregarDashboard(); // ← Carrega o dashboard após login
         });
+
+        showToast("Login realizado com sucesso!", "success");
+
+        // Esconder loading
+        loginText.classList.remove('hidden');
+        loginSpinner.classList.add('hidden');
+        loginBtn.disabled = false;
+
+    } catch(e) {
+        console.error(e);
+        showToast("Erro ao fazer login", "error");
+        // Esconder loading
+        loginText.classList.remove('hidden');
+        loginSpinner.classList.add('hidden');
+        loginBtn.disabled = false;
+    }
+});
 
         // ---------------- LOGOUT ----------------
         logoutBtn.addEventListener('click', () => {
@@ -1287,6 +1236,7 @@ function renderTopClientes(clientes) {
     </script>
 </body>
 </html>
+
 
 
 
