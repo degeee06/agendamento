@@ -5,16 +5,27 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
-const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: process.env.SMTP_SECURE === "true",
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -308,13 +319,12 @@ const { data: novoAgendamento, error } = await supabase
   .select()
   .single();
 
-if (error) throw error;
 
 // Enviar e-mail pelo Resend
 const linkConfirmacao = `${process.env.FRONTEND_URL}/confirmar?id=${novoAgendamento.id}`;
 
-await resend.emails.send({
-  from: "Agenda <worldgsuporte@gmail.com>",
+await transporter.sendMail({
+  from: `"Agenda" <${process.env.SMTP_USER}>`, // seu email Outlook
   to: emailNormalizado,
   subject: "Confirme seu horário",
   html: `
@@ -385,6 +395,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
