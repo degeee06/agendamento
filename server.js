@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import { Resend } from "@resend/client";
+import { Resend } from "resend";
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -420,6 +420,7 @@ app.get("/confirmar", async (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
