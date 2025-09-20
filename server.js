@@ -302,7 +302,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       dataNormalizada, emailNormalizado
     });
 
-    // Inserção sem checagem de horário disponível
+    // Inserção no Supabase
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -312,8 +312,8 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         telefone: Telefone,
         data: dataNormalizada,
         horario: Horario,
-        status: "pendente",   // sempre pendente
-        confirmado: false,    // sempre falso
+        status: "pendente",
+        confirmado: false,
       }])
       .select()
       .single();
@@ -325,6 +325,12 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
     await sheet.addRow(novoAgendamento);
+
+    // ✅ ✅ ✅ ADICIONE ESTAS LINHAS ✅ ✅ ✅
+    // Enviar e-mail de confirmação
+    const linkConfirmacao = `${process.env.FRONTEND_URL}/confirmar?id=${novoAgendamento.id}`;
+    await enviarEmail(emailNormalizado, Nome, linkConfirmacao);
+    // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
@@ -378,33 +384,41 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
     const mailOptions = {
       from: `"Agenda" <${process.env.ELASTIC_EMAIL_SMTP_USER}>`,
       to: destinatario,
-      subject: "✅ Confirme seu horário",
+      subject: "✅ Confirme seu horário - Agenda",
       html: `
-        <p>Olá <strong>${nome}</strong>,</p>
-        <p>Seu horário foi agendado com sucesso!</p>
-        <p>Clique para confirmar:</p>
-        <a href="${linkConfirmacao}" style="
-          display: inline-block;
-          padding: 12px 24px;
-          background-color: #007bff;
-          color: white;
-          text-decoration: none;
-          border-radius: 5px;
-          font-weight: bold;
-        ">✅ Confirmar Horário</a>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #007bff;">Olá ${nome}!</h2>
+          <p>Seu agendamento foi realizado com sucesso! 🎉</p>
+          <p>Para confirmar seu horário, clique no botão abaixo:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${linkConfirmacao}" style="
+              display: inline-block;
+              padding: 15px 30px;
+              background-color: #007bff;
+              color: white;
+              text-decoration: none;
+              border-radius: 8px;
+              font-weight: bold;
+              font-size: 16px;
+            ">✅ Confirmar Horário</a>
+          </div>
+          <p style="color: #666; font-size: 14px;">
+            Se você não solicitou este agendamento, por favor ignore este e-mail.
+          </p>
+        </div>
       `
     };
 
     await transporter.sendMail(mailOptions);
-    console.log("E-mail enviado via Elastic Email!");
+    console.log("✅ E-mail enviado para:", destinatario);
   } catch (err) {
-    console.error("Erro:", err);
+    console.error("❌ Erro ao enviar e-mail:", err);
   }
 }
 
-
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
