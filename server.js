@@ -374,9 +374,6 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 
 
-const mailersend = new MailerSend({
-  apiKey: process.env.MAILERSEND_API_KEY,
-});
 
 async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
@@ -400,6 +397,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
