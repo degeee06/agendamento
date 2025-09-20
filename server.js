@@ -5,27 +5,19 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import nodemailer from "nodemailer";
+import MailerSend from "@mailersend/mailersend";
+
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
+const mailersend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY
+});
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === "true",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -302,7 +294,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       dataNormalizada, emailNormalizado
     });
 
-
     // Inserção no Supabase
 const { data: novoAgendamento, error } = await supabase
   .from("agendamentos")
@@ -319,32 +310,20 @@ const { data: novoAgendamento, error } = await supabase
   .select()
   .single();
 
+if (error) throw error;
 
-// Enviar e-mail pelo Resend
+// Atualiza Google Sheet
+const doc = await accessSpreadsheet(cliente);
+const sheet = doc.sheetsByIndex[0];
+await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+await sheet.addRow(novoAgendamento);
+
+// Enviar e-mail pelo MailerSend
 const linkConfirmacao = `${process.env.FRONTEND_URL}/confirmar?id=${novoAgendamento.id}`;
+await enviarEmail(emailNormalizado, Nome, linkConfirmacao);
 
-await transporter.sendMail({
-  from: `"Agenda" <${process.env.SMTP_USER}>`, // seu email Outlook
-  to: emailNormalizado,
-  subject: "Confirme seu horário",
-  html: `
-    <p>Olá ${Nome},</p>
-    <p>Seu horário foi agendado para <b>${dataNormalizada} às ${Horario}</b>.</p>
-    <p>Clique abaixo para confirmar:</p>
-    <a href="${linkConfirmacao}">✅ Confirmar Horário</a>
-  `,
-});
+res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
-
-    if (error) throw error;
-
-    // Atualiza Google Sheet
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-    await sheet.addRow(novoAgendamento);
-
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
   } catch (err) {
     console.error("Erro no /agendar:", err);
@@ -391,15 +370,29 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
 });
 
+// Função para enviar e-mail
+async function enviarEmail(destinatario, nome, linkConfirmacao) {
+  try {
+    await mailersend.email.send({
+      from: "Agenda <amorimmm>",
+      to: [{ email: destinatario, name: nome }],
+      subject: "Confirme seu horário",
+      html: `
+        <p>Olá ${nome},</p>
+        <p>Seu horário foi agendado.</p>
+        <p>Clique para confirmar:</p>
+        <a href="${linkConfirmacao}">✅ Confirmar Horário</a>
+      `
+    });
+    console.log("E-mail enviado para", destinatario);
+  } catch (err) {
+    console.error("Erro ao enviar e-mail:", err);
+  }
+}
 
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
 
 
 
