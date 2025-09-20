@@ -136,26 +136,26 @@
             .dias-tabs-container::-webkit-scrollbar-thumb {
                 background: rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
-
             }
-.dashboard-card {
-    transition: all 0.3s ease;
-}
+            
+            .dashboard-card {
+                transition: all 0.3s ease;
+            }
 
-.dashboard-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
+            .dashboard-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
 
-.stat-number {
-    font-size: 1.875rem;
-    font-weight: 700;
-}
+            .stat-number {
+                font-size: 1.875rem;
+                font-weight: 700;
+            }
 
-.stat-label {
-    font-size: 0.875rem;
-    color: #D1D5DB;
-
+            .stat-label {
+                font-size: 0.875rem;
+                color: #D1D5DB;
+            }
         }
     </style>
 </head>
@@ -214,43 +214,43 @@
             </div>
         </div>
 
-<!-- Dashboard de Estatísticas -->
-<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
-            <div class="text-sm text-gray-300">Hoje</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
-            <div class="text-sm text-gray-300">Esta Semana</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
-            <div class="text-sm text-gray-300">Total</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
-            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
-        </div>
-    </div>
+        <!-- Dashboard de Estatísticas -->
+        <div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+            <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+                    <div class="text-sm text-gray-300">Hoje</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+                    <div class="text-sm text-gray-300">Esta Semana</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+                    <div class="text-sm text-gray-300">Total</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+                    <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+                </div>
+            </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Gráfico de Status -->
-        <div class="bg-white/10 rounded-xl p-4">
-            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
-            <div id="chartStatus" class="h-48"></div>
-        </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Gráfico de Status -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+                    <div id="chartStatus" class="h-48"></div>
+                </div>
 
-        <!-- Top Clientes -->
-        <div class="bg-white/10 rounded-xl p-4">
-            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
-            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                <!-- Top Clientes -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+                    <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -427,10 +427,14 @@
         const dataInput = document.getElementById("Data");
         const horarioInput = document.getElementById("Horario");
 
-        const pathParts = window.location.pathname.split('/');
-        const cliente = pathParts[1] || '';
+        // Extrair cliente da URL
+        const pathParts = window.location.pathname.split('/').filter(part => part);
+        const cliente = pathParts[0] || 'default';
 
-        function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+        function formatData(data){ 
+            const [y,m,d] = data.split("-"); 
+            return `${d}/${m}/${y}`; 
+        }
 
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
@@ -810,25 +814,25 @@
             form.querySelector('button[type="submit"]').disabled = true;
             
             try {
-  const pagamentoResponse = await fetch('/create-pix', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      amount: 50.00,
-      description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-      email: dataToSend.Email
-    })
-  });
+                const pagamentoResponse = await fetch('/create-pix', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        amount: 50.00,
+                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                        email: dataToSend.Email
+                    })
+                });
 
-  if (!pagamentoResponse.ok) {
-    const errorData = await pagamentoResponse.json();
-    throw new Error(errorData.error || 'Erro ao criar pagamento');
-  }
+                if (!pagamentoResponse.ok) {
+                    const errorData = await pagamentoResponse.json();
+                    throw new Error(errorData.error || 'Erro ao criar pagamento');
+                }
 
-  const pagamentoData = await pagamentoResponse.json();
-  
-  // ⏰ INICIAR CONTADOR com a data de expiração
-  iniciarContadorPagamento(pagamentoData.expires_at);
+                const pagamentoData = await pagamentoResponse.json();
+                
+                // ⏰ INICIAR CONTADOR com a data de expiração
+                iniciarContadorPagamento(pagamentoData.expires_at);
                 
                 // Exibir QR Code e código PIX
                 let pixDiv = document.getElementById("pixArea");
@@ -1220,49 +1224,48 @@
 
 
         // ==== FUNÇÃO PARA INICIAR CONTADOR REGRESSIVO ====
-function iniciarContadorPagamento(expiresAt) {
-  const pixArea = document.getElementById("pixArea");
-  const contadorDiv = document.createElement("div");
-  contadorDiv.id = "contador-pix";
-  contadorDiv.className = "text-center mb-4 p-3 bg-yellow-500/20 rounded-lg";
-  pixArea.prepend(contadorDiv);
-  
-  const tempoExpiracao = new Date(expiresAt).getTime();
-  
-  const interval = setInterval(() => {
-    const agora = new Date().getTime();
-    const diferenca = tempoExpiracao - agora;
-    
-    if (diferenca <= 0) {
-      clearInterval(interval);
-      contadorDiv.innerHTML = `
-        <div class="text-red-500 font-bold">
-          ❌ Pagamento expirado
-        </div>
-        <p class="text-sm mt-1">O tempo para pagamento acabou.</p>
-        <button onclick="location.reload()" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">
-          Fazer Novo Agendamento
-        </button>
-      `;
-      
-      // Desabilita botão de confirmação
-      const confirmBtn = document.getElementById("confirmPaymentBtn");
-      if (confirmBtn) confirmBtn.disabled = true;
-    } else {
-      const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
-      const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
-      
-      contadorDiv.innerHTML = `
-        <div class="font-semibold">⏰ Tempo restante para pagamento:</div>
-        <div class="text-2xl font-bold ${minutos < 5 ? 'text-red-500' : 'text-green-500'}">
-          ${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}
-        </div>
-        <p class="text-sm mt-1">Após este tempo, o agendamento será cancelado automaticamente.</p>
-      `;
-    }
-  }, 1000);
+        function iniciarContadorPagamento(expiresAt) {
+            const pixArea = document.getElementById("pixArea");
+            const contadorDiv = document.createElement("div");
+            contadorDiv.id = "contador-pix";
+            contadorDiv.className = "text-center mb-4 p-3 bg-yellow-500/20 rounded-lg";
+            pixArea.prepend(contadorDiv);
+            
+            const tempoExpiracao = new Date(expiresAt).getTime();
+            
+            const interval = setInterval(() => {
+                const agora = new Date().getTime();
+                const diferenca = tempoExpiracao - agora;
+                
+                if (diferenca <= 0) {
+                    clearInterval(interval);
+                    contadorDiv.innerHTML = `
+                        <div class="text-red-500 font-bold">
+                            ❌ Pagamento expirado
+                        </div>
+                        <p class="text-sm mt-1">O tempo para pagamento acabou.</p>
+                        <button onclick="location.reload()" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">
+                            Fazer Novo Agendamento
+                        </button>
+                    `;
+                    
+                    // Desabilita botão de confirmação
+                    const confirmBtn = document.getElementById("confirmPaymentBtn");
+                    if (confirmBtn) confirmBtn.disabled = true;
+                } else {
+                    const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
+                    const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
+                    
+                    contadorDiv.innerHTML = `
+                        <div class="font-semibold">⏰ Tempo restante para pagamento:</div>
+                        <div class="text-2xl font-bold ${minutos < 5 ? 'text-red-500' : 'text-green-500'}">
+                            ${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}
+                        </div>
+                        <p class="text-sm mt-1">Após este tempo, o agendamento será cancelado automaticamente.</p>
+                    `;
+                }
+            }, 1000);
         }
-       
         
         // ---------------- INIT ----------------
         AOS.init({
