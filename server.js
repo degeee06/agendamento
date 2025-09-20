@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import nodemailer from "nodemailer";
+
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,17 +20,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-// Configuração CORRETA para SMTP
-const transporter = nodemailer.createTransport({
-  host: "smtp.elasticemail.com",
-  port: 2525,  // ou 587, 465
-  secure: false,  // true para porta 465, false para outras
-  auth: {
-    user: process.env.ELASTIC_EMAIL_SMTP_USER,    // SEU USERNAME SMTP
-    pass: process.env.ELASTIC_EMAIL_SMTP_PASSWORD // SUA SENHA SMTP
-  }
-});
 
 // Inicializa Mercado Pago
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
@@ -302,7 +291,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       dataNormalizada, emailNormalizado
     });
 
-    // Inserção no Supabase
+    // Inserção sem checagem de horário disponível
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -312,8 +301,8 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         telefone: Telefone,
         data: dataNormalizada,
         horario: Horario,
-        status: "pendente",
-        confirmado: false,
+        status: "pendente",   // sempre pendente
+        confirmado: false,    // sempre falso
       }])
       .select()
       .single();
@@ -325,12 +314,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const sheet = doc.sheetsByIndex[0];
     await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
     await sheet.addRow(novoAgendamento);
-
-    // ✅ ✅ ✅ ADICIONE ESTAS LINHAS ✅ ✅ ✅
-    // Enviar e-mail de confirmação
-    const linkConfirmacao = `${process.env.FRONTEND_URL}/confirmar?id=${novoAgendamento.id}`;
-    await enviarEmail(emailNormalizado, Nome, linkConfirmacao);
-    // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
@@ -379,49 +362,8 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
 });
 
-async function enviarEmail(destinatario, nome, linkConfirmacao) {
-  try {
-    const mailOptions = {
-      from: `"Agenda" <${process.env.ELASTIC_EMAIL_SMTP_USER}>`,
-      to: destinatario,
-      subject: "✅ Confirme seu horário - Agenda",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #007bff;">Olá ${nome}!</h2>
-          <p>Seu agendamento foi realizado com sucesso! 🎉</p>
-          <p>Para confirmar seu horário, clique no botão abaixo:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${linkConfirmacao}" style="
-              display: inline-block;
-              padding: 15px 30px;
-              background-color: #007bff;
-              color: white;
-              text-decoration: none;
-              border-radius: 8px;
-              font-weight: bold;
-              font-size: 16px;
-            ">✅ Confirmar Horário</a>
-          </div>
-          <p style="color: #666; font-size: 14px;">
-            Se você não solicitou este agendamento, por favor ignore este e-mail.
-          </p>
-        </div>
-      `
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log("✅ E-mail enviado para:", destinatario);
-  } catch (err) {
-    console.error("❌ Erro ao enviar e-mail:", err);
-  }
-}
-
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
 
 
 
