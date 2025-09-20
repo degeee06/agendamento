@@ -7,7 +7,7 @@ import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import MailerSend from "mailersend";
 
-const { MailerSend, EmailParams, Sender, Recipient } = mailersendPkg;
+
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
@@ -372,7 +372,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
 });
 
-import MailerSend from "mailersend";
+
 
 const mailersend = new MailerSend({
   apiKey: process.env.MAILERSEND_API_KEY,
@@ -400,6 +400,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
