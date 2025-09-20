@@ -16,10 +16,22 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// Verifica se as variáveis de ambiente necessárias estão definidas
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("❌ Variáveis de ambiente do Supabase não configuradas");
+  process.exit(1);
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// Verifica se o token do Mercado Pago está definido
+if (!process.env.MP_ACCESS_TOKEN) {
+  console.error("❌ Token do Mercado Pago não configurado");
+  process.exit(1);
+}
 
 // Inicializa Mercado Pago
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
@@ -27,20 +39,30 @@ const payment = new Payment(mpClient);
 
 let creds;
 try {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT) {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT não definido");
+  }
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
 } catch (e) {
   console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
-  process.exit(1);
+  // Não encerra o processo para permitir funcionamento sem Google Sheets
+  console.warn("⚠️  Funcionalidade do Google Sheets desativada");
 }
 
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet(clienteId) {
+  if (!creds) {
+    throw new Error("Credenciais do Google Sheets não configuradas");
+  }
+  
   const { data, error } = await supabase
     .from("clientes")
     .select("spreadsheet_id")
     .eq("id", clienteId)
     .single();
+    
   if (error || !data) throw new Error(`Cliente ${clienteId} não encontrado`);
+  if (!data.spreadsheet_id) throw new Error(`Cliente ${clienteId} não tem spreadsheet_id configurado`);
 
   const doc = new GoogleSpreadsheet(data.spreadsheet_id);
   await doc.useServiceAccountAuth(creds);
@@ -49,9 +71,17 @@ async function accessSpreadsheet(clienteId) {
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
+  try {
+    await sheet.loadHeaderRow();
+  } catch (error) {
+    // Se não há header row, cria uma
+    await sheet.setHeaderRow(newKeys);
+    return;
+  }
+  
   const currentHeaders = sheet.headerValues || [];
   const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+  
   if (headersToAdd.length > 0) {
     await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
   }
@@ -61,14 +91,17 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   await sheet.loadHeaderRow();
   const rows = await sheet.getRows();
   const row = rows.find(r => r.id === rowId);
+  
   if (row) {
     Object.keys(updatedData).forEach(key => {
-      if (sheet.headerValues.includes(key)) row[key] = updatedData[key];
+      if (sheet.headerValues.includes(key)) {
+        row[key] = updatedData[key];
+      }
     });
     await row.save();
   } else {
     await ensureDynamicHeaders(sheet, Object.keys(updatedData));
-    await sheet.addRow(updatedData);
+    await sheet.addRow({ id: rowId, ...updatedData });
   }
 }
 
@@ -77,13 +110,18 @@ async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
 
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
-  req.user = data.user;
-  req.clienteId = data.user.user_metadata.cliente_id;
-  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
-  next();
+    req.user = data.user;
+    req.clienteId = data.user.user_metadata?.cliente_id;
+    if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
+    next();
+  } catch (error) {
+    console.error("Erro no middleware de autenticação:", error);
+    return res.status(500).json({ msg: "Erro interno de autenticação" });
+  }
 }
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
@@ -96,7 +134,13 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
     .neq("status", "cancelado");
 
   if (ignoreId) query = query.neq("id", ignoreId);
-  const { data: agendamentos } = await query;
+  const { data: agendamentos, error } = await query;
+  
+  if (error) {
+    console.error("Erro ao verificar horário disponível:", error);
+    return false;
+  }
+  
   return agendamentos.length === 0;
 }
 
@@ -133,13 +177,15 @@ async function limparAgendamentosExpirados() {
         } else {
           console.log(`✅ Agendamento ${agendamento.id} cancelado por falta de pagamento`);
           
-          // Atualiza Google Sheet
+          // Atualiza Google Sheet se configurado
           try {
-            const doc = await accessSpreadsheet(agendamento.cliente);
-            await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
-              status: "cancelado",
-              confirmado: false
-            });
+            if (creds) {
+              const doc = await accessSpreadsheet(agendamento.cliente);
+              await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
+                status: "cancelado",
+                confirmado: false
+              });
+            }
           } catch (sheetError) {
             console.error("Erro ao atualizar Google Sheets:", sheetError);
           }
@@ -155,6 +201,7 @@ async function limparAgendamentosExpirados() {
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
+
 app.get("/:cliente", async (req, res) => {
   const cliente = req.params.cliente;
   const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
@@ -241,8 +288,8 @@ app.post("/create-pix", async (req, res) => {
     res.json({
       payment_id: result.id,
       status: result.status,
-      qr_code: result.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+      qr_code: result.point_of_interaction?.transaction_data?.qr_code,
+      qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
       expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
     });
   } catch (err) {
@@ -425,12 +472,14 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       return res.status(500).json({ msg: "Erro ao criar agendamento" });
     }
 
-    // Atualiza Google Sheet
+    // Atualiza Google Sheet se configurado
     try {
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-      await sheet.addRow(novoAgendamento);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
       // Não falha a requisição por erro no sheet
@@ -456,10 +505,12 @@ app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)
     
     if (error) throw error;
     
-    // Atualiza Google Sheet
+    // Atualiza Google Sheet se configurado
     try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -482,10 +533,12 @@ app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=
     
     if (error) throw error;
     
-    // Atualiza Google Sheet
+    // Atualiza Google Sheet se configurado
     try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -513,10 +566,12 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
     
     if (error) throw error;
     
-    // Atualiza Google Sheet
+    // Atualiza Google Sheet se configurado
     try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -597,12 +652,13 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { data: agendamentos } = await supabase
+    const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("nome, email, telefone")
       .eq("cliente", cliente)
       .neq("status", "cancelado");
 
+    if (error) throw error;
     if (!agendamentos) {
       return res.json([]);
     }
