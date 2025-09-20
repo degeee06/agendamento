@@ -382,7 +382,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
   try {
     const emailData = {
       from: {
-        email: "seu-email@dominio.com",
+        email: "worldgsuporte@gmail.com",
         name: "Agenda"
       },
       to: [
@@ -409,6 +409,7 @@ async function enviarEmail(destinatario, nome, linkConfirmacao) {
 
 // ---------------- Servidor ----------------
 app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
