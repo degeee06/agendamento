@@ -136,7 +136,26 @@
             .dias-tabs-container::-webkit-scrollbar-thumb {
                 background: rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
+
             }
+.dashboard-card {
+    transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.stat-number {
+    font-size: 1.875rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #D1D5DB;
+
         }
     </style>
 </head>
@@ -194,6 +213,44 @@
                 </button>
             </div>
         </div>
+
+<!-- Dashboard de Estatísticas -->
+<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+            <div class="text-sm text-gray-300">Hoje</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+            <div class="text-sm text-gray-300">Esta Semana</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+            <div class="text-sm text-gray-300">Total</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Gráfico de Status -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+            <div id="chartStatus" class="h-48"></div>
+        </div>
+
+        <!-- Top Clientes -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+    </div>
+</div>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -623,6 +680,9 @@ function init() {
             modal.classList.remove("hidden");
         }
 
+
+
+
         // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
             if(!userToken) return;
@@ -678,6 +738,60 @@ function init() {
                 logoutBtn.style.display = 'flex';
 
                 listarAgendamentos().then(() => {
+// ---------------- DASHBOARD ----------------
+async function carregarDashboard() {
+    if (!userToken) return;
+
+    try {
+        // Carregar estatísticas
+        const [resStats, resClientes] = await Promise.all([
+            fetch(`/estatisticas/${cliente}`, {
+                headers: { "Authorization": `Bearer ${userToken}` }
+            }),
+            fetch(`/top-clientes/${cliente}`, {
+                headers: { "Authorization": `Bearer ${userToken}` }
+            })
+        ]);
+
+        const estatisticas = await resStats.json();
+        const topClientes = await resClientes.json();
+
+        // Atualizar cards
+        document.getElementById('statHoje').textContent = estatisticas.hoje;
+        document.getElementById('statSemana').textContent = estatisticas.semana;
+        document.getElementById('statTotal').textContent = estatisticas.total;
+        document.getElementById('statTaxa').textContent = estatisticas.taxaConfirmacao + '%';
+
+        // Renderizar top clientes
+        renderTopClientes(topClientes);
+        
+        // Mostrar dashboard
+        document.getElementById('dashboardSection').style.display = 'block';
+
+    } catch (error) {
+        console.error("Erro ao carregar dashboard:", error);
+    }
+}
+
+function renderTopClientes(clientes) {
+    const container = document.getElementById('topClientes');
+    container.innerHTML = '';
+
+    clientes.forEach((cliente, index) => {
+        const div = document.createElement('div');
+        div.className = 'flex justify-between items-center p-2 bg-white/5 rounded';
+        div.innerHTML = `
+            <div class="flex-1">
+                <div class="font-medium">${cliente.nome}</div>
+                <div class="text-sm text-gray-400">${cliente.agendamentos} agendamentos</div>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
+                ${index + 1}
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
                     // Seleciona o dia atual
                     let hoje = new Date().getDay();
                     if (hoje === 0) {
@@ -1173,5 +1287,6 @@ function init() {
     </script>
 </body>
 </html>
+
 
 
