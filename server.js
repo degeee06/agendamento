@@ -715,7 +715,42 @@ app.post("/agendar-com-link/:cliente", authMiddleware, async (req, res) => {
     }
 });
 
+// Verifica pagamentos pendentes (rode a cada 5 minutos)
+app.get("/verificar-pagamentos-pendentes", async (req, res) => {
+    try {
+        // Busca agendamentos com pagamento pendente
+        const { data: agendamentos, error } = await supabase
+            .from("agendamentos")
+            .select('*')
+            .eq('payment_status', 'waiting_payment')
+            .lt('payment_expires', new Date().toISOString());
 
+        for (const agendamento of agendamentos) {
+            // Verifica status no Mercado Pago
+            const statusResponse = await fetch(`/check-payment/${agendamento.payment_id}`);
+            if (statusResponse.ok) {
+                const statusData = await statusResponse.json();
+                
+                if (statusData.status === 'approved') {
+                    // Atualiza para confirmado
+                    await supabase
+                        .from("agendamentos")
+                        .update({
+                            status: "confirmado",
+                            confirmado: true,
+                            payment_status: "paid"
+                        })
+                        .eq('id', agendamento.id);
+                }
+            }
+        }
+
+        res.json({msg: "Pagamentos verificados"});
+    } catch (error) {
+        console.error("Erro ao verificar pagamentos:", error);
+        res.status(500).json({msg: "Erro interno"});
+    }
+});
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
 setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
@@ -728,4 +763,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
+
 
