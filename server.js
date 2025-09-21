@@ -3,7 +3,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import { MercadoPagoConfig, Payment, Preference } from "mercadopago";
+import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
 // ---------------- Config ----------------
@@ -24,7 +24,6 @@ const supabase = createClient(
 // Inicializa Mercado Pago
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 const payment = new Payment(mpClient);
-const preference = new Preference(mpClient);
 
 let creds;
 try {
@@ -644,225 +643,6 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ==== ROTA PARA GERAR LINK DE PAGAMENTO ====
-app.post("/create-payment-link", async (req, res) => {
-  const { amount, description, email, agendamento_id, cliente_id } = req.body;
-  
-  if (!amount || !email || !agendamento_id || !cliente_id) {
-    return res.status(400).json({ error: "Faltando dados obrigatórios" });
-  }
-
-  try {
-    // URL de redirecionamento
-    const successUrl = `${process.env.FRONTEND_URL}/payment/success?agendamento_id=${agendamento_id}`;
-    const failureUrl = `${process.env.FRONTEND_URL}/payment/failure?agendamento_id=${agendamento_id}`;
-    const pendingUrl = `${process.env.FRONTEND_URL}/payment/pending?agendamento_id=${agendamento_id}`;
-
-    // Cria a preferência (link de pagamento) - CONFIGURAÇÃO CORRIGIDA
-    const result = await preference.create({
-      body: {
-        items: [
-          {
-            title: description || "Pagamento de Agendamento",
-            quantity: 1,
-            unit_price: Number(amount),
-            currency_id: "BRL"
-          }
-        ],
-        payer: { 
-          email: email.toLowerCase().trim() 
-        },
-        back_urls: {
-          success: successUrl,
-          failure: failureUrl,
-          pending: pendingUrl
-        },
-        auto_return: "approved",
-        external_reference: agendamento_id,
-        notification_url: `${process.env.BACKEND_URL}/webhook-payment-link`,
-        metadata: {
-          agendamento_id: agendamento_id,
-          cliente_id: cliente_id,
-          email: email
-        },
-        // ⭐⭐ CONFIGURAÇÃO CORRETA PARA HABILITAR PIX ⭐⭐
-        payment_methods: {
-          excluded_payment_types: [], // Não exclui nenhum tipo de pagamento
-          excluded_payment_methods: [], // Não exclui nenhum método específico
-          default_payment_method_id: null, // Sem método padrão
-          installments: 12, // Número máximo de parcelas permitidas
-          default_installments: 1 // Parcela padrão (à vista para PIX)
-        },
-        // ⭐⭐ REMOVA ESTA LINHA - payment_type_id NÃO EXISTE NA API ⭐⭐
-        // payment_type_id: "pix", // ← REMOVER ESTA LINHA
-        
-        // Configurações adicionais para melhor experiência
-        expires: false, // Link não expira
-        statement_descriptor: "AGENDAMENTO" // Descrição no extrato
-      }
-    });
-
-    console.log("🔗 Link de pagamento criado:", result.id);
-    console.log("📋 Métodos disponíveis:", result.payment_methods);
-    console.log("💰 Informações de pagamento:", {
-      id: result.id,
-      init_point: result.init_point,
-      sandbox_init_point: result.sandbox_init_point
-    });
-
-    // Salva no banco de dados
-    const { error: insertError } = await supabase
-      .from("payment_links")
-      .insert([{
-        id: result.id,
-        agendamento_id: agendamento_id,
-        cliente_id: cliente_id,
-        email: email.toLowerCase().trim(),
-        amount: Number(amount),
-        description: description || "Pagamento de Agendamento",
-        status: "pending",
-        payment_link: result.init_point,
-        sandbox_init_point: result.sandbox_init_point,
-        created_at: new Date().toISOString()
-      }]);
-
-    if (insertError) {
-      console.error("Erro ao salvar link de pagamento:", insertError);
-      return res.status(500).json({ error: "Erro ao salvar link de pagamento" });
-    }
-
-    res.json({
-      payment_link_id: result.id,
-      payment_link: result.init_point,
-      sandbox_link: result.sandbox_init_point,
-      status: "pending",
-      payment_methods: result.payment_methods
-    });
-
-  } catch (err) {
-    console.error("Erro ao criar link de pagamento:", err);
-    
-    // Log mais detalhado do erro
-    if (err.cause) {
-      console.error("Causa do erro:", err.cause);
-    }
-    if (err.response) {
-      console.error("Resposta do erro:", err.response.data);
-    }
-    
-    res.status(500).json({ 
-      error: err.message,
-      details: err.response?.data || null
-    });
-  }
-});
-
-// ==== BUSCAR LINKS DE PAGAMENTO POR AGENDAMENTO ====
-app.get("/payment-links/agendamento/:agendamento_id", authMiddleware, async (req, res) => {
-  try {
-    const { agendamento_id } = req.params;
-
-    const { data: paymentLinks, error } = await supabase
-      .from("payment_links")
-      .select("*")
-      .eq("agendamento_id", agendamento_id) // UUID
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Erro ao buscar links de pagamento:", error);
-      return res.status(500).json({ error: "Erro interno" });
-    }
-
-    res.json({ payment_links: paymentLinks || [] });
-  } catch (err) {
-    console.error("Erro em /payment-links/agendamento:", err);
-    res.status(500).json({ error: "Erro interno" });
-  }
-});
-
-// ==== BUSCAR LINKS DE PAGAMENTO POR CLIENTE ====
-app.get("/payment-links/cliente/:cliente_id", authMiddleware, async (req, res) => {
-  try {
-    const { cliente_id } = req.params;
-
-    const { data: paymentLinks, error } = await supabase
-      .from("payment_links")
-      .select("*")
-      .eq("cliente_id", cliente_id) // TEXT
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Erro ao buscar links de pagamento:", error);
-      return res.status(500).json({ error: "Erro interno" });
-    }
-
-    res.json({ payment_links: paymentLinks || [] });
-  } catch (err) {
-    console.error("Erro em /payment-links/cliente:", err);
-    res.status(500).json({ error: "Erro interno" });
-  }
-});
-
-
-// ==== VERIFICAR STATUS DO LINK DE PAGAMENTO ====
-// ==== VERIFICAR STATUS DO LINK DE PAGAMENTO ====
-app.get("/check-payment-link/:paymentLinkId", async (req, res) => {
-  try {
-    const { paymentLinkId } = req.params;
-
-    // Busca no banco de dados
-    const { data: paymentLink, error } = await supabase
-      .from("payment_links")
-      .select(`
-        *,
-        agendamentos:agendamento_id (id, status, confirmado),
-        clientes:cliente_id (id, nome)
-      `)
-      .eq("id", paymentLinkId)
-      .single();
-
-    if (error) {
-      return res.status(404).json({ error: "Link de pagamento não encontrado" });
-    }
-
-    // Se já está aprovado, retorna
-    if (paymentLink.status === "approved") {
-      return res.json({ 
-        status: "approved", 
-        payment_link: paymentLink 
-      });
-    }
-
-    // Verifica no Mercado Pago para atualizar status
-    try {
-      const paymentDetails = await payment.get({ id: paymentLinkId });
-      
-      if (paymentDetails.status !== paymentLink.status) {
-        // Atualiza status no banco
-        await supabase
-          .from("payment_links")
-          .update({ 
-            status: paymentDetails.status,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", paymentLinkId);
-      }
-
-      res.json({ 
-        status: paymentDetails.status, 
-        payment_link: { ...paymentLink, status: paymentDetails.status } 
-      });
-
-    } catch (mpError) {
-      console.error("Erro ao verificar no Mercado Pago:", mpError);
-      res.json({ status: paymentLink.status, payment_link: paymentLink });
-    }
-
-  } catch (err) {
-    console.error("Erro em /check-payment-link:", err);
-    res.status(500).json({ error: "Erro interno" });
-  }
-});
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
 setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
@@ -875,6 +655,3 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
-
-
-
