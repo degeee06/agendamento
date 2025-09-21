@@ -508,8 +508,16 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
     if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
     
     const { data, error } = await supabase.from("agendamentos")
-      .update({data:novaData, horario:novoHorario})
-      .eq("id",id).eq("cliente",cliente).select().single();
+      .update({
+        data: novaData, 
+        horario: novoHorario,
+        status: "pendente",        // SEMPRE volta para pendente
+        confirmado: false          // SEMPRE volta para não confirmado
+      })
+      .eq("id", id)
+      .eq("cliente", cliente)
+      .select()
+      .single();
     
     if (error) throw error;
     
