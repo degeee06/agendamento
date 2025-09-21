@@ -643,249 +643,299 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ==== GERAR LINK DE CONFIRMAÇÃO ====
-app.post("/generate-confirmation-link", async (req, res) => {
-  const { agendamento_id, email } = req.body;
-  
-  if (!agendamento_id || !email) {
-    return res.status(400).json({ error: "Agendamento ID e email são obrigatórios" });
-  }
 
+// Adicione estas rotas após as rotas existentes
+
+// ---------------- Sistema de Confirmação com PIX ----------------
+
+// Gerar link de confirmação
+app.post("/gerar-link-confirmacao/:agendamento_id", authMiddleware, async (req, res) => {
   try {
-    // Verificar se o agendamento existe e pertence ao email
-    const { data: agendamento, error: agError } = await supabase
+    const { agendamento_id } = req.params;
+    const { valor, descricao } = req.body;
+
+    // Verificar se o agendamento existe e pertence ao cliente
+    const { data: agendamento, error: agendamentoError } = await supabase
       .from("agendamentos")
-      .select("id, cliente, email, status")
+      .select("*")
       .eq("id", agendamento_id)
-      .eq("email", email.toLowerCase())
+      .eq("cliente", req.clienteId)
       .single();
 
-    if (agError || !agendamento) {
-      return res.status(404).json({ error: "Agendamento não encontrado" });
+    if (agendamentoError || !agendamento) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
     }
 
-    if (agendamento.status !== "pendente") {
-      return res.status(400).json({ error: "Agendamento já confirmado ou cancelado" });
+    // Verificar se já existe um link ativo para este agendamento
+    const { data: linkExistente } = await supabase
+      .from("confirmacao_links")
+      .select("*")
+      .eq("agendamento_id", agendamento_id)
+      .eq("utilizado", false)
+      .gt("expira_em", new Date().toISOString())
+      .maybeSingle();
+
+    if (linkExistente) {
+      return res.json({
+        link: `${process.env.FRONTEND_URL}/confirmar-presenca/${linkExistente.token}`,
+        expira_em: linkExistente.expira_em
+      });
     }
 
     // Gerar token único
     const token = require('crypto').randomBytes(32).toString('hex');
     const expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
 
-    // Salvar no banco
-    const { error: insertError } = await supabase
+    // Criar registro do link de confirmação
+    const { data: novoLink, error: linkError } = await supabase
       .from("confirmacao_links")
       .insert([{
-        agendamento_id: agendamento_id,
-        token: token,
-        expira_em: expira_em.toISOString()
-      }]);
+        agendamento_id,
+        token,
+        expira_em: expira_em.toISOString(),
+        utilizado: false
+      }])
+      .select()
+      .single();
 
-    if (insertError) {
-      console.error("Erro ao salvar link de confirmação:", insertError);
-      return res.status(500).json({ error: "Erro ao gerar link" });
+    if (linkError) {
+      console.error("Erro ao criar link de confirmação:", linkError);
+      return res.status(500).json({ msg: "Erro ao gerar link de confirmação" });
     }
 
-    // Gerar URL do link de confirmação
-    const confirmationUrl = `${process.env.FRONTEND_URL}/confirmar/${token}`;
-
     res.json({
-      confirmation_url: confirmationUrl,
-      expira_em: expira_em,
-      message: "Link gerado com sucesso. Envie este link para o cliente."
+      link: `${process.env.FRONTEND_URL}/confirmar-presenca/${token}`,
+      expira_em: novoLink.expira_em
     });
 
   } catch (err) {
-    console.error("Erro ao gerar link de confirmação:", err);
-    res.status(500).json({ error: "Erro interno" });
+    console.error("Erro em /gerar-link-confirmacao:", err);
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
-// ==== PÁGINA PÚBLICA DE CONFIRMAÇÃO ====
-app.get("/confirmar/:token", async (req, res) => {
-  const { token } = req.params;
-
+// Verificar link de confirmação
+app.get("/verificar-link-confirmacao/:token", async (req, res) => {
   try {
-    // Buscar o link de confirmação
-    const { data: confirmacao, error: confError } = await supabase
+    const { token } = req.params;
+
+    const { data: link, error } = await supabase
       .from("confirmacao_links")
       .select(`
         *,
-        agendamentos:agendamento_id (
+        agendamentos (
           id,
+          cliente,
           nome,
           email,
           telefone,
           data,
           horario,
           status,
-          cliente
+          confirmado
         )
       `)
       .eq("token", token)
       .single();
 
-    if (confError || !confirmacao) {
-      return res.status(404).send("Link inválido ou expirado");
+    if (error || !link) {
+      return res.status(404).json({ msg: "Link inválido ou expirado" });
+    }
+
+    // Verificar se o link expirou
+    if (new Date(link.expira_em) < new Date()) {
+      return res.status(400).json({ msg: "Link expirado" });
     }
 
     // Verificar se já foi utilizado
-    if (confirmacao.utilizado) {
-      return res.status(400).send("Este link já foi utilizado");
+    if (link.utilizado) {
+      return res.status(400).json({ msg: "Link já utilizado" });
     }
 
-    // Verificar se expirou
-    if (new Date() > new Date(confirmacao.expira_em)) {
-      return res.status(400).send("Link expirado");
-    }
-
-    // Verificar status do agendamento
-    if (confirmacao.agendamentos.status !== "pendente") {
-      return res.status(400).send("Agendamento já confirmado ou cancelado");
-    }
-
-    // Servir página HTML de confirmação
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Confirmar Agendamento</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-      </head>
-      <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-        <div class="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
-          <h1 class="text-2xl font-bold mb-4">Confirmar Agendamento</h1>
-          
-          <div class="mb-6">
-            <p><strong>Nome:</strong> ${confirmacao.agendamentos.nome}</p>
-            <p><strong>Data:</strong> ${confirmacao.agendamentos.data}</p>
-            <p><strong>Horário:</strong> ${confirmacao.agendamentos.horario}</p>
-            <p><strong>Email:</strong> ${confirmacao.agendamentos.email}</p>
-          </div>
-
-          <div id="pixSection" class="mb-4 hidden">
-            <h2 class="text-lg font-semibold mb-2">Pagamento via PIX</h2>
-            <div id="qrCodeContainer"></div>
-            <div id="countdown" class="text-sm text-gray-600 mt-2"></div>
-          </div>
-
-          <button onclick="iniciarPagamento()" class="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">
-            Confirmar e Pagar via PIX
-          </button>
-
-          <script>
-            async function iniciarPagamento() {
-              try {
-                const response = await fetch('/create-pix-confirmacao', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    token: '${token}',
-                    agendamento_id: '${confirmacao.agendamento_id}'
-                  })
-                });
-
-                const data = await response.json();
-                
-                if (response.ok) {
-                  // Mostrar QR Code PIX
-                  document.getElementById('pixSection').classList.remove('hidden');
-                  document.querySelector('button').classList.add('hidden');
-                  
-                  document.getElementById('qrCodeContainer').innerHTML = \`
-                    <img src="data:image/png;base64,\${data.qr_code_base64}" class="w-48 h-48 mx-auto mb-4"/>
-                    <textarea readonly class="w-full p-2 border rounded">\${data.qr_code}</textarea>
-                    <p class="text-center mt-2">Valor: R$ \${data.amount.toFixed(2)}</p>
-                  \`;
-                  
-                  // Iniciar verificação de pagamento
-                  verificarPagamento(data.payment_id);
-                } else {
-                  alert('Erro: ' + data.error);
-                }
-              } catch (error) {
-                alert('Erro ao processar pagamento');
-              }
-            }
-
-            async function verificarPagamento(paymentId) {
-              const interval = setInterval(async () => {
-                const response = await fetch(\`/check-payment/\${paymentId}\`);
-                const data = await response.json();
-                
-                if (data.status === 'approved') {
-                  clearInterval(interval);
-                  alert('Pagamento confirmado! Agendamento realizado com sucesso.');
-                  window.location.reload();
-                }
-              }, 5000);
-            }
-          </script>
-        </div>
-      </body>
-      </html>
-    `);
+    res.json({
+      valido: true,
+      agendamento: link.agendamentos,
+      expira_em: link.expira_em
+    });
 
   } catch (err) {
-    console.error("Erro na página de confirmação:", err);
-    res.status(500).send("Erro interno");
+    console.error("Erro em /verificar-link-confirmacao:", err);
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
-// ==== CRIAR PIX PARA CONFIRMAÇÃO ====
-app.post("/create-pix-confirmacao", async (req, res) => {
-  const { token, agendamento_id } = req.body;
-
+// Processar confirmação com PIX
+app.post("/confirmar-com-pix/:token", async (req, res) => {
   try {
-    // Verificar token válido
-    const { data: confirmacao, error: confError } = await supabase
+    const { token } = req.params;
+    const { email } = req.body;
+
+    // Verificar link
+    const { data: link, error: linkError } = await supabase
       .from("confirmacao_links")
-      .select("*, agendamentos:agendamento_id(*)")
+      .select(`
+        *,
+        agendamentos (
+          id,
+          cliente,
+          nome,
+          email,
+          telefone,
+          data,
+          horario,
+          status,
+          confirmado
+        )
+      `)
       .eq("token", token)
       .single();
 
-    if (confError || !confirmacao) {
-      return res.status(400).json({ error: "Token inválido" });
+    if (linkError || !link) {
+      return res.status(404).json({ msg: "Link inválido ou expirado" });
     }
 
+    if (new Date(link.expira_em) < new Date()) {
+      return res.status(400).json({ msg: "Link expirado" });
+    }
+
+    if (link.utilizado) {
+      return res.status(400).json({ msg: "Link já utilizado" });
+    }
+
+    const agendamento = link.agendamentos;
+
     // Criar pagamento PIX
-    const valor = 0.01; // Ou valor real do serviço
     const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     
     const result = await payment.create({
       body: {
-        transaction_amount: valor,
-        description: `Agendamento - ${confirmacao.agendamentos.nome}`,
+        transaction_amount: 1.00, // Valor fixo ou pode ser dinâmico
+        description: `Confirmação de presença - ${agendamento.nome}`,
         payment_method_id: "pix",
-        payer: { email: confirmacao.agendamentos.email },
-        date_of_expiration: dateOfExpiration
-      }
+        payer: { email: email || agendamento.email },
+        date_of_expiration: dateOfExpiration,
+        metadata: {
+          agendamento_id: agendamento.id,
+          confirmacao_token: token
+        }
+      },
     });
 
-    // Marcar token como utilizado
+    // Marcar link como utilizado
     await supabase
       .from("confirmacao_links")
       .update({ utilizado: true })
       .eq("token", token);
 
+    // Registrar pagamento
+    await supabase
+      .from("pagamentos")
+      .insert([{ 
+        id: result.id, 
+        email: (email || agendamento.email).toLowerCase().trim(), 
+        amount: 1.00, 
+        status: result.status || 'pending', 
+        valid_until: null,
+        description: `Confirmação de presença - ${agendamento.nome}`,
+        metadata: {
+          agendamento_id: agendamento.id,
+          tipo: "confirmacao_presenca"
+        }
+      }]);
+
     res.json({
       payment_id: result.id,
+      status: result.status,
       qr_code: result.point_of_interaction.transaction_data.qr_code,
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
-      amount: valor,
       expires_at: dateOfExpiration
     });
 
   } catch (err) {
-    console.error("Erro ao criar PIX de confirmação:", err);
-    res.status(500).json({ error: "Erro ao processar pagamento" });
+    console.error("Erro em /confirmar-com-pix:", err);
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
+// Webhook para confirmação automática após pagamento
+app.post("/webhook-confirmacao", async (req, res) => {
+  try {
+    const paymentId = req.body?.data?.id || req.query["data.id"];
+    if (!paymentId) return res.sendStatus(400);
 
+    const paymentDetails = await payment.get({ id: paymentId });
 
+    // Verificar se é um pagamento de confirmação
+    if (paymentDetails.metadata?.tipo === "confirmacao_presenca" && 
+        ["approved", "paid"].includes(paymentDetails.status.toLowerCase())) {
+      
+      const agendamentoId = paymentDetails.metadata.agendamento_id;
+
+      // Atualizar agendamento para confirmado
+      const { error: updateError } = await supabase
+        .from("agendamentos")
+        .update({ 
+          status: "confirmado", 
+          confirmado: true 
+        })
+        .eq("id", agendamentoId);
+
+      if (updateError) {
+        console.error("Erro ao confirmar agendamento:", updateError);
+      } else {
+        console.log(`✅ Agendamento ${agendamentoId} confirmado via PIX`);
+
+        // Atualizar Google Sheet
+        try {
+          const { data: agendamento } = await supabase
+            .from("agendamentos")
+            .select("cliente")
+            .eq("id", agendamentoId)
+            .single();
+
+          if (agendamento) {
+            const doc = await accessSpreadsheet(agendamento.cliente);
+            await updateRowInSheet(doc.sheetsByIndex[0], agendamentoId, {
+              status: "confirmado",
+              confirmado: true
+            });
+          }
+        } catch (sheetError) {
+          console.error("Erro ao atualizar Google Sheets:", sheetError);
+        }
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Erro no webhook de confirmação:", err);
+    res.sendStatus(500);
+  }
+});
+
+// Limpar links expirados periodicamente
+async function limparLinksExpirados() {
+  try {
+    console.log("🔄 Verificando links de confirmação expirados...");
+    
+    const { error } = await supabase
+      .from("confirmacao_links")
+      .update({ utilizado: true })
+      .lt("expira_em", new Date().toISOString())
+      .eq("utilizado", false);
+
+    if (error) {
+      console.error("Erro ao limpar links expirados:", error);
+    } else {
+      console.log("✅ Links expirados limpos");
+    }
+  } catch (err) {
+    console.error("Erro na limpeza de links:", err);
+  }
+}
+
+// Adicione ao intervalo de limpeza
+setInterval(limparLinksExpirados, 60 * 60 * 1000); // A cada 1 hora
 
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
@@ -899,4 +949,3 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
-
