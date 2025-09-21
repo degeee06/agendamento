@@ -643,6 +643,79 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+app.post("/agendar-com-link/:cliente", authMiddleware, async (req, res) => {
+    try {
+        const { Nome, Email, Telefone, Data, Horario } = req.body;
+        
+        // Verifica disponibilidade
+        const disponivel = await horarioDisponivel(cliente, Data, Horario);
+        if (!disponivel) return res.status(400).json({msg: "Horário indisponível"});
+
+        // Primeiro cria o agendamento
+        const { data: agendamento, error } = await supabase
+            .from("agendamentos")
+            .insert([{
+                cliente,
+                nome: Nome,
+                email: Email,
+                telefone: Telefone,
+                data: Data,
+                horario: Horario,
+                status: "pendente",
+                confirmado: false,
+                payment_status: "pending"
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Gera o pagamento PIX
+        const valorEmReais = 0.01; // 1 centavo para teste
+        const pagamentoResponse = await fetch('/create-pix', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                amount: valorEmReais,
+                description: `Agendamento - ${Nome} - ${Data} ${Horario}`,
+                email: Email
+            })
+        });
+
+        if (!pagamentoResponse.ok) {
+            throw new Error('Erro ao criar pagamento');
+        }
+
+        const pagamentoData = await pagamentoResponse.json();
+
+        // Atualiza o agendamento com os dados do pagamento
+        const { data: agendamentoAtualizado, error: updateError } = await supabase
+            .from("agendamentos")
+            .update({
+                payment_id: pagamentoData.payment_id,
+                payment_link: pagamentoData.qr_code, // Ou URL do payment link
+                payment_expires: pagamentoData.expires_at,
+                payment_status: "waiting_payment"
+            })
+            .eq('id', agendamento.id)
+            .select()
+            .single();
+
+        if (updateError) throw updateError;
+
+        res.json({
+            msg: "Agendamento criado com sucesso!",
+            agendamento: agendamentoAtualizado,
+            payment_link: pagamentoData.qr_code // Link para você enviar manualmente
+        });
+
+    } catch (error) {
+        console.error("Erro ao criar agendamento:", error);
+        res.status(500).json({msg: "Erro interno"});
+    }
+});
+
+
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
 setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
@@ -655,3 +728,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
+
