@@ -685,7 +685,7 @@ app.post("/create-payment-link", async (req, res) => {
           cliente_id: cliente_id,
           email: email
         },
-        // ⭐⭐ CONFIGURAÇÃO ESSENCIAL PARA HABILITAR PIX ⭐⭐
+        // ⭐⭐ CONFIGURAÇÃO CORRETA PARA HABILITAR PIX ⭐⭐
         payment_methods: {
           excluded_payment_types: [], // Não exclui nenhum tipo de pagamento
           excluded_payment_methods: [], // Não exclui nenhum método específico
@@ -693,17 +693,22 @@ app.post("/create-payment-link", async (req, res) => {
           installments: 12, // Número máximo de parcelas permitidas
           default_installments: 1 // Parcela padrão (à vista para PIX)
         },
-        // ⭐⭐ HABILITAR PIX EXPLICITAMENTE ⭐⭐
-        payment_type_id: "pix", // Isso força a disponibilidade do PIX
+        // ⭐⭐ REMOVA ESTA LINHA - payment_type_id NÃO EXISTE NA API ⭐⭐
+        // payment_type_id: "pix", // ← REMOVER ESTA LINHA
+        
         // Configurações adicionais para melhor experiência
         expires: false, // Link não expira
-        binary_mode: true, // Evita status pendentes
         statement_descriptor: "AGENDAMENTO" // Descrição no extrato
       }
     });
 
     console.log("🔗 Link de pagamento criado:", result.id);
     console.log("📋 Métodos disponíveis:", result.payment_methods);
+    console.log("💰 Informações de pagamento:", {
+      id: result.id,
+      init_point: result.init_point,
+      sandbox_init_point: result.sandbox_init_point
+    });
 
     // Salva no banco de dados
     const { error: insertError } = await supabase
@@ -731,16 +736,18 @@ app.post("/create-payment-link", async (req, res) => {
       payment_link: result.init_point,
       sandbox_link: result.sandbox_init_point,
       status: "pending",
-      // ⭐ Retorna informações adicionais para debug
       payment_methods: result.payment_methods
     });
 
   } catch (err) {
     console.error("Erro ao criar link de pagamento:", err);
     
-    // ⭐ Log mais detalhado do erro
+    // Log mais detalhado do erro
+    if (err.cause) {
+      console.error("Causa do erro:", err.cause);
+    }
     if (err.response) {
-      console.error("Detalhes do erro Mercado Pago:", err.response.data);
+      console.error("Resposta do erro:", err.response.data);
     }
     
     res.status(500).json({ 
@@ -868,5 +875,6 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
+
 
 
