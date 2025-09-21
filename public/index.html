@@ -1418,6 +1418,33 @@ async function carregarDashboard() {
     }
 }
 
+// Para enviar o link para o cliente:
+async function enviarLinkConfirmacao(agendamentoId, emailCliente) {
+  const response = await fetch('/generate-confirmation-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agendamento_id: agendamentoId,
+      email: emailCliente
+    })
+  });
+
+  const data = await response.json();
+  
+  if (response.ok) {
+    // Envie este link por email/SMS/WhatsApp para o cliente
+    console.log("Link para enviar:", data.confirmation_url);
+    
+    // Exemplo: enviar por email (usando seu sistema atual)
+    await enviarEmail(
+      emailCliente,
+      "Confirme seu agendamento",
+      `Clique no link para confirmar: ${data.confirmation_url}`
+    );
+  }
+}
+
+
         // ---------------- INIT ----------------
         AOS.init({
             duration: 800,
@@ -1429,4 +1456,5 @@ async function carregarDashboard() {
     </script>
 </body>
 </html>
+
 
