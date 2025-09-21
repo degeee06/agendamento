@@ -942,72 +942,120 @@
         }
 
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-        form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    // Mostrar loading
-    agendarText.classList.add('hidden');
-    agendarSpinner.classList.remove('hidden');
-    form.querySelector('button[type="submit"]').disabled = true;
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
 
-    try {
-        const formData = new FormData(form);
-        const dataToSend = Object.fromEntries(formData.entries());
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
 
-        const response = await fetch(`/agendar-com-link/${cliente}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                "Authorization": `Bearer ${userToken}`
-            },
-            body: JSON.stringify(dataToSend)
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            // MOSTRA O LINK PARA VOCÊ COPIAR E ENVIAR MANUALMENTE
-            const linkDiv = document.createElement('div');
-            linkDiv.className = 'mt-4 p-4 bg-green-900/20 rounded-lg';
-            linkDiv.innerHTML = `
-                <h3 class="text-center mb-3">✅ Agendamento Criado!</h3>
-                <p class="text-sm mb-3">Copie o link abaixo e envie para o cliente:</p>
-                <div class="flex items-center gap-2 mb-3">
-                    <input type="text" value="${data.payment_link}" readonly 
-                           class="flex-1 p-2 bg-white/5 rounded text-sm" id="paymentLinkInput">
-                    <button onclick="copiarLink()" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                        <i data-feather="copy" class="w-4 h-4"></i>
-                    </button>
-                </div>
-                <p class="text-xs text-gray-400">O cliente terá 30 minutos para pagar</p>
-            `;
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
             
-            form.appendChild(linkDiv);
-            feather.replace();
-            
-            showToast("Agendamento criado! Copie o link para enviar ao cliente", "success");
-            
-        } else {
-            showToast(data.msg || "Erro ao criar agendamento", "error");
-        }
+            try {
+    // Primeiro, criar o pagamento PIX - MERCADO PAGO
+    const valorEmReais = 0.01; // 1 centavo
 
-    } catch (err) {
-        console.error(err);
-        showToast("Erro ao processar", "error");
-    } finally {
-        agendarText.classList.remove('hidden');
-        agendarSpinner.classList.add('hidden');
-        form.querySelector('button[type="submit"]').disabled = false;
+    const pagamentoResponse = await fetch('/create-pix', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+            email: dataToSend.Email
+        })
+    });
+
+    if (!pagamentoResponse.ok) {
+        const errorData = await pagamentoResponse.json();
+        throw new Error(errorData.error || 'Erro ao criar pagamento');
     }
-});
 
-// Função para copiar o link
-function copiarLink() {
-    const input = document.getElementById('paymentLinkInput');
-    input.select();
-    document.execCommand('copy');
-    showToast('Link copiado!', 'success');
-}
+    const pagamentoData = await pagamentoResponse.json();
+    currentPaymentId = pagamentoData.payment_id;
+    paymentExpiresAt = pagamentoData.expires_at;
+    
+    // Exibir QR Code e código PIX
+    let pixDiv = document.getElementById("pixArea");
+    if (!pixDiv) {
+        pixDiv = document.createElement("div");
+        pixDiv.id = "pixArea";
+        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+        form.appendChild(pixDiv);
+    }
+
+    pixDiv.innerHTML = `
+        <h3 class="text-center mb-3">Pagamento via PIX</h3>
+        <div class="text-center mb-4">
+            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+        </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div class="text-center">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                            Já efetuei o pagamento
+                        </button>
+                    </div>
+                `;
+                
+                feather.replace();
+                
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
+                });
+                
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
+                
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    }
+                });
+                
+                pagamentoPendente = true;
+                
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar pagamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
+            }
+        });
 
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
