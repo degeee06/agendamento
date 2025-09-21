@@ -1247,46 +1247,45 @@
         }
 
         async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-            if (!userToken) {
-                showToast("Faça login para reagendar um agendamento.", "warning");
-                return;
-            }
+    if (!userToken) {
+        showToast("Faça login para reagendar um agendamento.", "warning");
+        return;
+    }
 
-            try {
-                const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ 
-                        novaData, 
-                        novoHorario, 
-                        status: "pendente",
-                        confirmado: false
-                    })
-                });
+    try {
+        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ 
+                novaData, 
+                novoHorario, 
+                status: "pendente", // SEMPRE volta para pendente
+                confirmado: false   // SEMPRE volta para não confirmado
+            })
+        });
 
-                const data = await res.json();
+        const data = await res.json();
 
-                if (res.ok) {
-                    showToast("Agendamento reagendado com sucesso!", "success");
-                    listarAgendamentos();
-                } else {
-                    // Detecta conflito de horário (erro do índice único)
-                    if (data.code === "23505") {
-                        showToast("Já existe um agendamento nesse horário para este cliente.", "error");
-                    } else {
-                        showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
-                    }
-                }
-
-            } catch (e) {
-                console.error(e);
-                showToast("Erro de conexão ao reagendar.", "error");
+        if (res.ok) {
+            showToast("Agendamento reagendado com sucesso!", "success");
+            listarAgendamentos();
+        } else {
+            // Detecta conflito de horário (erro do índice único)
+            if (data.code === "23505") {
+                showToast("Já existe um agendamento nesse horário para este cliente.", "error");
+            } else {
+                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
             }
         }
 
+    } catch (e) {
+        console.error(e);
+        showToast("Erro de conexão ao reagendar.", "error");
+    }
+}
         // ---------------- DASHBOARD ----------------
         async function carregarDashboard() {
             try {
@@ -1359,3 +1358,4 @@
     </script>
 </body>
 </html>
+
