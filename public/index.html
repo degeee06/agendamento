@@ -482,6 +482,7 @@
                 form.style.display = 'block';
                 logoutBtn.style.display = 'flex';
                 listarAgendamentos();
+                verificarLinkConfirmacao();
             }
         }
 
@@ -604,12 +605,12 @@
                 const btnContainer = document.createElement("div");
                 btnContainer.className = "flex gap-2 mt-4 flex-wrap";
 
-                // Confirmar
+                // Confirmar - AGORA ABRE MODAL PIX
                 if (a.status !== "confirmado") {
                     const btnConfirmar = document.createElement("button");
                     btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
                     btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
-                    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
+                    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id, a));
                     btnContainer.appendChild(btnConfirmar);
                 }
 
@@ -1188,13 +1189,13 @@
             showToast("Exportado para PDF com sucesso", "success");
         });
 
-        async function confirmarAgendamento(cliente, id) {
+       // ---------------- MODIFICAR FUNÇÃO DE CONFIRMAR AGENDAMENTO ----------------
+        async function confirmarAgendamento(cliente, id, agendamento) {
             if (!userToken) {
                 showToast("Faça login para confirmar um agendamento.", "warning");
                 return;
             }
 
-            try {
                 const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
                     method: "POST",
                     headers: {
@@ -1216,8 +1217,99 @@
             } catch (e) {
                 console.error(e);
                 showToast("Erro de conexão ao confirmar.", "error");
+                abrirModalConfirmacaoPIX(agendamento);
             }
         }
+
+// ---------------- VERIFICAÇÃO DE LINK DE CONFIRMAÇÃO (para página pública) ----------------
+        async function verificarLinkConfirmacao() {
+            // Verifica se está na página de confirmação
+            if (window.location.pathname.includes('/confirmar-presenca/')) {
+                const token = window.location.pathname.split('/').pop();
+                
+                try {
+                    const res = await fetch(`/verificar-link-confirmacao/${token}`);
+                    const data = await res.json();
+                    
+                    if (res.ok && data.valido) {
+                        // Mostrar informações do agendamento e botão para pagar
+                        mostrarPaginaConfirmacao(data.agendamento, token);
+                    } else {
+                        mostrarErroConfirmacao(data.msg || "Link inválido ou expirado");
+                    }
+                } catch (error) {
+                    mostrarErroConfirmacao("Erro ao verificar link");
+                }
+            }
+        }
+
+        function mostrarPaginaConfirmacao(agendamento, token) {
+            // Implementar interface para página pública de confirmação
+            document.body.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center p-4">
+                    <div class="glass-card rounded-2xl p-8 max-w-md w-full">
+                        <h1 class="text-2xl font-bold text-center mb-6">Confirmar Presença</h1>
+                        <div class="space-y-4 mb-6">
+                            <p><strong>Nome:</strong> ${agendamento.nome}</p>
+                            <p><strong>Data:</strong> ${formatData(agendamento.data)}</p>
+                            <p><strong>Horário:</strong> ${agendamento.horario}</p>
+                        </div>
+                        <form id="formConfirmacao" class="space-y-4">
+                            <div>
+                                <label class="block mb-2">Email para recebimento</label>
+                                <input type="email" id="emailConfirmacao" value="${agendamento.email}" 
+                                       class="w-full p-3 rounded-lg bg-white/10 border border-white/20">
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-600 text-white py-3 rounded-lg">
+                                Confirmar com PIX (R$ 1,00)
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('formConfirmacao').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('emailConfirmacao').value;
+                
+                try {
+                    const resultado = await confirmarComPix(token, email);
+                    
+                    // Mostrar QR Code PIX
+                    document.body.innerHTML += `
+                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div class="bg-gray-900 rounded-xl p-6 max-w-md w-full">
+                                <h2 class="text-lg font-medium mb-4">Pagamento PIX</h2>
+                                <img src="data:image/png;base64,${resultado.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                                <div class="text-center">
+                                    <p class="text-sm mb-2">Escaneie o QR Code para pagar</p>
+                                    <div class="countdown-timer">Tempo restante: 15:00</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Iniciar verificação de pagamento
+                    verificarPagamentoConfirmacao(resultado.payment_id);
+                } catch (error) {
+                    alert("Erro: " + error.message);
+                }
+            });
+        }
+
+        function mostrarErroConfirmacao(mensagem) {
+            document.body.innerHTML = `
+                <div class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center p-4">
+                    <div class="glass-card rounded-2xl p-8 max-w-md w-full text-center">
+                        <i data-feather="x-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                        <h1 class="text-xl font-bold mb-4">Erro</h1>
+                        <p>${mensagem}</p>
+                    </div>
+                </div>
+            `;
+            feather.replace();
+        }
+
 
         // ---------------- CANCELAR AGENDAMENTO ----------------
         async function cancelarAgendamento(cliente, id) {
@@ -1429,4 +1521,5 @@ async function carregarDashboard() {
     </script>
 </body>
 </html>
+
 
