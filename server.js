@@ -643,85 +643,101 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/agendar-com-link/:cliente", authMiddleware, async (req, res) => {
+// ==== ROTA PARA VERIFICAR PAGAMENTOS PENDENTES ====
+app.get("/verificar-pagamentos-pendentes", async (req, res) => {
     try {
-        const { Nome, Email, Telefone, Data, Horario } = req.body;
+        console.log("🔄 Verificando pagamentos pendentes...");
         
-        // Verifica disponibilidade
-        const disponivel = await horarioDisponivel(cliente, Data, Horario);
-        if (!disponivel) return res.status(400).json({msg: "Horário indisponível"});
-
-        // Primeiro cria o agendamento
-        const { data: agendamento, error } = await supabase
+        // Busca agendamentos com pagamento pendente e não expirados
+        const { data: agendamentos, error } = await supabase
             .from("agendamentos")
-            .insert([{
-                cliente,
-                nome: Nome,
-                email: Email,
-                telefone: Telefone,
-                data: Data,
-                horario: Horario,
-                status: "pendente",
-                confirmado: false,
-                payment_status: "pending"
-            }])
-            .select()
-            .single();
+            .select('*')
+            .eq('payment_status', 'waiting_payment')
+            .gt('payment_expires', new Date().toISOString()); // Apenas os não expirados
 
-        if (error) throw error;
-
-        // Gera o pagamento PIX
-        const valorEmReais = 0.01; // 1 centavo para teste
-        const pagamentoResponse = await fetch('/create-pix', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                amount: valorEmReais,
-                description: `Agendamento - ${Nome} - ${Data} ${Horario}`,
-                email: Email
-            })
-        });
-
-        if (!pagamentoResponse.ok) {
-            throw new Error('Erro ao criar pagamento');
+        if (error) {
+            console.error("Erro ao buscar agendamentos pendentes:", error);
+            return res.status(500).json({ error: "Erro interno" });
         }
 
-        const pagamentoData = await pagamentoResponse.json();
+        console.log(`📋 Encontrados ${agendamentos?.length || 0} pagamentos pendentes`);
 
-        // Atualiza o agendamento com os dados do pagamento
-        const { data: agendamentoAtualizado, error: updateError } = await supabase
-            .from("agendamentos")
-            .update({
-                payment_id: pagamentoData.payment_id,
-                payment_link: pagamentoData.qr_code, // Ou URL do payment link
-                payment_expires: pagamentoData.expires_at,
-                payment_status: "waiting_payment"
-            })
-            .eq('id', agendamento.id)
-            .select()
-            .single();
+        let atualizados = 0;
+        
+        for (const agendamento of agendamentos || []) {
+            try {
+                // Verifica status no Mercado Pago
+                const paymentDetails = await payment.get({ id: agendamento.payment_id });
+                
+                if (paymentDetails.status === 'approved') {
+                    // Atualiza para confirmado
+                    const { error: updateError } = await supabase
+                        .from("agendamentos")
+                        .update({
+                            status: "confirmado",
+                            confirmado: true,
+                            payment_status: "paid"
+                        })
+                        .eq('id', agendamento.id);
 
-        if (updateError) throw updateError;
+                    if (!updateError) {
+                        console.log(`✅ Pagamento ${agendamento.payment_id} aprovado - Agendamento ${agendamento.id} confirmado`);
+                        atualizados++;
+                        
+                        // Atualiza Google Sheet
+                        try {
+                            const doc = await accessSpreadsheet(agendamento.cliente);
+                            await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
+                                status: "confirmado",
+                                confirmado: true,
+                                payment_status: "paid"
+                            });
+                        } catch (sheetError) {
+                            console.error("Erro ao atualizar Google Sheets:", sheetError);
+                        }
+                    } else {
+                        console.error(`❌ Erro ao atualizar agendamento ${agendamento.id}:`, updateError);
+                    }
+                }
+            } catch (mpError) {
+                console.error(`❌ Erro ao verificar pagamento ${agendamento.payment_id}:`, mpError.message);
+            }
+        }
 
-        res.json({
-            msg: "Agendamento criado com sucesso!",
-            agendamento: agendamentoAtualizado,
-            payment_link: pagamentoData.qr_code // Link para você enviar manualmente
+        res.json({ 
+            msg: "Pagamentos verificados", 
+            total: agendamentos?.length || 0, 
+            atualizados 
         });
 
     } catch (error) {
-        console.error("Erro ao criar agendamento:", error);
-        res.status(500).json({msg: "Erro interno"});
+        console.error("Erro ao verificar pagamentos:", error);
+        res.status(500).json({ error: "Erro interno" });
     }
 });
 
+// ==== FUNÇÃO PARA VERIFICAÇÃO AUTOMÁTICA ====
+async function verificarPagamentosAutomaticamente() {
+    try {
+        console.log("⏰ Verificação automática de pagamentos iniciada...");
+        
+        // Faz uma requisição para a própria rota
+        const response = await fetch(`http://localhost:${PORT}/verificar-pagamentos-pendentes`);
+        const result = await response.json();
+        
+        console.log("✅ Verificação de pagamentos concluída:", result);
+    } catch (error) {
+        console.error("❌ Erro na verificação automática:", error);
+    }
+}
 
-// ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
-// Executar a cada 5 minutos (300000 ms)
-setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
+// ==== CONFIGURAR VERIFICAÇÃO AUTOMÁTICA ====
+// Executar a cada 2 minutos (120000 ms)
+setInterval(verificarPagamentosAutomaticamente, 2 * 60 * 1000);
 
-// Executar imediatamente ao iniciar o servidor
-setTimeout(limparAgendamentosExpirados, 2000);
+// Executar imediatamente ao iniciar o servidor (após 5 segundos)
+setTimeout(verificarPagamentosAutomaticamente, 5000);
+
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => {
