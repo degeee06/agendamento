@@ -658,7 +658,7 @@ app.post("/create-payment-link", async (req, res) => {
     const failureUrl = `${process.env.FRONTEND_URL}/payment/failure?agendamento_id=${agendamento_id}`;
     const pendingUrl = `${process.env.FRONTEND_URL}/payment/pending?agendamento_id=${agendamento_id}`;
 
-    // Cria a preferência (link de pagamento)
+    // Cria a preferência (link de pagamento) - CONFIGURAÇÃO CORRIGIDA
     const result = await preference.create({
       body: {
         items: [
@@ -684,19 +684,34 @@ app.post("/create-payment-link", async (req, res) => {
           agendamento_id: agendamento_id,
           cliente_id: cliente_id,
           email: email
-        }
+        },
+        // ⭐⭐ CONFIGURAÇÃO ESSENCIAL PARA HABILITAR PIX ⭐⭐
+        payment_methods: {
+          excluded_payment_types: [], // Não exclui nenhum tipo de pagamento
+          excluded_payment_methods: [], // Não exclui nenhum método específico
+          default_payment_method_id: null, // Sem método padrão
+          installments: 12, // Número máximo de parcelas permitidas
+          default_installments: 1 // Parcela padrão (à vista para PIX)
+        },
+        // ⭐⭐ HABILITAR PIX EXPLICITAMENTE ⭐⭐
+        payment_type_id: "pix", // Isso força a disponibilidade do PIX
+        // Configurações adicionais para melhor experiência
+        expires: false, // Link não expira
+        binary_mode: true, // Evita status pendentes
+        statement_descriptor: "AGENDAMENTO" // Descrição no extrato
       }
     });
 
     console.log("🔗 Link de pagamento criado:", result.id);
+    console.log("📋 Métodos disponíveis:", result.payment_methods);
 
-    // Salva no banco de dados - note que os tipos já estão corretos
+    // Salva no banco de dados
     const { error: insertError } = await supabase
       .from("payment_links")
       .insert([{
         id: result.id,
-        agendamento_id: agendamento_id, // UUID
-        cliente_id: cliente_id,         // TEXT
+        agendamento_id: agendamento_id,
+        cliente_id: cliente_id,
         email: email.toLowerCase().trim(),
         amount: Number(amount),
         description: description || "Pagamento de Agendamento",
@@ -715,86 +730,23 @@ app.post("/create-payment-link", async (req, res) => {
       payment_link_id: result.id,
       payment_link: result.init_point,
       sandbox_link: result.sandbox_init_point,
-      status: "pending"
+      status: "pending",
+      // ⭐ Retorna informações adicionais para debug
+      payment_methods: result.payment_methods
     });
 
   } catch (err) {
     console.error("Erro ao criar link de pagamento:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-// ==== WEBHOOK ESPECÍFICO PARA LINKS DE PAGAMENTO ====
-// ==== WEBHOOK ESPECÍFICO PARA LINKS DE PAGAMENTO ====
-app.post("/webhook-payment-link", async (req, res) => {
-  try {
-    const { type, data } = req.body;
     
-    if (type === "payment") {
-      const paymentId = data.id;
-      const paymentDetails = await payment.get({ id: paymentId });
-      
-      const status = paymentDetails.status;
-      const externalReference = paymentDetails.external_reference; // agendamento_id (UUID)
-      
-      console.log(`🔗 Webhook payment-link: ${paymentId} - Status: ${status} - Agendamento: ${externalReference}`);
-
-      // Atualiza o status do link de pagamento
-      const { error: updateLinkError } = await supabase
-        .from("payment_links")
-        .update({ 
-          status: status,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", paymentDetails.order?.id || paymentId);
-
-      if (updateLinkError) {
-        console.error("Erro ao atualizar link de pagamento:", updateLinkError);
-      }
-
-      // Se o pagamento foi aprovado, atualiza o agendamento
-      if (["approved", "paid"].includes(status.toLowerCase())) {
-        // Atualiza o agendamento para confirmado
-        const { error: updateAgendamentoError } = await supabase
-          .from("agendamentos")
-          .update({ 
-            status: "confirmado",
-            confirmado: true
-          })
-          .eq("id", externalReference); // UUID
-
-        if (updateAgendamentoError) {
-          console.error("Erro ao atualizar agendamento:", updateAgendamentoError);
-        } else {
-          console.log(`✅ Agendamento ${externalReference} confirmado via link de pagamento`);
-          
-          // Atualiza Google Sheet
-          try {
-            const { data: agendamento, error: agError } = await supabase
-              .from("agendamentos")
-              .select("cliente")
-              .eq("id", externalReference)
-              .single();
-
-            if (agError) {
-              console.error("Erro ao buscar agendamento:", agError);
-            } else if (agendamento) {
-              const doc = await accessSpreadsheet(agendamento.cliente); // TEXT
-              await updateRowInSheet(doc.sheetsByIndex[0], externalReference, {
-                status: "confirmado",
-                confirmado: true
-              });
-            }
-          } catch (sheetError) {
-            console.error("Erro ao atualizar Google Sheets:", sheetError);
-          }
-        }
-      }
+    // ⭐ Log mais detalhado do erro
+    if (err.response) {
+      console.error("Detalhes do erro Mercado Pago:", err.response.data);
     }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Erro no webhook payment-link:", err);
-    res.sendStatus(500);
+    
+    res.status(500).json({ 
+      error: err.message,
+      details: err.response?.data || null
+    });
   }
 });
 
@@ -916,4 +868,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
+
 
