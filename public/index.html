@@ -941,26 +941,19 @@
             }
         }
 
-       // ---------------- AGENDAR COM LINK PIX PARA ENVIAR MANUALMENTE ----------------
-form.addEventListener('submit', async (e) => {
+        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+        form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const formData = new FormData(form);
-    const dataToSend = {};
-    formData.forEach((v, k) => dataToSend[k] = v);
-
-    // Verifica campos obrigatórios
-    if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast("Preencha todos os campos", "warning");
-        return;
-    }
-
+    
     // Mostrar loading
     agendarText.classList.add('hidden');
     agendarSpinner.classList.remove('hidden');
     form.querySelector('button[type="submit"]').disabled = true;
 
     try {
-        // Envia dados para criar agendamento com link PIX
+        const formData = new FormData(form);
+        const dataToSend = Object.fromEntries(formData.entries());
+
         const response = await fetch(`/agendar-com-link/${cliente}`, {
             method: 'POST',
             headers: {
@@ -973,109 +966,47 @@ form.addEventListener('submit', async (e) => {
         const data = await response.json();
 
         if (response.ok) {
-            // REMOVE a área de pagamento anterior se existir
-            const pixDivAntiga = document.getElementById("pixArea");
-            if (pixDivAntiga) {
-                pixDivAntiga.remove();
-            }
-
-            // CRIA nova área com o link para copiar
+            // MOSTRA O LINK PARA VOCÊ COPIAR E ENVIAR MANUALMENTE
             const linkDiv = document.createElement('div');
-            linkDiv.id = "pixArea";
-            linkDiv.className = 'mt-6 p-6 bg-green-900/20 rounded-lg border border-green-500/30';
+            linkDiv.className = 'mt-4 p-4 bg-green-900/20 rounded-lg';
             linkDiv.innerHTML = `
-                <div class="text-center mb-4">
-                    <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <i data-feather="check-circle" class="w-6 h-6 text-green-400"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-green-300 mb-2">✅ Agendamento Criado!</h3>
-                    <p class="text-sm text-gray-300 mb-4">Copie o link PIX abaixo e envie para o cliente:</p>
+                <h3 class="text-center mb-3">✅ Agendamento Criado!</h3>
+                <p class="text-sm mb-3">Copie o link abaixo e envie para o cliente:</p>
+                <div class="flex items-center gap-2 mb-3">
+                    <input type="text" value="${data.payment_link}" readonly 
+                           class="flex-1 p-2 bg-white/5 rounded text-sm" id="paymentLinkInput">
+                    <button onclick="copiarLink()" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                        <i data-feather="copy" class="w-4 h-4"></i>
+                    </button>
                 </div>
-                
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Link PIX para pagamento:</label>
-                    <div class="flex items-center gap-2">
-                        <input type="text" value="${data.payment_link}" readonly 
-                               class="flex-1 p-3 bg-white/5 rounded-lg border border-white/10 text-sm font-mono"
-                               id="paymentLinkInput">
-                        <button onclick="copiarLink()" class="p-3 bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all">
-                            <i data-feather="copy" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <div class="bg-white/5 p-3 rounded-lg">
-                        <span class="text-gray-400">Valor:</span>
-                        <p class="font-semibold">R$ 0,01</p>
-                    </div>
-                    <div class="bg-white/5 p-3 rounded-lg">
-                        <span class="text-gray-400">Expira em:</span>
-                        <p class="font-semibold">30 minutos</p>
-                    </div>
-                </div>
-
-                <div class="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
-                    <p class="text-xs text-blue-300 text-center">
-                        💡 Envie este link por WhatsApp ou email para o cliente realizar o pagamento.
-                        O agendamento será confirmado automaticamente quando o pagamento for aprovado.
-                    </p>
-                </div>
+                <p class="text-xs text-gray-400">O cliente terá 30 minutos para pagar</p>
             `;
-
+            
             form.appendChild(linkDiv);
             feather.replace();
-
+            
             showToast("Agendamento criado! Copie o link para enviar ao cliente", "success");
-
-            // Limpa o formulário após sucesso
-            form.reset();
-
+            
         } else {
             showToast(data.msg || "Erro ao criar agendamento", "error");
         }
 
     } catch (err) {
         console.error(err);
-        showToast("Erro ao processar agendamento", "error");
+        showToast("Erro ao processar", "error");
     } finally {
-        // Esconder loading
         agendarText.classList.remove('hidden');
         agendarSpinner.classList.add('hidden');
         form.querySelector('button[type="submit"]').disabled = false;
     }
 });
 
-// Função para copiar o link PIX
+// Função para copiar o link
 function copiarLink() {
     const input = document.getElementById('paymentLinkInput');
     input.select();
     document.execCommand('copy');
-    
-    // Feedback visual
-    const btn = document.querySelector('[onclick="copiarLink()"]');
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i data-feather="check" class="w-4 h-4"></i>';
-    btn.classList.add('bg-green-600');
-    btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-    
-    showToast('Link copiado! Cole no WhatsApp ou email para enviar ao cliente.', 'success');
-    
-    // Volta ao normal após 2 segundos
-    setTimeout(() => {
-        btn.innerHTML = originalHtml;
-        btn.classList.remove('bg-green-600');
-        btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
-        feather.replace();
-    }, 2000);
-}
-
-// Função para compartilhar via WhatsApp (opcional)
-function compartilharWhatsApp() {
-    const link = document.getElementById('paymentLinkInput').value;
-    const mensagem = `Olá! Segue o link para pagamento do seu agendamento: ${link}`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
-    window.open(whatsappUrl, '_blank');
+    showToast('Link copiado!', 'success');
 }
 
         // ---------------- FILTROS ----------------
@@ -1439,44 +1370,6 @@ async function carregarDashboard() {
     }
 }
 
-// Verifica pagamentos pendentes (rode a cada 5 minutos)
-app.get("/verificar-pagamentos-pendentes", async (req, res) => {
-    try {
-        // Busca agendamentos com pagamento pendente
-        const { data: agendamentos, error } = await supabase
-            .from("agendamentos")
-            .select('*')
-            .eq('payment_status', 'waiting_payment')
-            .lt('payment_expires', new Date().toISOString());
-
-        for (const agendamento of agendamentos) {
-            // Verifica status no Mercado Pago
-            const statusResponse = await fetch(`/check-payment/${agendamento.payment_id}`);
-            if (statusResponse.ok) {
-                const statusData = await statusResponse.json();
-                
-                if (statusData.status === 'approved') {
-                    // Atualiza para confirmado
-                    await supabase
-                        .from("agendamentos")
-                        .update({
-                            status: "confirmado",
-                            confirmado: true,
-                            payment_status: "paid"
-                        })
-                        .eq('id', agendamento.id);
-                }
-            }
-        }
-
-        res.json({msg: "Pagamentos verificados"});
-    } catch (error) {
-        console.error("Erro ao verificar pagamentos:", error);
-        res.status(500).json({msg: "Erro interno"});
-    }
-});
-
-
         // ---------------- INIT ----------------
         AOS.init({
             duration: 800,
@@ -1488,6 +1381,4 @@ app.get("/verificar-pagamentos-pendentes", async (req, res) => {
     </script>
 </body>
 </html>
-
-
 
