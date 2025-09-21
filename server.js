@@ -643,108 +643,15 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ==== ROTA PARA VERIFICAR PAGAMENTOS PENDENTES ====
-// ==== ROTA PARA VERIFICAR PAGAMENTOS PENDENTES ====
-app.get("/verificar-pagamentos-pendentes", async (req, res) => {
-    try {
-        console.log("🔄 Verificando pagamentos pendentes...");
-        
-        // Busca agendamentos com pagamento pendente e não expirados
-        const { data: agendamentos, error } = await supabase
-            .from("agendamentos")
-            .select('*')
-            .eq('payment_status', 'waiting_payment')
-            .gt('payment_expires', new Date().toISOString());
+// ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
+// Executar a cada 5 minutos (300000 ms)
+setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
 
-        if (error) {
-            console.error("Erro ao buscar agendamentos pendentes:", error);
-            return res.status(500).json({ error: "Erro interno" });
-        }
+// Executar imediatamente ao iniciar o servidor
+setTimeout(limparAgendamentosExpirados, 2000);
 
-        console.log(`📋 Encontrados ${agendamentos?.length || 0} pagamentos pendentes`);
-
-        let atualizados = 0;
-        
-        for (const agendamento of agendamentos || []) {
-            try {
-                // Verifica status no Mercado Pago
-                const paymentDetails = await payment.get({ id: agendamento.payment_id });
-                
-                if (paymentDetails.status === 'approved') {
-                    // Atualiza para confirmado
-                    const { error: updateError } = await supabase
-                        .from("agendamentos")
-                        .update({
-                            status: "confirmado",
-                            confirmado: true,
-                            payment_status: "paid"
-                        })
-                        .eq('id', agendamento.id);
-
-                    if (!updateError) {
-                        console.log(`✅ Pagamento ${agendamento.payment_id} aprovado - Agendamento ${agendamento.id} confirmado`);
-                        atualizados++;
-                    } else {
-                        console.error(`❌ Erro ao atualizar agendamento ${agendamento.id}:`, updateError);
-                    }
-                }
-            } catch (mpError) {
-                console.error(`❌ Erro ao verificar pagamento ${agendamento.payment_id}:`, mpError.message);
-            }
-        }
-
-        res.json({ 
-            msg: "Pagamentos verificados", 
-            total: agendamentos?.length || 0, 
-            atualizados 
-        });
-
-    } catch (error) {
-        console.error("Erro ao verificar pagamentos:", error);
-        res.status(500).json({ error: "Erro interno" });
-    }
-});
-
-
-
-// ==== FUNÇÃO PARA VERIFICAÇÃO AUTOMÁTICA ====
-// ==== FUNÇÃO PARA VERIFICAÇÃO AUTOMÁTICA ====
-async function verificarPagamentosAutomaticamente() {
-    try {
-        console.log("⏰ Verificação automática de pagamentos iniciada...");
-        
-        // ✅ Pequeno delay para garantir que o servidor está pronto
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-        console.log("🌐 Usando URL:", baseUrl);
-        
-        const response = await fetch(`${baseUrl}/verificar-pagamentos-pendentes`);
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log("✅ Verificação de pagamentos concluída:", result);
-        } else {
-            console.error("❌ Erro na resposta:", response.status, response.statusText);
-            
-            // ✅ Tenta novamente após 30 segundos se falhar
-            setTimeout(verificarPagamentosAutomaticamente, 30000);
-        }
-    } catch (error) {
-        console.error("❌ Erro na verificação automática:", error.message);
-        
-        // ✅ Tenta novamente após 30 segundos se falhar
-        setTimeout(verificarPagamentosAutomaticamente, 30000);
-    }
-}
-
-// 3. Configuração dos intervals
-setInterval(verificarPagamentosAutomaticamente, 2 * 60 * 1000);
-setTimeout(verificarPagamentosAutomaticamente, 10000);
-
-// 4. Por último o app.listen
+// ---------------- Servidor ----------------
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
-  console.log("💳 Sistema de verificação de pagamentos ativo (a cada 2 minutos)");
 });
