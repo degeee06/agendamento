@@ -644,6 +644,7 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
 });
 
 // ==== ROTA PARA VERIFICAR PAGAMENTOS PENDENTES ====
+// ==== ROTA PARA VERIFICAR PAGAMENTOS PENDENTES ====
 app.get("/verificar-pagamentos-pendentes", async (req, res) => {
     try {
         console.log("🔄 Verificando pagamentos pendentes...");
@@ -653,7 +654,7 @@ app.get("/verificar-pagamentos-pendentes", async (req, res) => {
             .from("agendamentos")
             .select('*')
             .eq('payment_status', 'waiting_payment')
-            .gt('payment_expires', new Date().toISOString()); // Apenas os não expirados
+            .gt('payment_expires', new Date().toISOString());
 
         if (error) {
             console.error("Erro ao buscar agendamentos pendentes:", error);
@@ -683,18 +684,6 @@ app.get("/verificar-pagamentos-pendentes", async (req, res) => {
                     if (!updateError) {
                         console.log(`✅ Pagamento ${agendamento.payment_id} aprovado - Agendamento ${agendamento.id} confirmado`);
                         atualizados++;
-                        
-                        // Atualiza Google Sheet
-                        try {
-                            const doc = await accessSpreadsheet(agendamento.cliente);
-                            await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
-                                status: "confirmado",
-                                confirmado: true,
-                                payment_status: "paid"
-                            });
-                        } catch (sheetError) {
-                            console.error("Erro ao atualizar Google Sheets:", sheetError);
-                        }
                     } else {
                         console.error(`❌ Erro ao atualizar agendamento ${agendamento.id}:`, updateError);
                     }
@@ -716,24 +705,19 @@ app.get("/verificar-pagamentos-pendentes", async (req, res) => {
     }
 });
 
+
+
+// ==== FUNÇÃO PARA VERIFICAÇÃO AUTOMÁTICA ====
 // ==== FUNÇÃO PARA VERIFICAÇÃO AUTOMÁTICA ====
 async function verificarPagamentosAutomaticamente() {
     try {
         console.log("⏰ Verificação automática de pagamentos iniciada...");
         
-        // ✅ Múltiplas opções para diferentes ambientes
-        let baseUrl;
+        // ✅ Pequeno delay para garantir que o servidor está pronto
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
-        if (process.env.RENDER_EXTERNAL_URL) {
-            // Render
-            baseUrl = process.env.RENDER_EXTERNAL_URL;
-        } else if (process.env.NODE_ENV === 'production') {
-            // Outro hosting em produção
-            baseUrl = process.env.APP_URL || `https://${process.env.HOST}`;
-        } else {
-            // Desenvolvimento local
-            baseUrl = `http://localhost:${PORT}`;
-        }
+        const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+        console.log("🌐 Usando URL:", baseUrl);
         
         const response = await fetch(`${baseUrl}/verificar-pagamentos-pendentes`);
         
@@ -742,23 +726,25 @@ async function verificarPagamentosAutomaticamente() {
             console.log("✅ Verificação de pagamentos concluída:", result);
         } else {
             console.error("❌ Erro na resposta:", response.status, response.statusText);
+            
+            // ✅ Tenta novamente após 30 segundos se falhar
+            setTimeout(verificarPagamentosAutomaticamente, 30000);
         }
     } catch (error) {
         console.error("❌ Erro na verificação automática:", error.message);
+        
+        // ✅ Tenta novamente após 30 segundos se falhar
+        setTimeout(verificarPagamentosAutomaticamente, 30000);
     }
 }
 
-// ==== CONFIGURAR VERIFICAÇÃO AUTOMÁTICA ====
-// Executar a cada 2 minutos (120000 ms)
+// 3. Configuração dos intervals
 setInterval(verificarPagamentosAutomaticamente, 2 * 60 * 1000);
+setTimeout(verificarPagamentosAutomaticamente, 10000);
 
-// Executar imediatamente ao iniciar o servidor (após 5 segundos)
-setTimeout(verificarPagamentosAutomaticamente, 5000);
-
-
-// ---------------- Servidor ----------------
+// 4. Por último o app.listen
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
+  console.log("💳 Sistema de verificação de pagamentos ativo (a cada 2 minutos)");
 });
-
