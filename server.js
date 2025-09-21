@@ -1,649 +1,1229 @@
-import express from "express";
-import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
-import { createClient } from "@supabase/supabase-js";
-import { MercadoPagoConfig, Payment } from "mercadopago";
-import { GoogleSpreadsheet } from "google-spreadsheet";
-
-// ---------------- Config ----------------
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PORT = process.env.PORT || 3000;
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-// Inicializa Mercado Pago
-const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
-const payment = new Payment(mpClient);
-
-let creds;
-try {
-  creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-} catch (e) {
-  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
-  process.exit(1);
-}
-
-// ---------------- Google Sheets ----------------
-async function accessSpreadsheet(clienteId) {
-  const { data, error } = await supabase
-    .from("clientes")
-    .select("spreadsheet_id")
-    .eq("id", clienteId)
-    .single();
-  if (error || !data) throw new Error(`Cliente ${clienteId} não encontrado`);
-
-  const doc = new GoogleSpreadsheet(data.spreadsheet_id);
-  await doc.useServiceAccountAuth(creds);
-  await doc.loadInfo();
-  return doc;
-}
-
-async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
-  const currentHeaders = sheet.headerValues || [];
-  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
-  if (headersToAdd.length > 0) {
-    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
-  }
-}
-
-async function updateRowInSheet(sheet, rowId, updatedData) {
-  await sheet.loadHeaderRow();
-  const rows = await sheet.getRows();
-  const row = rows.find(r => r.id === rowId);
-  if (row) {
-    Object.keys(updatedData).forEach(key => {
-      if (sheet.headerValues.includes(key)) row[key] = updatedData[key];
-    });
-    await row.save();
-  } else {
-    await ensureDynamicHeaders(sheet, Object.keys(updatedData));
-    await sheet.addRow(updatedData);
-  }
-}
-
-// ---------------- Middleware Auth ----------------
-async function authMiddleware(req, res, next) {
-  const token = req.headers["authorization"]?.split("Bearer ")[1];
-  if (!token) return res.status(401).json({ msg: "Token não enviado" });
-
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
-
-  req.user = data.user;
-  req.clienteId = data.user.user_metadata.cliente_id;
-  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
-  next();
-}
-
-async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  let query = supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", cliente)
-    .eq("data", data)
-    .eq("horario", horario)
-    .neq("status", "cancelado");
-
-  if (ignoreId) query = query.neq("id", ignoreId);
-  const { data: agendamentos } = await query;
-  return agendamentos.length === 0;
-}
-
-// ==== FUNÇÃO PARA LIMPAR AGENDAMENTOS EXPIRADOS ====
-async function limparAgendamentosExpirados() {
-  try {
-    const quinzeMinutosAtras = new Date(Date.now() - 15 * 60 * 1000);
-    
-    console.log("🔄 Verificando agendamentos expirados...");
-    
-    const { data: agendamentosExpirados, error } = await supabase
-      .from("agendamentos")
-      .select("id, cliente, email, data, horario, created_at")
-      .eq("status", "pendente")
-      .lt("created_at", quinzeMinutosAtras.toISOString());
-
-    if (error) {
-      console.error("Erro ao buscar agendamentos expirados:", error);
-      return;
-    }
-
-    if (agendamentosExpirados && agendamentosExpirados.length > 0) {
-      console.log(`📋 Encontrados ${agendamentosExpirados.length} agendamentos expirados`);
-      
-      for (const agendamento of agendamentosExpirados) {
-        // Cancela agendamento não pago
-        const { error: updateError } = await supabase
-          .from("agendamentos")
-          .update({ status: "cancelado", confirmado: false })
-          .eq("id", agendamento.id);
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/imask/6.4.2/imask.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
-        if (updateError) {
-          console.error(`❌ Erro ao cancelar agendamento ${agendamento.id}:`, updateError);
-        } else {
-          console.log(`✅ Agendamento ${agendamento.id} cancelado por falta de pagamento`);
-          
-          // Atualiza Google Sheet
-          try {
-            const doc = await accessSpreadsheet(agendamento.cliente);
-            await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
-              status: "cancelado",
-              confirmado: false
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+      
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .input-field {
+            transition: all 0.3s ease;
+        }
+        
+        .input-field:focus {
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
+        }
+        
+        .status-pendente {
+            color: #fbbf24;
+            background-color: rgba(251, 191, 36, 0.15);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .status-confirmado {
+            color: #34d399;
+            background-color: rgba(52, 211, 153, 0.15);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .status-cancelado {
+            color: #f87171;
+            background-color: rgba(248, 113, 113, 0.15);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        
+        .tab-dia.active {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .agendamento-card {
+            transition: all 0.3s ease;
+        }
+        
+        .agendamento-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .loading-spinner {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 2px solid white;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 640px) {
+            .mobile-flex-col {
+                flex-direction: column;
+            }
+            
+            .mobile-w-full {
+                width: 100%;
+            }
+            
+            .mobile-text-center {
+                text-align: center;
+            }
+            
+            .dias-tabs-container {
+                overflow-x: auto;
+                padding-bottom: 8px;
+            }
+            
+            .dias-tabs-container::-webkit-scrollbar {
+                height: 4px;
+            }
+            
+            .dias-tabs-container::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+
+            }
+.dashboard-card {
+    transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.stat-number {
+    font-size: 1.875rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #D1D5DB;
+
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header with animated gradient -->
+        <header class="text-center mb-12" data-aos="fade-down">
+            <div class="flex justify-between items-center mb-3">
+                <h1 class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
+                    Agendamento
+                </h1>
+                <button id="logoutBtn" style="display:none;" class="text-sm bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg flex items-center gap-2">
+                    <i data-feather="log-out" class="w-4 h-4"></i>
+                    Sair
+                </button>
+            </div>
+            <p class="text-lg opacity-90 max-w-2xl mx-auto">
+                Gerencie seus compromissos com uma interface intuitiva e elegante
+            </p>
+        </header>
+
+        <!-- Login Section -->
+        <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
+            <div class="flex items-center justify-center mb-6">
+                <div class="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg">
+                    <i data-feather="lock" class="w-6 h-6 text-white"></i>
+                </div>
+            </div>
+            <h2 class="text-2xl font-semibold text-center mb-6">Acesso ao Sistema</h2>
+            <div class="space-y-5 max-w-md mx-auto">
+                <div>
+                    <label for="email" class="block mb-2 text-sm font-medium opacity-80">Email</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-feather="mail" class="w-5 h-5 text-gray-400"></i>
+                        </div>
+                        <input type="email" id="email" placeholder="seu@email.com" 
+                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                    </div>
+                </div>
+                <div>
+                    <label for="senha" class="block mb-2 text-sm font-medium opacity-80">Senha</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-feather="key" class="w-5 h-5 text-gray-400"></i>
+                        </div>
+                        <input type="password" id="senha" placeholder="••••••••" 
+                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                    </div>
+                </div>
+                <button id="loginBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <i data-feather="log-in" class="w-5 h-5"></i>
+                    <span id="loginText">Entrar</span>
+                    <div id="loginSpinner" class="loading-spinner hidden"></div>
+                </button>
+            </div>
+        </div>
+
+<!-- Dashboard de Estatísticas -->
+<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+            <div class="text-sm text-gray-300">Hoje</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+            <div class="text-sm text-gray-300">Esta Semana</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+            <div class="text-sm text-gray-300">Total</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Gráfico de Status -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+            <div id="chartStatus" class="h-48"></div>
+        </div>
+
+        <!-- Top Clientes -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+    </div>
+</div>
+
+        <!-- Appointment Form (Hidden Initially) -->
+        <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
+            <div class="flex items-center justify-center mb-6">
+                <div class="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg">
+                    <i data-feather="calendar" class="w-6 h-6 text-white"></i>
+                </div>
+            </div>
+            <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl mx-auto">
+                <div class="space-y-5">
+                    <div>
+                        <label for="Nome" class="block mb-2 text-sm font-medium opacity-80">Nome Completo</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-feather="user" class="w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input type="text" name="Nome" placeholder="Seu nome" required 
+                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="Email" class="block mb-2 text-sm font-medium opacity-80">Email</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-feather="mail" class="w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input type="email" name="Email" placeholder="seu@email.com" required 
+                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-5">
+                    <div>
+                        <label for="Telefone" class="block mb-2 text-sm font-medium opacity-80">Telefone</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-feather="phone" class="w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input type="text" id="Telefone" name="Telefone" placeholder="(00) 00000-0000" required 
+                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="Data" class="block mb-2 text-sm font-medium opacity-80">Data</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
+                                </div>
+                                <input type="date" id="Data" name="Data" placeholder="Data do Agendamento" required 
+                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="Horario" class="block mb-2 text-sm font-medium opacity-80">Horário</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i data-feather="clock" class="w-5 h-5 text-gray-400"></i>
+                                </div>
+                                <input type="time" id="Horario" name="Horario" placeholder="Horário" required 
+                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="max-w-md mx-auto mt-8">
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <i data-feather="plus" class="w-5 h-5"></i>
+                    <span id="agendarText">Agendar</span>
+                    <div id="agendarSpinner" class="loading-spinner hidden"></div>
+                </button>
+            </div>
+        </form>
+
+        <!-- Filters Section -->
+        <div id="filtersSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+            <div class="flex flex-col md:flex-row gap-4 items-center">
+                <div class="flex-1 w-full">
+                    <label for="searchInput" class="sr-only">Pesquisar</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-feather="search" class="w-5 h-5 text-gray-400"></i>
+                        </div>
+                        <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email" 
+                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                    </div>
+                </div>
+                <div class="w-full md:w-48 relative">
+                    <label for="statusFilter" class="sr-only">Status</label>
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-feather="filter" class="w-5 h-5 text-gray-400"></i>
+                    </div>
+                    <select id="statusFilter" 
+                        class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none input-field">
+                        <option value="" class="text-black">Todos os status</option>
+                        <option value="pendente" class="text-black">Pendente</option>
+                        <option value="confirmado" class="text-black">Confirmado</option>
+                        <option value="cancelado" class="text-black">Cancelado</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 mobile-w-full mobile-flex-col md:flex-row">
+                    <button id="exportCSVBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2 mobile-w-full">
+                        <i data-feather="download" class="w-5 h-5"></i>
+                        <span class="hidden md:inline">CSV</span>
+                    </button>
+                    <button id="exportPDFBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2 mobile-w-full">
+                        <i data-feather="file-text" class="w-5 h-5"></i>
+                        <span class="hidden md:inline">PDF</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs Dias da Semana -->
+        <div id="diasTabs" style="display:none;" class="dias-tabs-container flex flex-col md:flex-row gap-4 mb-6" data-aos="fade-up">
+            <div class="flex gap-2 overflow-x-auto pb-2">
+                <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-medium whitespace-nowrap">Segunda</button>
+                <button data-dia="2" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Terça</button>
+                <button data-dia="3" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quarta</button>
+                <button data-dia="4" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quinta</button>
+                <button data-dia="5" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sexta</button>
+                <button data-dia="6" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sábado</button>
+            </div>
+            <div class="flex gap-2 md:ml-4 md:pl-4 md:border-l border-white/20 overflow-x-auto pb-2">
+                <button data-semana="-1" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">Semana Passada</button>
+                <button data-semana="-2" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">2 Semanas</button>
+                <button data-semana="-4" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">1 Mês</button>
+            </div>
+        </div>
+
+        <!-- Appointments List -->
+        <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" style="display:none;" data-aos="fade-up">
+            <div class="text-center py-8">
+                <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
+                    <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
+                </div>
+                <p class="text-gray-300">Nenhum agendamento encontrado</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+
+    <script type="module">
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let userToken = null;
+        let agendamentosCache = [];
+        let diaSelecionado = 1;
+        let telefoneMask = null;
+        let pagamentoPendente = false;
+
+        const form = document.getElementById('agendamentoForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginSection = document.getElementById('loginSection');
+        const meusAgendamentos = document.getElementById('meusAgendamentos');
+        const searchInput = document.getElementById("searchInput");
+        const statusFilter = document.getElementById("statusFilter");
+        const exportCSVBtn = document.getElementById("exportCSVBtn");
+        const exportPDFBtn = document.getElementById("exportPDFBtn");
+        const logoutBtn = document.getElementById("logoutBtn");
+        const loginText = document.getElementById("loginText");
+        const loginSpinner = document.getElementById("loginSpinner");
+        const agendarText = document.getElementById("agendarText");
+        const agendarSpinner = document.getElementById("agendarSpinner");
+        const telefoneInput = document.getElementById("Telefone");
+        const dataInput = document.getElementById("Data");
+        const horarioInput = document.getElementById("Horario");
+
+        const pathParts = window.location.pathname.split('/');
+        const cliente = pathParts[1] || '';
+
+        function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+
+        // ---------------- INICIALIZAÇÃO ----------------
+        function init() {
+            // Configurar máscara de telefone
+            if (telefoneInput) {
+                telefoneMask = IMask(telefoneInput, {
+                    mask: '(00) 00000-0000'
+                });
+            }
+            
+            // Permitir selecionar a partir de hoje (incluindo hoje)
+            const hoje = new Date();
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1); // Data de ontem
+            
+            if (dataInput) {
+                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
+            }
+            
+            // Verificar se já está logado - RESTAURAR userToken PRIMEIRO
+            const token = localStorage.getItem('userToken');
+            if (token) {
+                userToken = token; // ✅ RESTAURA O TOKEN ANTES DE USAR
+                loginSection.style.display = 'none';
+                form.style.display = 'block';
+                logoutBtn.style.display = 'flex';
+                listarAgendamentos();
+            }
+        }
+
+        // ---------------- TOASTS ----------------
+        let activeToasts = [];
+        function showToast(message, type = "success") {
+            const colors = {
+                success: "bg-gradient-to-r from-green-500 to-teal-400",
+                error: "bg-gradient-to-r from-red-500 to-pink-500",
+                info: "bg-gradient-to-r from-blue-500 to-cyan-400",
+                warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
+            };
+            
+            const container = document.getElementById("toast-container");
+            if (activeToasts.length >= 3) {
+                const oldest = activeToasts.shift();
+                oldest.remove();
+            }
+            
+            const toast = document.createElement("div");
+            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
+            toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+            activeToasts.push(toast);
+            feather.replace();
+            
+            requestAnimationFrame(()=>{
+                toast.classList.remove("opacity-0","translate-x-5"); 
+                toast.classList.add("opacity-100","translate-x-0");
             });
-          } catch (sheetError) {
-            console.error("Erro ao atualizar Google Sheets:", sheetError);
-          }
-        }
-      }
-    } else {
-      console.log("✅ Nenhum agendamento expirado encontrado");
-    }
-  } catch (err) {
-    console.error("Erro na limpeza de agendamentos expirados:", err);
-  }
-}
-
-// ---------------- Rotas ----------------
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
-app.get("/:cliente", async (req, res) => {
-  const cliente = req.params.cliente;
-  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
-  if (error || !data) return res.status(404).send("Cliente não encontrado");
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
-
-app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado")
-      .order("data", { ascending: true })
-      .order("horario", { ascending: true });
-
-    if (error) throw error;
-    res.json({ agendamentos: data });
-  } catch (err) {
-    console.error("Erro ao listar agendamentos:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// ==== ROTA /create-pix COM EXPIRAÇÃO ====
-app.post("/create-pix", async (req, res) => {
-  const { amount, description, email } = req.body;
-  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
-
-  try {
-    // ⏰ Calcula data de expiração (15 minutos)
-    const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    
-    const result = await payment.create({
-      body: {
-        transaction_amount: Number(amount),
-        description: description || "Pagamento de Agendamento",
-        payment_method_id: "pix",
-        payer: { email },
-        // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
-        date_of_expiration: dateOfExpiration
-      },
-    });
-
-    console.log("💰 Pagamento criado no Mercado Pago:", result.id, result.status, "Expira:", dateOfExpiration);
-
-    // INSERÇÃO NO BANCO
-    const { error: insertError } = await supabase
-      .from("pagamentos")
-      .insert([{ 
-        id: result.id, 
-        email: email.toLowerCase().trim(), 
-        amount: Number(amount), 
-        status: result.status || 'pending', 
-        valid_until: null,
-        description: description || "Pagamento de Agendamento"
-      }]);
-
-    if (insertError) {
-      console.error("Erro ao inserir pagamento no Supabase:", insertError);
-      
-      // Tenta atualizar se já existir
-      const { error: updateError } = await supabase
-        .from("pagamentos")
-        .update({ 
-          status: result.status || 'pending',
-          amount: Number(amount),
-          description: description || "Pagamento de Agendamento"
-        })
-        .eq("id", result.id);
-        
-      if (updateError) {
-        console.error("Erro ao atualizar pagamento no Supabase:", updateError);
-        return res.status(500).json({ error: "Erro ao salvar pagamento" });
-      }
-    }
-
-    console.log("💾 Pagamento salvo no Supabase:", result.id);
-
-    res.json({
-      payment_id: result.id,
-      status: result.status,
-      qr_code: result.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
-      expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
-    });
-  } catch (err) {
-    console.error("Erro ao criar PIX:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Verifica status do pagamento
-app.get("/check-payment/:paymentId", async (req, res) => {
-  try {
-    const { paymentId } = req.params;
-    
-    // Primeiro verifica no banco de dados
-    const { data: paymentData, error: dbError } = await supabase
-      .from("pagamentos")
-      .select("*")
-      .eq("id", paymentId)
-      .maybeSingle();  // Usa maybeSingle para evitar erro quando não encontra
-
-    if (dbError && dbError.code !== 'PGRST116') {
-      console.error("Erro ao buscar pagamento no banco:", dbError);
-      return res.status(500).json({ error: "Erro ao verificar pagamento" });
-    }
-
-    // Se não encontrou no banco, verifica no Mercado Pago
-    if (!paymentData) {
-      console.log("Pagamento não encontrado no banco, verificando no Mercado Pago...");
-      try {
-        const paymentDetails = await payment.get({ id: paymentId });
-        return res.json({ status: paymentDetails.status, payment: paymentDetails });
-      } catch (mpError) {
-        console.error("Erro ao verificar pagamento no Mercado Pago:", mpError);
-        return res.status(404).json({ error: "Pagamento não encontrado" });
-      }
-    }
-
-    // Se já está aprovado no banco, retorna
-    if (paymentData.status === "approved") {
-      return res.json({ status: "approved", payment: paymentData });
-    }
-
-    // Se não está aprovado, verifica no Mercado Pago
-    try {
-      const paymentDetails = await payment.get({ id: paymentId });
-      
-      // Atualiza status no banco se mudou
-      if (paymentDetails.status !== paymentData.status) {
-        let valid_until = paymentData.valid_until;
-        
-        if (["approved", "paid"].includes(paymentDetails.status.toLowerCase())) {
-          const vipExpires = new Date();
-          vipExpires.setDate(vipExpires.getDate() + 30);
-          valid_until = vipExpires.toISOString();
+            
+            setTimeout(()=>{
+                toast.classList.add("opacity-0","translate-x-5"); 
+                setTimeout(()=>{
+                    toast.remove(); 
+                    activeToasts=activeToasts.filter(t=>t!==toast);
+                },300);
+            },3000);
         }
 
-        await supabase
-          .from("pagamentos")
-          .update({ 
-            status: paymentDetails.status, 
-            valid_until,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", paymentId);
-      }
+        // ---------------- RENDER AGENDAMENTOS ----------------
+        function renderAgendamentos() {
+            const filtroNome = searchInput.value.toLowerCase();
+            const filtroStatus = statusFilter.value;
 
-      res.json({ status: paymentDetails.status, payment: paymentDetails });
+            const filtrados = agendamentosCache
+                .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+                            (filtroStatus ? a.status === filtroStatus : true))
+                .filter(a => {
+                    const dataAgendamento = new Date(`${a.data}T${a.horario}`);
+                    const hoje = new Date();
+                    
+                    if(diaSelecionado >= 1 && diaSelecionado <= 6) {
+                        return dataAgendamento.getDay() === diaSelecionado && 
+                               dataAgendamento >= new Date(hoje.setHours(0,0,0,0));
+                    } else {
+                        const semanas = -diaSelecionado;
+                        const dataLimite = new Date();
+                        dataLimite.setDate(dataLimite.getDate() + semanas * 7);
+                        return dataAgendamento >= new Date(dataLimite.setHours(0,0,0,0)) && 
+                               dataAgendamento < new Date(hoje.setHours(0,0,0,0));
+                    }
+                })
+                .sort((a,b) => {
+                    const dateA = new Date(`${a.data}T${a.horario}`);
+                    const dateB = new Date(`${b.data}T${b.horario}`);
+                    return dateA - dateB;
+                });
 
-    } catch (mpError) {
-      console.error("Erro ao verificar pagamento no Mercado Pago:", mpError);
-      // Se não conseguir verificar no MP, retorna o status do banco
-      res.json({ status: paymentData.status, payment: paymentData });
-    }
+            if (filtrados.length === 0) {
+                meusAgendamentos.innerHTML = `
+                    <div class='text-center py-8'>
+                        <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
+                            <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
+                        </div>
+                        <p class="text-gray-300">Nenhum agendamento encontrado</p>
+                    </div>
+                `;
+                feather.replace();
+                return;
+            }
 
-  } catch (err) {
-    console.error("Erro em /check-payment:", err);
-    res.status(500).json({ error: "Erro interno ao verificar pagamento" });
-  }
-});
+            meusAgendamentos.innerHTML = "";
 
-// Checa VIP pelo email (aprovado e dentro do prazo)
-app.get("/check-vip/:email", async (req, res) => {
-  const email = req.params.email;
-  if (!email) return res.status(400).json({ error: "Faltando email" });
+            filtrados.forEach(a => {
+                const div = document.createElement("div");
+                div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
+                
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
+                            <span class="font-medium">${a.horario}</span>
+                        </div>
+                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
+                            ${a.status}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                            <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium">${a.nome}</h3>
+                            <p class="text-sm text-gray-300">${formatData(a.data)}</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
+                            <span class="truncate">${a.email}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
+                            <span>${a.telefone}</span>
+                        </div>
+                    </div>
+                `;
 
-  const now = new Date();
-  const { data, error } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email)
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
+                const btnContainer = document.createElement("div");
+                btnContainer.className = "flex gap-2 mt-4 flex-wrap";
 
-  if (error && error.code !== "PGRST116") {
-    return res.status(500).json({ error: error.message });
-  }
+                // Confirmar
+                if (a.status !== "confirmado") {
+                    const btnConfirmar = document.createElement("button");
+                    btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+                    btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+                    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
+                    btnContainer.appendChild(btnConfirmar);
+                }
 
-  res.json({
-    vip: !!data,
-    valid_until: data?.valid_until || null
-  });
-});
+                // Cancelar
+                const btnCancelar = document.createElement("button");
+                btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+                btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+                btnCancelar.addEventListener("click", () => cancelarAgendamento(a.cliente, a.id));
+                btnContainer.appendChild(btnCancelar);
 
-// Webhook Mercado Pago
-app.post("/webhook", async (req, res) => {
-  try {
-    const paymentId = req.body?.data?.id || req.query["data.id"];
-    if (!paymentId) return res.sendStatus(400);
+                // Reagendar
+                const btnReagendar = document.createElement("button");
+                btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
+                btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+                btnReagendar.addEventListener("click", () => abrirModalReagendar(a));
+                btnContainer.appendChild(btnReagendar);
 
-    const paymentDetails = await payment.get({ id: paymentId });
+                div.appendChild(btnContainer);
+                meusAgendamentos.appendChild(div);
+            });
 
-    // Atualiza status no Supabase
-    const status = paymentDetails.status;
-    let valid_until = null;
+            feather.replace();
+        }
 
-    if (["approved", "paid"].includes(status.toLowerCase())) {
-      const vipExpires = new Date();
-      vipExpires.setDate(vipExpires.getDate() + 30); // 30 dias
-      valid_until = vipExpires.toISOString();
-    }
+        // ---------------- MODAL REAGENDAR ----------------
+        function abrirModalReagendar(agendamento) {
+            let modal = document.getElementById("modalReagendar");
 
-    const { error: updateError } = await supabase
-      .from("pagamentos")
-      .update({ status, valid_until })
-      .eq("id", paymentId);
+            if (!modal) {
+                modal = document.createElement("div");
+                modal.id = "modalReagendar";
+                modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden";
+                modal.innerHTML = `
+                    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md relative">
+                        <button id="fecharModal" class="absolute top-4 right-4 text-gray-400 hover:text-white">
+                            <i data-feather="x" class="w-5 h-5"></i>
+                        </button>
+                        <h2 class="text-lg font-medium mb-4 text-white">Reagendar Agendamento</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-gray-300 mb-1">Data</label>
+                                <input type="date" id="novaData" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-300 mb-1">Horário</label>
+                                <input type="time" id="novoHorario" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 mt-6">
+                            <button id="cancelarReagendar" class="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-all">Cancelar</button>
+                            <button id="confirmarReagendar" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all">Confirmar</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                feather.replace();
 
-    if (updateError) {
-      console.error("Erro ao atualizar Supabase:", updateError.message);
-    } else {
-      console.log(`✅ Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
-    }
+                // Evento de fechar
+                modal.querySelector("#fecharModal").addEventListener("click", () => {
+                    modal.classList.add("hidden");
+                });
+                
+                modal.querySelector("#cancelarReagendar").addEventListener("click", () => {
+                    modal.classList.add("hidden");
+                });
+            }
 
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Erro no webhook:", err.message);
-    res.sendStatus(500);
-  }
-});
+            // Preenche valores atuais e define data mínima como hoje
+            modal.querySelector("#novaData").value = agendamento.data;
+            modal.querySelector("#novoHorario").value = agendamento.horario;
 
-// ---------------- Agendar ----------------
-app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+            // Remove qualquer evento antigo para evitar duplicação
+            const confirmarBtn = modal.querySelector("#confirmarReagendar");
+            const novoConfirmarBtn = confirmarBtn.cloneNode(true);
+            confirmarBtn.parentNode.replaceChild(novoConfirmarBtn, confirmarBtn);
 
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+            novoConfirmarBtn.addEventListener("click", () => {
+                const novaData = modal.querySelector("#novaData").value;
+                const novoHorario = modal.querySelector("#novoHorario").value;
 
-    const emailNormalizado = Email.toLowerCase().trim();
-    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
+                if (!novaData || !novoHorario) {
+                    showToast("Preencha data e horário corretamente!", "warning");
+                    return;
+                }
 
-    // Verifica se o horário está disponível
-    const disponivel = await horarioDisponivel(cliente, dataNormalizada, Horario);
-    if (!disponivel) {
-      return res.status(400).json({ msg: "Horário indisponível para agendamento" });
-    }
 
-    // Inserção do agendamento
-    const { data: novoAgendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente,
-        nome: Nome,
-        email: emailNormalizado,
-        telefone: Telefone,
-        data: dataNormalizada,
-        horario: Horario,
-        status: "pendente",
-        confirmado: false,
-      }])
-      .select()
-      .single();
+                reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
+                modal.classList.add("hidden");
+            });
 
-    if (error) {
-      console.error("Erro ao inserir agendamento:", error);
-      return res.status(500).json({ msg: "Erro ao criar agendamento" });
-    }
+            // Mostra modal
+            modal.classList.remove("hidden");
+        }
 
-    // Atualiza Google Sheet
-    try {
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-      await sheet.addRow(novoAgendamento);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-      // Não falha a requisição por erro no sheet
-    }
+        // ---------------- LISTAR AGENDAMENTOS ----------------
+        async function listarAgendamentos(){
+            if(!userToken) {
+                console.error("Token não disponível");
+                return;
+            }
+            
+            try{
+                const res = await fetch(`/agendamentos/${cliente}`, {
+                    headers: { "Authorization": `Bearer ${userToken}` }
+                });
+                
+                if (res.status === 401) {
+                    // Token expirado ou inválido
+                    showToast("Sessão expirada. Faça login novamente.", "error");
+                    logoutBtn.click(); // Força logout
+                    return;
+                }
+                
+                const { agendamentos } = await res.json();
+                agendamentosCache = agendamentos;
+                meusAgendamentos.style.display = 'block';
+                document.getElementById('filtersSection').style.display = 'block';
+                document.getElementById('diasTabs').style.display = 'flex';
+                initTabsDias();
+                renderAgendamentos(); 
+            } catch(e){
+                console.error("Erro ao listar agendamentos:", e);
+                showToast("Erro ao listar agendamentos","error");
+            }
+        }
 
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+        // ---------------- LOGIN ----------------
+        loginBtn.addEventListener('click', async () => {
+            const email = document.getElementById('email').value;
+            const senha = document.getElementById('senha').value;
+            if(!email || !senha) {
+                showToast("Preencha email e senha", "warning");
+                return;
+            }
+            
+            try {
+                loginText.classList.add('hidden');
+                loginSpinner.classList.remove('hidden');
+                loginBtn.disabled = true;
+                
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+                if(error){ 
+                    showToast(error.message,"error"); 
+                    loginText.classList.remove('hidden');
+                    loginSpinner.classList.add('hidden');
+                    loginBtn.disabled = false;
+                    return; 
+                }
 
-  } catch (err) {
-    console.error("Erro no /agendar:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
+                userToken = data.session.access_token;
 
-// ---------------- Confirmar / Cancelar / Reagendar ----------------
-app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
-  try {
-    const { cliente, id } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-    
-    const { data, error } = await supabase.from("agendamentos")
-      .update({confirmado:true,status:"confirmado"})
-      .eq("id",id).eq("cliente",cliente).select().single();
-    
-    if (error) throw error;
-    
-    // Atualiza Google Sheet
-    try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
-    
-    res.json({msg:"Agendamento confirmado", agendamento:data});
-  } catch (error) {
-    console.error("Erro ao confirmar agendamento:", error);
-    res.status(500).json({msg:"Erro interno"});
-  }
-});
+                // ✅ Salvar também o email junto com o token
+                localStorage.setItem('userToken', userToken);
+                localStorage.setItem('userEmail', email);
 
-app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=>{
-  try {
-    const { cliente, id } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-    
-    const { data, error } = await supabase.from("agendamentos")
-      .update({status:"cancelado", confirmado:false})
-      .eq("id",id).eq("cliente",cliente).select().single();
-    
-    if (error) throw error;
-    
-    // Atualiza Google Sheet
-    try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
-    
-    res.json({msg:"Agendamento cancelado", agendamento:data});
-  } catch (error) {
-    console.error("Erro ao cancelar agendamento:", error);
-    res.status(500).json({msg:"Erro interno"});
-  }
-});
+                loginSection.style.display = 'none';
+                form.style.display = 'block';
+                logoutBtn.style.display = 'flex';
 
-app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)=>{
-  try {
-    const { cliente, id } = req.params;
-    const { novaData, novoHorario } = req.body;
-    if (!novaData || !novoHorario) return res.status(400).json({msg:"Data e horário obrigatórios"});
-    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-    
-    const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
-    if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
-    
-    const { data, error } = await supabase.from("agendamentos")
-      .update({data:novaData, horario:novoHorario})
-      .eq("id",id).eq("cliente",cliente).select().single();
-    
-    if (error) throw error;
-    
-    // Atualiza Google Sheet
-    try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
-    
-    res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
-  } catch (error) {
-    console.error("Erro ao reagendar:", error);
-    res.status(500).json({msg:"Erro interno"});
-  }
-});
+                listarAgendamentos().then(() => {
+                    let hoje = new Date().getDay();
+                    if (hoje === 0) hoje = 1;
+                    document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
+                    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
 
-// ---------------- ESTATÍSTICAS ----------------
-app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+                    carregarDashboard();
+                });
 
-    const hoje = new Date().toISOString().split('T')[0];
-    const umaSemanaAtras = new Date();
-    umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7);
+                showToast("Login realizado com sucesso!", "success");
 
-    // Agendamentos de hoje
-    const { data: agendamentosHoje, error: errorHoje } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", hoje)
-      .neq("status", "cancelado");
+                loginText.classList.remove('hidden');
+                loginSpinner.classList.add('hidden');
+                loginBtn.disabled = false;
 
-    if (errorHoje) throw errorHoje;
+            } catch(e) {
+                console.error(e);
+                showToast("Erro ao fazer login", "error");
+                loginText.classList.remove('hidden');
+                loginSpinner.classList.add('hidden');
+                loginBtn.disabled = false;
+            }
+        });
 
-    // Total de agendamentos
-    const { data: todosAgendamentos, error: errorTotal } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado");
+        // ---------------- LOGOUT ----------------
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await supabase.auth.signOut();
+                localStorage.removeItem('userToken');
+                localStorage.removeItem('userEmail');
+                userToken = null; // ✅ LIMPA A VARIÁVEL GLOBAL TAMBÉM
 
-    if (errorTotal) throw errorTotal;
+                form.style.display = 'none';
+                loginSection.style.display = 'block';
+                logoutBtn.style.display = 'none';
+                meusAgendamentos.style.display = 'none';
+                document.getElementById('filtersSection').style.display = 'none';
+                document.getElementById('diasTabs').style.display = 'none';
 
-    // Agendamentos da semana
-    const { data: agendamentosSemana, error: errorSemana } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .gte("data", umaSemanaAtras.toISOString().split('T')[0])
-      .neq("status", "cancelado");
+                showToast("Logout realizado com sucesso!", "success");
+            } catch (e) {
+                console.error(e);
+                showToast("Erro ao fazer logout", "error");
+            }
+        });
 
-    if (errorSemana) throw errorSemana;
+        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
 
-    // Estatísticas por status
-    const confirmados = todosAgendamentos.filter(a => a.status === 'confirmado').length;
-    const pendentes = todosAgendamentos.filter(a => a.status === 'pendente').length;
-    const cancelados = todosAgendamentos.filter(a => a.status === 'cancelado').length;
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
 
-    const estatisticas = {
-      hoje: agendamentosHoje?.length || 0,
-      total: todosAgendamentos?.length || 0,
-      semana: agendamentosSemana?.length || 0,
-      status: {
-        confirmado: confirmados,
-        pendente: pendentes,
-        cancelado: cancelados
-      },
-      taxaConfirmacao: todosAgendamentos.length > 0 ? Math.round((confirmados / todosAgendamentos.length) * 100) : 0
-    };
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
+            
+            try{
+                // Primeiro, criar o pagamento PIX
+                const pagamentoResponse = await fetch('/create-pix', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        amount: 50.00, // Valor do agendamento
+                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                        email: dataToSend.Email
+                    })
+                });
 
-    res.json(estatisticas);
-  } catch (error) {
-    console.error("Erro ao buscar estatísticas:", error);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
+                if (!pagamentoResponse.ok) {
+                    const errorData = await pagamentoResponse.json();
+                    throw new Error(errorData.error || 'Erro ao criar pagamento');
+                }
 
-// ---------------- TOP CLIENTES ----------------
-app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+                const pagamentoData = await pagamentoResponse.json();
+                
+                // Exibir QR Code e código PIX
+                let pixDiv = document.getElementById("pixArea");
+                if (!pixDiv) {
+                    pixDiv = document.createElement("div");
+                    pixDiv.id = "pixArea";
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+                    form.appendChild(pixDiv);
+                }
 
-    const { data: agendamentos } = await supabase
-      .from("agendamentos")
-      .select("nome, email, telefone")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado");
+                pixDiv.innerHTML = `
+                    <h3 class="text-center mb-3">Pagamento via PIX</h3>
+                    <div class="text-center mb-4">
+                        <p class="text-lg font-semibold">Valor: R$ 50,00</p>
+                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+                    </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                            Já efetuei o pagamento
+                        </button>
+                    </div>
+                `;
+                
+                feather.replace();
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
+                });
+                
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    try {
+                        // Verificar status do pagamento
+                        const statusResponse = await fetch(`/check-payment/${pagamentoData.payment_id}`);
+                        if (!statusResponse.ok) {
+                            throw new Error('Erro ao verificar pagamento');
+                        }
+                        
+                        const statusData = await statusResponse.json();
+                        
+                        if (statusData.status === 'approved') {
+                            // Pagamento aprovado, enviar agendamento
+                            const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    "Authorization": `Bearer ${userToken}`
+                                },
+                                body: JSON.stringify(dataToSend)
+                            });
+                            
+                            if (agendamentoResponse.ok) {
+                                showToast("Agendamento realizado com sucesso!", "success");
+                                form.reset();
+                                pixDiv.remove();
+                                listarAgendamentos();
+                            } else {
+                                const errorData = await agendamentoResponse.json();
+                                showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                            }
+                        } else {
+                            showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                        }
+                    } catch (err) {
+                        console.error("Erro ao confirmar pagamento:", err);
+                        showToast("Erro ao verificar pagamento", "error");
+                    }
+                });
+                
+                pagamentoPendente = true;
+                
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar pagamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
+            }
+        });
 
-    if (!agendamentos) {
-      return res.json([]);
-    }
+        // ---------------- FILTROS ----------------
+        searchInput.addEventListener("input", renderAgendamentos);
+        statusFilter.addEventListener("change", renderAgendamentos);
 
-    // Contagem por cliente
-    const clientesCount = agendamentos.reduce((acc, agendamento) => {
-      const key = agendamento.email;
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
+        // ---------------- TABS ----------------
+        function initTabsDias(){
+            const tabsDia=document.querySelectorAll(".tab-dia");
+            const tabsSemana=document.querySelectorAll(".tab-semana");
+            
+            tabsDia.forEach(btn=>{
+                btn.addEventListener("click",()=>{
+                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
+                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
+                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
+                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
+                    
+                    btn.classList.remove("bg-white/10", "hover:bg-white/20");
+                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+                    diaSelecionado=parseInt(btn.dataset.dia);
+                    renderAgendamentos();
+                });
+            });
 
-    // Ordenar por quantidade
-    const topClientes = Object.entries(clientesCount)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 10)
-      .map(([email, count]) => {
-        const agendamento = agendamentos.find(a => a.email === email);
-        return {
-          nome: agendamento?.nome || 'Não informado',
-          email: email,
-          telefone: agendamento?.telefone || 'Não informado',
-          agendamentos: count
-        };
-      });
+            tabsSemana.forEach(btn=>{
+                btn.addEventListener("click",()=>{
+                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
+                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
+                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
+                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
+                    
+                    btn.classList.remove("bg-white/5", "hover:bg-white/10");
+                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
+                    
+                    const semanas = parseInt(btn.dataset.semana);
+                    const dataLimite = new Date();
+                    dataLimite.setDate(dataLimite.getDate() + semanas * 7);
+                    diaSelecionado = semanas; // Usar o valor numérico diretamente para semanas
+                    renderAgendamentos();
+                });
+            });
+        }
 
-    res.json(topClientes);
-  } catch (error) {
-    console.error("Erro ao buscar top clientes:", error);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
+        // ---------------- EXPORT ----------------
+        exportCSVBtn.addEventListener("click", ()=>{
+            const filtrados = agendamentosCache.filter(a=>statusFilter.value?a.status===statusFilter.value:true);
+            if(filtrados.length === 0) {
+                showToast("Nenhum agendamento para exportar", "warning");
+                return;
+            }
+            
+            let csv="Nome,Email,Telefone,Data,Horario,Status\n";
+            filtrados.forEach(a=>{csv+=`${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`;});
+            const blob=new Blob([csv],{type:"text/csv"});
+            const link=document.createElement("a");
+            link.href=URL.createObjectURL(blob);
+            link.download=`agendamentos_${cliente}.csv`;
+            link.click();
+            showToast("Exportado para CSV com sucesso", "success");
+        });
 
-// ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
-// Executar a cada 5 minutos (300000 ms)
-setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
+        exportPDFBtn.addEventListener("click", ()=>{
+            const { jsPDF }=window.jspdf;
+            const doc=new jsPDF();
+            
+            const filtrados = agendamentosCache.filter(a=>statusFilter.value?a.status===statusFilter.value:true);
+            if(filtrados.length === 0) {
+                showToast("Nenhum agendamento para exportar", "warning");
+                return;
+            }
+            
+            // Adiciona cabeçalho
+            doc.setFontSize(18);
+            doc.setTextColor(40);
+            doc.text("Agendamentos", 105, 20, null, null, "center");
+            
+            doc.setFontSize(12);
+            doc.setTextColor(100);
+            doc.text(`Cliente: ${cliente}`, 105, 30, null, null, "center");
+            
+            // Adiciona data
+            const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
+            const today = new Date().toLocaleDateString('pt-BR', options);
+            doc.text(`Gerado em: ${today}`, 105, 35, null, null, "center");
+            
+            // Adiciona linha
+            doc.setDrawColor(200);
+            doc.line(20, 40, 190, 40);
+            
+            // Configurações da tabela
+            doc.setFontSize(10);
+            doc.setTextColor(40);
+            let y = 50;
+            
+            // Cabeçalho da tabela
+            doc.setFillColor(230);
+            doc.rect(20, y, 170, 10, 'F');
+            doc.text("Data", 25, y + 7);
+            doc.text("Horário", 50, y + 7);
+            doc.text("Nome", 80, y + 7);
+            doc.text("Status", 160, y + 7);
+            y += 10;
+            
+            // Conteúdo da tabela
+            filtrados.forEach(a => {
+                if(y > 270) { // Nova página se necessário
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                doc.text(formatData(a.data), 25, y + 7);
+                doc.text(a.horario, 50, y + 7);
+                doc.text(a.nome, 80, y + 7);
+                
+                // Status com cor
+                if(a.status === 'confirmado') {
+                    doc.setTextColor(0, 150, 0);
+                } else if(a.status === 'pendente') {
+                    doc.setTextColor(200, 150, 0);
+                } else {
+                    doc.setTextColor(40);
+                }
+                doc.text(a.status, 160, y + 7);
+                doc.setTextColor(40);
+                
+                y += 10;
+            });
+            
+            doc.save(`agendamentos_${cliente}.pdf`);
+            showToast("Exportado para PDF com sucesso", "success");
+        });
 
-// Executar imediatamente ao iniciar o servidor
-setTimeout(limparAgendamentosExpirados, 2000);
+        async function confirmarAgendamento(cliente, id) {
+            if (!userToken) {
+                showToast("Faça login para confirmar um agendamento.", "warning");
+                return;
+            }
 
-// ---------------- Servidor ----------------
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
-});
+            try {
+                const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${userToken}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ status: "confirmado", confirmado: true })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast("Agendamento confirmado com sucesso!", "success");
+                    listarAgendamentos();
+                } else {
+                    showToast("Erro ao confirmar: " + (data.msg || data.message), "error");
+                }
+
+            } catch (e) {
+                console.error(e);
+                showToast("Erro de conexão ao confirmar.", "error");
+            }
+        }
+
+        // ---------------- CANCELAR AGENDAMENTO ----------------
+        async function cancelarAgendamento(cliente, id) {
+            if (!userToken) {
+                showToast("Faça login para cancelar um agendamento.", "warning");
+                return;
+            }
+
+            try {
+                const res = await fetch(`/agendamentos/${cliente}/cancelar/${id}`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${userToken}`,
+                        "Content-Type": "application/json"
+                    }
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    showToast("Agendamento cancelado com sucesso!", "success");
+                    listarAgendamentos();
+                } else {
+                    showToast("Erro ao cancelar: " + (data.msg || data.message), "error");
+                }
+            } catch (e) {
+                console.error(e);
+                showToast("Erro de conexão ao cancelar.", "error");
+            }
+        }
+
+        async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
+            if (!userToken) {
+                showToast("Faça login para reagendar um agendamento.", "warning");
+                return;
+            }
+
+            try {
+                const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${userToken}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ 
+                        novaData, 
+                        novoHorario, 
+                        status: "pendente",
+                        confirmado: false
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast("Agendamento reagendado com sucesso!", "success");
+                    listarAgendamentos();
+                } else {
+                    // Detecta conflito de horário (erro do índice único)
+                    if (data.code === "23505") {
+                        showToast("Já existe um agendamento nesse horário para este cliente.", "error");
+                    } else {
+                        showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+                    }
+                }
+
+            } catch (e) {
+                console.error(e);
+                showToast("Erro de conexão ao reagendar.", "error");
+            }
+        }
+
+        // ---------------- DASHBOARD ----------------
+        async function carregarDashboard() {
+            try {
+                const hoje = new Date().toISOString().split('T')[0];
+                const semanaInicio = new Date();
+                semanaInicio.setDate(semanaInicio.getDate() - semanaInicio.getDay() + 1); // Segunda-feira
+                const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
+                
+                // Estatísticas básicas
+                const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
+                const semanaCount = agendamentosCache.filter(a => a.data >= semanaInicioStr).length;
+                const totalCount = agendamentosCache.length;
+                
+                const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
+                const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
+                
+                document.getElementById('statHoje').textContent = hojeCount;
+                document.getElementById('statSemana').textContent = semanaCount;
+                document.getElementById('statTotal').textContent = totalCount;
+                document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
+                
+                // Gráfico de status
+                const statusCount = {
+                    pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
+                    confirmado: confirmadosCount,
+                    cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
+                };
+                
+                // Top clientes
+                const clientesCount = {};
+                agendamentosCache.forEach(a => {
+                    if (!clientesCount[a.nome]) {
+                        clientesCount[a.nome] = 0;
+                    }
+                    clientesCount[a.nome]++;
+                });
+                
+                const topClientes = Object.entries(clientesCount)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+                
+                const topClientesDiv = document.getElementById('topClientes');
+                topClientesDiv.innerHTML = '';
+                
+                topClientes.forEach(([nome, count]) => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center';
+                    div.innerHTML = `
+                        <span>${nome}</span>
+                        <span class="bg-white/10 px-2 py-1 rounded">${count} agendamentos</span>
+                    `;
+                    topClientesDiv.appendChild(div);
+                });
+                
+                document.getElementById('dashboardSection').style.display = 'block';
+                
+            } catch (e) {
+                console.error('Erro ao carregar dashboard:', e);
+            }
+        }
+
+        // ---------------- INIT ----------------
+        AOS.init({
+            duration: 800,
+            easing: 'ease-out-quart',
+            once: true
+        });
+        feather.replace();
+        init();
+    </script>
+</body>
+</html>
