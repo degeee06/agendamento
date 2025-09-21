@@ -721,13 +721,30 @@ async function verificarPagamentosAutomaticamente() {
     try {
         console.log("⏰ Verificação automática de pagamentos iniciada...");
         
-        // Faz uma requisição para a própria rota
-        const response = await fetch(`http://localhost:${PORT}/verificar-pagamentos-pendentes`);
-        const result = await response.json();
+        // ✅ Múltiplas opções para diferentes ambientes
+        let baseUrl;
         
-        console.log("✅ Verificação de pagamentos concluída:", result);
+        if (process.env.RENDER_EXTERNAL_URL) {
+            // Render
+            baseUrl = process.env.RENDER_EXTERNAL_URL;
+        } else if (process.env.NODE_ENV === 'production') {
+            // Outro hosting em produção
+            baseUrl = process.env.APP_URL || `https://${process.env.HOST}`;
+        } else {
+            // Desenvolvimento local
+            baseUrl = `http://localhost:${PORT}`;
+        }
+        
+        const response = await fetch(`${baseUrl}/verificar-pagamentos-pendentes`);
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log("✅ Verificação de pagamentos concluída:", result);
+        } else {
+            console.error("❌ Erro na resposta:", response.status, response.statusText);
+        }
     } catch (error) {
-        console.error("❌ Erro na verificação automática:", error);
+        console.error("❌ Erro na verificação automática:", error.message);
     }
 }
 
@@ -744,3 +761,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
+
