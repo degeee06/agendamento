@@ -253,43 +253,43 @@
             </div>
         </div>
 
-        <!-- Dashboard de Estatísticas -->
-        <div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
-                    <div class="text-sm text-gray-300">Hoje</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
-                    <div class="text-sm text-gray-300">Esta Semana</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
-                    <div class="text-sm text-gray-300">Total</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
-                    <div class="text-sm text-gray-300">Taxa de Confirmação</div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cals-2 gap-6">
-                <!-- Gráfico de Status -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
-                    <div id="chartStatus" class="h-48"></div>
-                </div>
-
-                <!-- Top Clientes -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">👥 Top Clientes</h3>
-                    <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
-                </div>
-            </div>
+<!-- Dashboard de Estatísticas -->
+<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+            <div class="text-sm text-gray-300">Hoje</div>
         </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+            <div class="text-sm text-gray-300">Esta Semana</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+            <div class="text-sm text-gray-300">Total</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Gráfico de Status -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+            <div id="chartStatus" class="h-48"></div>
+        </div>
+
+        <!-- Top Clientes -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+    </div>
+</div>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -357,8 +357,7 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Seção de Método de Pagamento Adicionada -->
+<!-- Seção de Método de Pagamento Adicionada -->
             <div class="max-w-md mx-auto mt-6">
                 <div class="mb-6">
                     <label class="block mb-2 text-sm font-medium opacity-80">Método de Pagamento</label>
@@ -374,6 +373,7 @@
                     </div>
                 </div>
 
+            <div class="max-w-md mx-auto mt-8">
                 <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
                     <i data-feather="plus" class="w-5 h-5"></i>
                     <span id="agendarText">Agendar</span>
@@ -975,7 +975,8 @@
             }
         }
 
-        // ---------------- AGENDAR COM PAGAMENTO PIX OU LINK ----------------
+
+       // ---------------- AGENDAR COM PAGAMENTO PIX OU LINK ----------------
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
@@ -1019,7 +1020,7 @@ form.addEventListener('submit', async (e) => {
         const valorEmReais = 0.01; // 1 centavo para teste
 
         if (metodoPagamento === 'pix') {
-            // PAGAMENTO VIA PIX (código existente)
+            // PAGAMENTO VIA PIX
             const pagamentoResponse = await fetch('/create-pix', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -1039,7 +1040,7 @@ form.addEventListener('submit', async (e) => {
             currentPaymentId = pagamentoData.payment_id;
             paymentExpiresAt = pagamentoData.expires_at;
             
-            // Exibir QR Code PIX (código existente)
+            // Exibir QR Code PIX
             let pixDiv = document.getElementById("pixArea");
             if (!pixDiv) {
                 pixDiv = document.createElement("div");
@@ -1064,15 +1065,6 @@ form.addEventListener('submit', async (e) => {
                         </button>
                     </div>
                 </div>
-<div class="mb-4">
-                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                        <div class="flex items-center gap-2">
-                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
-                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                <i data-feather="copy" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
                 <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
                 <div class="text-center">
                     <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
@@ -1176,13 +1168,16 @@ form.addEventListener('submit', async (e) => {
                         
                         if (statusData.status === 'approved') {
                             showToast("Pagamento confirmado! Agendamento realizado.", "success");
-                            form.reset();
+                            
+                            // Atualizar a interface
                             linkDiv.innerHTML = `
                                 <div class="text-center p-4 bg-green-900/20 rounded-lg">
                                     <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
                                     <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
                                 </div>
                             `;
+                            feather.replace();
+                            
                             listarAgendamentos();
                         } else {
                             showToast(`Status do pagamento: ${statusData.status}`, "info");
@@ -1210,6 +1205,47 @@ form.addEventListener('submit', async (e) => {
     }
 });
 
+// Limpar área de pagamento quando mudar o método (FORA do evento submit)
+document.querySelectorAll('input[name="metodoPagamento"]').forEach(radio => {
+    radio.addEventListener('change', clearPaymentArea);
+});
+
+
+async function checkLinkPaymentStatus(paymentLinkId) {
+    try {
+        const statusResponse = await fetch(`/check-payment-link/${paymentLinkId}`);
+        if (!statusResponse.ok) {
+            throw new Error('Erro ao verificar pagamento');
+        }
+        
+        const statusData = await statusResponse.json();
+        
+        if (statusData.status === 'approved') {
+            // Pagamento aprovado via link
+            showToast("Pagamento confirmado! Agendamento realizado.", "success");
+            form.reset();
+            
+            const paymentDiv = document.getElementById("pixArea");
+            if (paymentDiv) {
+                paymentDiv.innerHTML = `
+                    <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                        <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                        <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                    </div>
+                `;
+                feather.replace();
+            }
+            
+            listarAgendamentos();
+            return true;
+        }
+        
+        return false;
+    } catch (err) {
+        console.error("Erro ao verificar pagamento via link:", err);
+        return false;
+    }
+}
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
         statusFilter.addEventListener("change", renderAgendamentos);
@@ -1441,7 +1477,9 @@ form.addEventListener('submit', async (e) => {
         showToast("Erro de conexão ao reagendar.", "error");
     }
 }
-       // ---------------- DASHBOARD ----------------
+
+
+
 // ---------------- DASHBOARD ----------------
 async function carregarDashboard() {
     try {
@@ -1571,42 +1609,6 @@ async function carregarDashboard() {
     }
 }
 
-async function checkLinkPaymentStatus(paymentLinkId) {
-    try {
-        const statusResponse = await fetch(`/check-payment-link/${paymentLinkId}`);
-        if (!statusResponse.ok) {
-            throw new Error('Erro ao verificar pagamento');
-        }
-        
-        const statusData = await statusResponse.json();
-        
-        if (statusData.status === 'approved') {
-            // Pagamento aprovado via link
-            showToast("Pagamento confirmado! Agendamento realizado.", "success");
-            form.reset();
-            
-            const paymentDiv = document.getElementById("pixArea");
-            if (paymentDiv) {
-                paymentDiv.innerHTML = `
-                    <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                        <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                        <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                    </div>
-                `;
-                feather.replace();
-            }
-            
-            listarAgendamentos();
-            return true;
-        }
-        
-        return false;
-    } catch (err) {
-        console.error("Erro ao verificar pagamento via link:", err);
-        return false;
-    }
-}
-
 function clearPaymentArea() {
     const paymentArea = document.getElementById("pixArea");
     if (paymentArea) {
@@ -1625,10 +1627,10 @@ function clearPaymentArea() {
 }
 
 
-// Limpar área de pagamento quando mudar o método
-document.querySelectorAll('input[name="metodoPagamento"]').forEach(radio => {
-    radio.addEventListener('change', clearPaymentArea);
-});
+
+
+
+
         // ---------------- INIT ----------------
         AOS.init({
             duration: 800,
@@ -1640,6 +1642,4 @@ document.querySelectorAll('input[name="metodoPagamento"]').forEach(radio => {
     </script>
 </body>
 </html>
-
-
 
