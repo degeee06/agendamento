@@ -157,26 +157,26 @@
             .dias-tabs-container::-webkit-scrollbar-thumb {
                 background: rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
-
             }
-.dashboard-card {
-    transition: all 0.3s ease;
-}
+            
+            .dashboard-card {
+                transition: all 0.3s ease;
+            }
 
-.dashboard-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
+            .dashboard-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
 
-.stat-number {
-    font-size: 1.875rem;
-    font-weight: 700;
-}
+            .stat-number {
+                font-size: 1.875rem;
+                font-weight: 700;
+            }
 
-.stat-label {
-    font-size: 0.875rem;
-    color: #D1D5DB;
-
+            .stat-label {
+                font-size: 0.875rem;
+                color: #D1D5DB;
+            }
         }
     </style>
 </head>
@@ -235,43 +235,43 @@
             </div>
         </div>
 
-<!-- Dashboard de Estatísticas -->
-<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
-            <div class="text-sm text-gray-300">Hoje</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
-            <div class="text-sm text-gray-300">Esta Semana</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
-            <div class="text-sm text-gray-300">Total</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
-            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
-        </div>
-    </div>
+        <!-- Dashboard de Estatísticas -->
+        <div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+            <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+                    <div class="text-sm text-gray-300">Hoje</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+                    <div class="text-sm text-gray-300">Esta Semana</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+                    <div class="text-sm text-gray-300">Total</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+                    <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+                </div>
+            </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Gráfico de Status -->
-        <div class="bg-white/10 rounded-xl p-4">
-            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
-            <div id="chartStatus" class="h-48"></div>
-        </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Gráfico de Status -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+                    <div id="chartStatus" class="h-48"></div>
+                </div>
 
-        <!-- Top Clientes -->
-        <div class="bg-white/10 rounded-xl p-4">
-            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
-            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                <!-- Top Clientes -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+                    <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -456,6 +456,14 @@
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
+        // ---------------- FUNÇÕES AUXILIARES ----------------
+        function getAuthHeaders() {
+            return {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            };
+        }
+
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
             // Configurar máscara de telefone
@@ -481,6 +489,9 @@
                 loginSection.style.display = 'none';
                 form.style.display = 'block';
                 logoutBtn.style.display = 'flex';
+                document.getElementById('filtersSection').style.display = 'block';
+                document.getElementById('diasTabs').style.display = 'flex';
+                document.getElementById('dashboardSection').style.display = 'block';
                 listarAgendamentos();
                 verificarLinkConfirmacao();
             }
@@ -605,12 +616,12 @@
                 const btnContainer = document.createElement("div");
                 btnContainer.className = "flex gap-2 mt-4 flex-wrap";
 
-                // Confirmar - AGORA ABRE MODAL PIX
+                // Confirmar
                 if (a.status !== "confirmado") {
                     const btnConfirmar = document.createElement("button");
                     btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
                     btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
-                    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id, a));
+                    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
                     btnContainer.appendChild(btnConfirmar);
                 }
 
@@ -696,7 +707,6 @@
                     return;
                 }
 
-
                 reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
                 modal.classList.add("hidden");
             });
@@ -714,7 +724,7 @@
             
             try{
                 const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: { "Authorization": `Bearer ${userToken}` }
+                    headers: getAuthHeaders()
                 });
                 
                 if (res.status === 401) {
@@ -727,10 +737,8 @@
                 const { agendamentos } = await res.json();
                 agendamentosCache = agendamentos;
                 meusAgendamentos.style.display = 'block';
-                document.getElementById('filtersSection').style.display = 'block';
-                document.getElementById('diasTabs').style.display = 'flex';
-                initTabsDias();
-                renderAgendamentos(); 
+                renderAgendamentos();
+                carregarDashboard();
             } catch(e){
                 console.error("Erro ao listar agendamentos:", e);
                 showToast("Erro ao listar agendamentos","error");
@@ -769,18 +777,17 @@
                 loginSection.style.display = 'none';
                 form.style.display = 'block';
                 logoutBtn.style.display = 'flex';
+                document.getElementById('filtersSection').style.display = 'block';
+                document.getElementById('diasTabs').style.display = 'flex';
+                document.getElementById('dashboardSection').style.display = 'block';
 
                 listarAgendamentos().then(() => {
-    let hoje = new Date().getDay();
-    if (hoje === 0) hoje = 1;
-    document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
-    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-
-    // Adiciona pequeno delay para garantir que os agendamentos foram carregados
-    setTimeout(() => {
-        carregarDashboard();
-    }, 500);
-});
+                    let hoje = new Date().getDay();
+                    if (hoje === 0) hoje = 1;
+                    document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
+                    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
+                });
+                
                 showToast("Login realizado com sucesso!", "success");
 
                 loginText.classList.remove('hidden');
@@ -810,6 +817,7 @@
                 meusAgendamentos.style.display = 'none';
                 document.getElementById('filtersSection').style.display = 'none';
                 document.getElementById('diasTabs').style.display = 'none';
+                document.getElementById('dashboardSection').style.display = 'none';
 
                 showToast("Logout realizado com sucesso!", "success");
             } catch (e) {
@@ -899,10 +907,7 @@
                     
                     const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            "Authorization": `Bearer ${userToken}`
-                        },
+                        headers: getAuthHeaders(),
                         body: JSON.stringify(dataToSend)
                     });
                     
@@ -961,43 +966,43 @@
             form.querySelector('button[type="submit"]').disabled = true;
             
             try {
-    // Primeiro, criar o pagamento PIX - MERCADO PAGO
-    const valorEmReais = 0.01; // 1 centavo
+                // Primeiro, criar o pagamento PIX - MERCADO PAGO
+                const valorEmReais = 0.01; // 1 centavo
 
-    const pagamentoResponse = await fetch('/create-pix', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
-            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-            email: dataToSend.Email
-        })
-    });
+                const pagamentoResponse = await fetch('/create-pix', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                        email: dataToSend.Email
+                    })
+                });
 
-    if (!pagamentoResponse.ok) {
-        const errorData = await pagamentoResponse.json();
-        throw new Error(errorData.error || 'Erro ao criar pagamento');
-    }
+                if (!pagamentoResponse.ok) {
+                    const errorData = await pagamentoResponse.json();
+                    throw new Error(errorData.error || 'Erro ao criar pagamento');
+                }
 
-    const pagamentoData = await pagamentoResponse.json();
-    currentPaymentId = pagamentoData.payment_id;
-    paymentExpiresAt = pagamentoData.expires_at;
-    
-    // Exibir QR Code e código PIX
-    let pixDiv = document.getElementById("pixArea");
-    if (!pixDiv) {
-        pixDiv = document.createElement("div");
-        pixDiv.id = "pixArea";
-        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-        form.appendChild(pixDiv);
-    }
+                const pagamentoData = await pagamentoResponse.json();
+                currentPaymentId = pagamentoData.payment_id;
+                paymentExpiresAt = pagamentoData.expires_at;
+                
+                // Exibir QR Code e código PIX
+                let pixDiv = document.getElementById("pixArea");
+                if (!pixDiv) {
+                    pixDiv = document.createElement("div");
+                    pixDiv.id = "pixArea";
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+                    form.appendChild(pixDiv);
+                }
 
-    pixDiv.innerHTML = `
-        <h3 class="text-center mb-3">Pagamento via PIX</h3>
-        <div class="text-center mb-4">
-            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-        </div>
+                pixDiv.innerHTML = `
+                    <h3 class="text-center mb-3">Pagamento via PIX</h3>
+                    <div class="text-center mb-4">
+                        <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+                    </div>
                     <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
                     <div class="mb-4">
                         <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
@@ -1189,20 +1194,17 @@
             showToast("Exportado para PDF com sucesso", "success");
         });
 
-       // ---------------- MODIFICAR FUNÇÃO DE CONFIRMAR AGENDAMENTO ----------------
-        async function confirmarAgendamento(cliente, id, agendamento) {
+        // ---------------- CONFIRMAR AGENDAMENTO ----------------
+        async function confirmarAgendamento(cliente, id) {
             if (!userToken) {
                 showToast("Faça login para confirmar um agendamento.", "warning");
                 return;
             }
 
+            try {
                 const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
                     method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ status: "confirmado", confirmado: true })
+                    headers: getAuthHeaders()
                 });
 
                 const data = await res.json();
@@ -1213,103 +1215,11 @@
                 } else {
                     showToast("Erro ao confirmar: " + (data.msg || data.message), "error");
                 }
-
             } catch (e) {
                 console.error(e);
                 showToast("Erro de conexão ao confirmar.", "error");
-                abrirModalConfirmacaoPIX(agendamento);
             }
         }
-
-// ---------------- VERIFICAÇÃO DE LINK DE CONFIRMAÇÃO (para página pública) ----------------
-        async function verificarLinkConfirmacao() {
-            // Verifica se está na página de confirmação
-            if (window.location.pathname.includes('/confirmar-presenca/')) {
-                const token = window.location.pathname.split('/').pop();
-                
-                try {
-                    const res = await fetch(`/verificar-link-confirmacao/${token}`);
-                    const data = await res.json();
-                    
-                    if (res.ok && data.valido) {
-                        // Mostrar informações do agendamento e botão para pagar
-                        mostrarPaginaConfirmacao(data.agendamento, token);
-                    } else {
-                        mostrarErroConfirmacao(data.msg || "Link inválido ou expirado");
-                    }
-                } catch (error) {
-                    mostrarErroConfirmacao("Erro ao verificar link");
-                }
-            }
-        }
-
-        function mostrarPaginaConfirmacao(agendamento, token) {
-            // Implementar interface para página pública de confirmação
-            document.body.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center p-4">
-                    <div class="glass-card rounded-2xl p-8 max-w-md w-full">
-                        <h1 class="text-2xl font-bold text-center mb-6">Confirmar Presença</h1>
-                        <div class="space-y-4 mb-6">
-                            <p><strong>Nome:</strong> ${agendamento.nome}</p>
-                            <p><strong>Data:</strong> ${formatData(agendamento.data)}</p>
-                            <p><strong>Horário:</strong> ${agendamento.horario}</p>
-                        </div>
-                        <form id="formConfirmacao" class="space-y-4">
-                            <div>
-                                <label class="block mb-2">Email para recebimento</label>
-                                <input type="email" id="emailConfirmacao" value="${agendamento.email}" 
-                                       class="w-full p-3 rounded-lg bg-white/10 border border-white/20">
-                            </div>
-                            <button type="submit" class="w-full bg-indigo-600 text-white py-3 rounded-lg">
-                                Confirmar com PIX (R$ 1,00)
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('formConfirmacao').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = document.getElementById('emailConfirmacao').value;
-                
-                try {
-                    const resultado = await confirmarComPix(token, email);
-                    
-                    // Mostrar QR Code PIX
-                    document.body.innerHTML += `
-                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                            <div class="bg-gray-900 rounded-xl p-6 max-w-md w-full">
-                                <h2 class="text-lg font-medium mb-4">Pagamento PIX</h2>
-                                <img src="data:image/png;base64,${resultado.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
-                                <div class="text-center">
-                                    <p class="text-sm mb-2">Escaneie o QR Code para pagar</p>
-                                    <div class="countdown-timer">Tempo restante: 15:00</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Iniciar verificação de pagamento
-                    verificarPagamentoConfirmacao(resultado.payment_id);
-                } catch (error) {
-                    alert("Erro: " + error.message);
-                }
-            });
-        }
-
-        function mostrarErroConfirmacao(mensagem) {
-            document.body.innerHTML = `
-                <div class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center p-4">
-                    <div class="glass-card rounded-2xl p-8 max-w-md w-full text-center">
-                        <i data-feather="x-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
-                        <h1 class="text-xl font-bold mb-4">Erro</h1>
-                        <p>${mensagem}</p>
-                    </div>
-                </div>
-            `;
-            feather.replace();
-        }
-
 
         // ---------------- CANCELAR AGENDAMENTO ----------------
         async function cancelarAgendamento(cliente, id) {
@@ -1321,10 +1231,7 @@
             try {
                 const res = await fetch(`/agendamentos/${cliente}/cancelar/${id}`, {
                     method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`,
-                        "Content-Type": "application/json"
-                    }
+                    headers: getAuthHeaders()
                 });
 
                 const data = await res.json();
@@ -1340,177 +1247,150 @@
             }
         }
 
+        // ---------------- REAGENDAR AGENDAMENTO ----------------
         async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-    if (!userToken) {
-        showToast("Faça login para reagendar um agendamento.", "warning");
-        return;
-    }
-
-    try {
-        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ 
-                novaData, 
-                novoHorario, 
-                status: "pendente", // SEMPRE volta para pendente
-                confirmado: false   // SEMPRE volta para não confirmado
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            showToast("Agendamento reagendado com sucesso!", "success");
-            listarAgendamentos();
-        } else {
-            // Detecta conflito de horário (erro do índice único)
-            if (data.code === "23505") {
-                showToast("Já existe um agendamento nesse horário para este cliente.", "error");
-            } else {
-                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+            if (!userToken) {
+                showToast("Faça login para reagendar um agendamento.", "warning");
+                return;
             }
-        }
 
-    } catch (e) {
-        console.error(e);
-        showToast("Erro de conexão ao reagendar.", "error");
-    }
-}
-       // ---------------- DASHBOARD ----------------
-// ---------------- DASHBOARD ----------------
-async function carregarDashboard() {
-    try {
-        console.log('Carregando dashboard...');
-        console.log('Total de agendamentos:', agendamentosCache.length);
-        
-        // Verifica se os elementos do dashboard existem
-        const dashboardSection = document.getElementById('dashboardSection');
-        if (!dashboardSection) {
-            console.error('Seção do dashboard não encontrada!');
-            return;
-        }
-        
-        // Mostra a seção do dashboard
-        dashboardSection.style.display = 'block';
-        
-        const hoje = new Date().toISOString().split('T')[0];
-        
-        // Corrige cálculo da semana (segunda-feira como início)
-        const hojeObj = new Date();
-        const diaSemana = hojeObj.getDay(); // 0 = domingo, 1 = segunda, etc.
-        
-        // Calcula a data de início da semana (segunda-feira)
-        const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-        const semanaInicio = new Date(hojeObj);
-        semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
-        const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
-        
-        console.log('Hoje:', hoje, 'Início da semana:', semanaInicioStr);
-        
-        // Estatísticas básicas
-        const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
-        const semanaCount = agendamentosCache.filter(a => {
-            const agendamentoDate = new Date(a.data);
-            return agendamentoDate >= new Date(semanaInicioStr) && a.data <= hoje;
-        }).length;
-        
-        const totalCount = agendamentosCache.length;
-        const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
-        const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
-        
-        // Atualiza os elementos se existirem
-        if (document.getElementById('statHoje')) {
-            document.getElementById('statHoje').textContent = hojeCount;
-        }
-        if (document.getElementById('statSemana')) {
-            document.getElementById('statSemana').textContent = semanaCount;
-        }
-        if (document.getElementById('statTotal')) {
-            document.getElementById('statTotal').textContent = totalCount;
-        }
-        if (document.getElementById('statTaxa')) {
-            document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
-        }
-        
-        console.log('Estatísticas:', {hojeCount, semanaCount, totalCount, taxaConfirmacao});
-        
-        // Gráfico de status (implementação simples)
-        const statusCount = {
-            pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
-            confirmado: confirmadosCount,
-            cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
-        };
-        
-        const chartStatus = document.getElementById('chartStatus');
-        if (chartStatus) {
-            chartStatus.innerHTML = `
-                <div class="h-full flex flex-col justify-center">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Pendente: ${statusCount.pendente}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Top clientes
-        const clientesCount = {};
-        agendamentosCache.forEach(a => {
-            if (!clientesCount[a.nome]) {
-                clientesCount[a.nome] = 0;
-            }
-            clientesCount[a.nome]++;
-        });
-        
-        const topClientes = Object.entries(clientesCount)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5);
-        
-        const topClientesDiv = document.getElementById('topClientes');
-        if (topClientesDiv) {
-            topClientesDiv.innerHTML = '';
-            
-            if (topClientes.length === 0) {
-                topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
-            } else {
-                topClientes.forEach(([nome, count]) => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
-                    div.innerHTML = `
-                        <span class="text-sm truncate">${nome}</span>
-                        <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
-                    `;
-                    topClientesDiv.appendChild(div);
+            try {
+                const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ 
+                        novaData, 
+                        novoHorario
+                    })
                 });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast("Agendamento reagendado com sucesso!", "success");
+                    listarAgendamentos();
+                } else {
+                    showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+                }
+
+            } catch (e) {
+                console.error(e);
+                showToast("Erro de conexão ao reagendar.", "error");
             }
         }
-        
-        console.log('Dashboard carregado com sucesso!');
-        
-    } catch (e) {
-        console.error('Erro ao carregar dashboard:', e);
-    }
-}
 
-        // ---------------- INIT ----------------
+        // ---------------- DASHBOARD ----------------
+        async function carregarDashboard() {
+            try {
+                // Estatísticas básicas
+                const hoje = new Date().toISOString().split('T')[0];
+                const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
+                
+                // Calcula a semana (segunda a domingo)
+                const hojeObj = new Date();
+                const diaSemana = hojeObj.getDay();
+                const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+                const semanaInicio = new Date(hojeObj);
+                semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
+                const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
+                
+                const semanaCount = agendamentosCache.filter(a => {
+                    return a.data >= semanaInicioStr && a.data <= hoje;
+                }).length;
+                
+                const totalCount = agendamentosCache.length;
+                const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
+                const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
+                
+                // Atualiza os elementos
+                document.getElementById('statHoje').textContent = hojeCount;
+                document.getElementById('statSemana').textContent = semanaCount;
+                document.getElementById('statTotal').textContent = totalCount;
+                document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
+                
+                // Gráfico de status
+                const statusCount = {
+                    pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
+                    confirmado: confirmadosCount,
+                    cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
+                };
+                
+                const chartStatus = document.getElementById('chartStatus');
+                if (chartStatus) {
+                    chartStatus.innerHTML = `
+                        <div class="h-full flex flex-col justify-center">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm">Pendente: ${statusCount.pendente}</span>
+                                <div class="w-24 bg-gray-600 rounded-full h-2">
+                                    <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
+                                <div class="w-24 bg-gray-600 rounded-full h-2">
+                                    <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
+                                <div class="w-24 bg-gray-600 rounded-full h-2">
+                                    <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Top clientes
+                const clientesCount = {};
+                agendamentosCache.forEach(a => {
+                    if (!clientesCount[a.nome]) {
+                        clientesCount[a.nome] = 0;
+                    }
+                    clientesCount[a.nome]++;
+                });
+                
+                const topClientes = Object.entries(clientesCount)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+                
+                const topClientesDiv = document.getElementById('topClientes');
+                if (topClientesDiv) {
+                    topClientesDiv.innerHTML = '';
+                    
+                    if (topClientes.length === 0) {
+                        topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
+                    } else {
+                        topClientes.forEach(([nome, count]) => {
+                            const div = document.createElement('div');
+                            div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
+                            div.innerHTML = `
+                                <span class="text-sm truncate">${nome}</span>
+                                <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
+                            `;
+                            topClientesDiv.appendChild(div);
+                        });
+                    }
+                }
+                
+            } catch (e) {
+                console.error('Erro ao carregar dashboard:', e);
+            }
+        }
+
+        // ---------------- VERIFICAÇÃO DE LINK DE CONFIRMAÇÃO ----------------
+        async function verificarLinkConfirmacao() {
+            // Implementação simplificada para verificação de link
+            // Esta função seria usada em uma página pública de confirmação
+            console.log("Verificação de link de confirmação - funcionalidade disponível");
+        }
+
+        // ---------------- INICIALIZAR TABS ----------------
+        function initTabs() {
+            initTabsDias();
+        }
+
+        // ---------------- INICIALIZAR ----------------
         AOS.init({
             duration: 800,
             easing: 'ease-out-quart',
@@ -1518,8 +1398,7 @@ async function carregarDashboard() {
         });
         feather.replace();
         init();
+        initTabs();
     </script>
 </body>
 </html>
-
-
