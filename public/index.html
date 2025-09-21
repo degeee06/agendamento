@@ -111,6 +111,27 @@
             100% { transform: rotate(360deg); }
         }
         
+        .countdown-timer {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.15);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .countdown-warning {
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
         @media (max-width: 640px) {
             .mobile-flex-col {
                 flex-direction: column;
@@ -136,26 +157,26 @@
             .dias-tabs-container::-webkit-scrollbar-thumb {
                 background: rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
-            }
-            
-            .dashboard-card {
-                transition: all 0.3s ease;
-            }
 
-            .dashboard-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
             }
+.dashboard-card {
+    transition: all 0.3s ease;
+}
 
-            .stat-number {
-                font-size: 1.875rem;
-                font-weight: 700;
-            }
+.dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
 
-            .stat-label {
-                font-size: 0.875rem;
-                color: #D1D5DB;
-            }
+.stat-number {
+    font-size: 1.875rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #D1D5DB;
+
         }
     </style>
 </head>
@@ -214,43 +235,43 @@
             </div>
         </div>
 
-        <!-- Dashboard de Estatísticas -->
-        <div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
-                    <div class="text-sm text-gray-300">Hoje</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
-                    <div class="text-sm text-gray-300">Esta Semana</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
-                    <div class="text-sm text-gray-300">Total</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
-                    <div class="text-sm text-gray-300">Taxa de Confirmação</div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Gráfico de Status -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
-                    <div id="chartStatus" class="h-48"></div>
-                </div>
-
-                <!-- Top Clientes -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">👥 Top Clientes</h3>
-                    <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
-                </div>
-            </div>
+<!-- Dashboard de Estatísticas -->
+<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+            <div class="text-sm text-gray-300">Hoje</div>
         </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+            <div class="text-sm text-gray-300">Esta Semana</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+            <div class="text-sm text-gray-300">Total</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Gráfico de Status -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+            <div id="chartStatus" class="h-48"></div>
+        </div>
+
+        <!-- Top Clientes -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+    </div>
+</div>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -401,7 +422,7 @@
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
         const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhbmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let userToken = null;
@@ -409,7 +430,9 @@
         let diaSelecionado = 1;
         let telefoneMask = null;
         let pagamentoPendente = false;
-        let intervaloContadorGlobal = null;
+        let paymentCheckInterval = null;
+        let currentPaymentId = null;
+        let paymentExpiresAt = null;
 
         const form = document.getElementById('agendamentoForm');
         const loginBtn = document.getElementById('loginBtn');
@@ -562,7 +585,7 @@
                             <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
                         </div>
                         <div>
-                            <h3 class="font-medium">${a.nome</h3>
+                            <h3 class="font-medium">${a.nome}</h3>
                             <p class="text-sm text-gray-300">${formatData(a.data)}</p>
                         </div>
                     </div>
@@ -632,11 +655,11 @@
                             </div>
                             <div>
                                 <label class="block text-sm text-gray-300 mb-1">Horário</label>
-                                <input type="time" id="novoHorario" class="w-full p-3 rounded-md bg-white/5 border border-white/极速飞艇10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                                <input type="time" id="novoHorario" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
                             </div>
                         </div>
                         <div class="flex justify-end gap-2 mt-6">
-                            <button id="cancelarReagendar" class="px-4 py-2 rounded-lg bg-gray-极速飞艇700 text-white hover:bg-gray-600 transition-all">Cancelar</button>
+                            <button id="cancelarReagendar" class="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-all">Cancelar</button>
                             <button id="confirmarReagendar" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all">Confirmar</button>
                         </div>
                     </div>
@@ -655,7 +678,7 @@
             }
 
             // Preenche valores atuais e define data mínima como hoje
-            modal.querySelector("#nova极速飞艇Data").value = agendamento.data;
+            modal.querySelector("#novaData").value = agendamento.data;
             modal.querySelector("#novoHorario").value = agendamento.horario;
 
             // Remove qualquer evento antigo para evitar duplicação
@@ -671,6 +694,7 @@
                     showToast("Preencha data e horário corretamente!", "warning");
                     return;
                 }
+
 
                 reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
                 modal.classList.add("hidden");
@@ -749,7 +773,7 @@
                     let hoje = new Date().getDay();
                     if (hoje === 0) hoje = 1;
                     document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
-                    document.querySelector(`极速飞艇.tab-dia[data-dia="1"]`)?.click();
+                    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
 
                     carregarDashboard();
                 });
@@ -791,6 +815,130 @@
             }
         });
 
+        // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
+        function formatTimeRemaining(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
+            if (paymentCheckInterval) {
+                clearInterval(paymentCheckInterval);
+            }
+            
+            const countdownElement = document.getElementById('countdownTimer');
+            
+            // Atualizar o contador a cada segundo
+            paymentCheckInterval = setInterval(async () => {
+                const now = new Date();
+                const expires = new Date(expiresAt);
+                const timeRemaining = Math.floor((expires - now) / 1000);
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(paymentCheckInterval);
+                    countdownElement.innerHTML = 'Tempo esgotado!';
+                    countdownElement.classList.add('countdown-warning');
+                    
+                    // Limpar a área de pagamento
+                    const pixDiv = document.getElementById("pixArea");
+                    if (pixDiv) {
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                    Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                        
+                        feather.replace();
+                        
+                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                            form.dispatchEvent(new Event('submit'));
+                        });
+                    }
+                    
+                    return;
+                }
+                
+                // Atualizar o contador
+                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+                
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
+                if (timeRemaining < 60) {
+                    countdownElement.classList.add('countdown-warning');
+                } else {
+                    countdownElement.classList.remove('countdown-warning');
+                }
+            }, 1000);
+        }
+
+        async function checkPaymentStatus(paymentId) {
+            try {
+                const statusResponse = await fetch(`/check-payment/${paymentId}`);
+                if (!statusResponse.ok) {
+                    throw new Error('Erro ao verificar pagamento');
+                }
+                
+                const statusData = await statusResponse.json();
+                
+                if (statusData.status === 'approved') {
+                    // Pagamento aprovado, parar de verificar
+                    clearInterval(paymentCheckInterval);
+                    
+                    // Enviar agendamento
+                    const formData = new FormData(form);
+                    const dataToSend = {};
+                    formData.forEach((v,k) => dataToSend[k] = v);
+                    
+                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            "Authorization": `Bearer ${userToken}`
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
+                    
+                    if (agendamentoResponse.ok) {
+                        showToast("Agendamento realizado com sucesso!", "success");
+                        form.reset();
+                        
+                        const pixDiv = document.getElementById("pixArea");
+                        if (pixDiv) {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                </div>
+                            `;
+                            feather.replace();
+                        }
+                        
+                        listarAgendamentos();
+                    } else {
+                        const errorData = await agendamentoResponse.json();
+                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                    }
+                    
+                    return true;
+                } else if (statusData.status === 'expired') {
+                    // Pagamento expirado
+                    clearInterval(paymentCheckInterval);
+                    showToast("Tempo para pagamento expirado.", "error");
+                    return true;
+                }
+                
+                return false;
+            } catch (err) {
+                console.error("Erro ao verificar pagamento:", err);
+                return false;
+            }
+        }
+
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
         form.addEventListener('submit', async (e)=>{
             e.preventDefault();
@@ -827,29 +975,27 @@
                 }
 
                 const pagamentoData = await pagamentoResponse.json();
+                currentPaymentId = pagamentoData.payment_id;
+                paymentExpiresAt = pagamentoData.expires_at;
                 
                 // Exibir QR Code e código PIX
                 let pixDiv = document.getElementById("pixArea");
-                if (!pix极速飞艇Div) {
+                if (!pixDiv) {
                     pixDiv = document.createElement("div");
                     pixDiv.id = "pixArea";
                     pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
                     form.appendChild(pixDiv);
                 }
 
-                // ⏰ INICIAR CONTADOR REGRESSIVO (NOVO)
-                iniciarContadorPagamento(pagamentoData.expires_at, pagamentoData.payment_id, dataToSend);
-                
                 pixDiv.innerHTML = `
-                    <div id="contador-pix" class="text-center mb-4 p-3 bg-yellow-500/20 rounded-lg"></div>
                     <h3 class="text-center mb-3">Pagamento via PIX</h3>
                     <div class="text-center mb-4">
                         <p class="text-lg font-semibold">Valor: R$ 50,00</p>
-                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</极速飞艇p>
+                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
                     </div>
                     <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
                     <div class="mb-4">
-                        <p class="text-sm font-medium mb-1">Código PIX (copiar e cola):</p>
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
                         <div class="flex items-center gap-2">
                             <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
                             <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
@@ -857,6 +1003,7 @@
                             </button>
                         </div>
                     </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
                     <div class="text-center">
                         <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
                             Já efetuei o pagamento
@@ -866,6 +1013,9 @@
                 
                 feather.replace();
                 
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
                 // Configurar botão de copiar
                 document.getElementById('copyPixBtn').addEventListener('click', () => {
                     const textarea = document.querySelector('#pixArea textarea');
@@ -874,44 +1024,19 @@
                     showToast('Código PIX copiado!', 'success');
                 });
                 
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
+                
                 // Configurar botão de confirmação de pagamento
                 document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-                    try {
-                        // Verificar status do pagamento
-                        const statusResponse = await fetch(`/check-payment/${pagamentoData.payment_id}`);
-                        if (!statusResponse.ok) {
-                            throw new Error('Erro ao verificar pagamento');
-                        }
-                        
-                        const statusData = await statusResponse.json();
-                        
-                        if (statusData.status === 'approved') {
-                            // Pagamento aprovado, enviar agendamento
-                            const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    "Authorization": `Bearer ${userToken}`
-                                },
-                                body: JSON.stringify(dataToSend)
-                            });
-                            
-                            if (agendamentoResponse.ok) {
-                                showToast("Agendamento realizado com sucesso!", "success");
-                                form.reset();
-                                if (intervaloContadorGlobal) clearInterval(intervaloContadorGlobal);
-                                pixDiv.remove();
-                                listarAgendamentos();
-                            } else {
-                                const errorData = await agendamentoResponse.json();
-                                showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                            }
-                        } else {
-                            showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
-                        }
-                    } catch (err) {
-                        console.error("Erro ao confirmar pagamento:", err);
-                        showToast("Erro ao verificar pagamento", "error");
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
                     }
                 });
                 
@@ -924,95 +1049,9 @@
                 // Esconder loading
                 agendarText.classList.remove('hidden');
                 agendarSpinner.classList.add('hidden');
-                form.querySelector('button[type极速飞艇="submit"]').disabled = false;
+                form.querySelector('button[type="submit"]').disabled = false;
             }
         });
-
-        // ⏰ FUNÇÃO: CONTADOR REGRESSIVO PARA PAGAMENTO PIX
-        function iniciarContadorPagamento(expiresAt, paymentId, formData) {
-            const contadorDiv = document.getElementById("contador-pix");
-            const tempoExpiracao = new Date(expiresAt).getTime();
-            
-            // Limpar qualquer intervalo anterior
-            if (intervaloContadorGlobal) {
-                clearInterval(intervaloContadorGlobal);
-            }
-            
-            function atualizarContador() {
-                const agora = new Date().getTime();
-                const diferenca = tempoExpiracao - agora;
-                
-                if (diferenca <= 0) {
-                    clearInterval(intervaloContadorGlobal);
-                    contadorDiv.innerHTML = `
-                        <div class="text-red-500 font-bold">
-                            ❌ Pagamento expirado
-                        </div>
-                        <p class="text-sm mt-1">O tempo para pagamento acabou.</p>
-                        <button onclick="location.reload()" class="bg-blue-500 text-white px-3 py-1 rounded mt-2 text-sm">
-                            Fazer Novo Agendamento
-                        </button>
-                    `;
-                    
-                    // Desabilita botão de confirmação
-                    const confirmBtn = document.getElementById("confirmPaymentBtn");
-                    if (confirmBtn) confirmBtn.disabled = true;
-                    
-                    // Cancela automaticamente o agendamento no servidor
-                    cancelarAgendamentoExpirado(paymentId);
-                } else {
-                    const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
-                    const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
-                    
-                    let corTexto = "text-green-500";
-                    if (minutos < 3) corTexto = "text-red-500";
-                    else if (minutos < 5) corTexto = "text-yellow-500";
-                    
-                    contadorDiv.innerHTML = `
-                        <div class="font-sem极速飞艇ibold">⏰ Tempo restante para pagamento:</div>
-                        <div class="text-2xl font-bold ${corTexto}">
-                            ${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}
-                        </div>
-                        <p class="text-sm mt-1">Após este tempo, o agendamento será cancelado automaticamente.</p>
-                    `;
-                }
-            }
-            
-            // Atualiza imediatamente e a cada segundo
-            atualizarContador();
-            intervaloContadorGlobal = setInterval(atualizarContador, 1000);
-        }
-
-        // ⏰ FUNÇÃO: CANCELAR AGENDAMENTO EXPIRADO
-        async function cancelarAgendamentoExpirado(paymentId) {
-            try {
-                // Busca o agendamento pendente mais recente do usuário
-                const email = localStorage.getItem('userEmail');
-                if (!email) return;
-                
-                const { data: agendamento, error } = await supabase
-                    .from("agendamentos")
-                    .select("id, cliente")
-                    .eq("email", email)
-                    .eq("status", "pendente")
-                    .order("created_at", { ascending: false })
-                    .limit(1)
-                    .single();
-                    
-                if (agendamento && userToken) {
-                    await fetch(`/agendamentos/${agendamento.cliente}/cancelar/${agendamento.id}`, {
-                        method: "POST",
-                        headers: {
-                            "Authorization": `Bearer ${userToken}`,
-                            "Content-Type": "application/json"
-                        }
-                    });
-                    console.log("Agendamento expirado cancelado automaticamente");
-                }
-            } catch (error) {
-                console.error("Erro ao cancelar agendamento expirado:", error);
-            }
-        }
 
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
@@ -1039,7 +1078,7 @@
 
             tabsSemana.forEach(btn=>{
                 btn.addEventListener("click",()=>{
-                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500极速飞艇", "to-cyan-500", "active"));
+                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
                     tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
                     tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
                     tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
@@ -1096,7 +1135,7 @@
             // Adiciona data
             const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
             const today = new Date().toLocaleDateString('pt-BR', options);
-            doc.text(`Gerado em: ${today}`, 105极速飞艇, 35, null, null, "center");
+            doc.text(`Gerado em: ${today}`, 105, 35, null, null, "center");
             
             // Adiciona linha
             doc.setDrawColor(200);
@@ -1108,8 +1147,8 @@
             let y = 50;
             
             // Cabeçalho da tabela
-            doc.setFill极速飞艇Color(230);
-            doc.rect(20, y, 170, 10, '极速飞艇F');
+            doc.setFillColor(230);
+            doc.rect(20, y, 170, 10, 'F');
             doc.text("Data", 25, y + 7);
             doc.text("Horário", 50, y + 7);
             doc.text("Nome", 80, y + 7);
@@ -1197,7 +1236,7 @@
                     showToast("Agendamento cancelado com sucesso!", "success");
                     listarAgendamentos();
                 } else {
-                    showToast("Erro ao cancelar: " + (data.msg || data.message), "极速飞艇error");
+                    showToast("Erro ao cancelar: " + (data.msg || data.message), "error");
                 }
             } catch (e) {
                 console.error(e);
@@ -1216,7 +1255,7 @@
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${userToken}`,
-                        "极速飞艇Content-Type": "application/json"
+                        "Content-Type": "application/json"
                     },
                     body: JSON.stringify({ 
                         novaData, 
@@ -1256,7 +1295,7 @@
                 
                 // Estatísticas básicas
                 const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
-                const semana极速飞艇Count = agendamentosCache.filter(a => a.data >= semanaInicioStr).length;
+                const semanaCount = agendamentosCache.filter(a => a.data >= semanaInicioStr).length;
                 const totalCount = agendamentosCache.length;
                 
                 const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
