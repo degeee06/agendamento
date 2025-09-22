@@ -66,58 +66,11 @@
             50% { opacity: 0.5; }
             100% { opacity: 1; }
         }
-        
-        .status-pendente {
-            color: #fbbf24;
-            background-color: rgba(251, 191, 36, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-
-        .status-confirmado {
-            color: #34d399;
-            background-color: rgba(52, 211, 153, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-
-        .status-cancelado {
-            color: #f87171;
-            background-color: rgba(248, 113, 113, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-        
-        .agendamento-card {
-            transition: all 0.3s ease;
-        }
-        
-        .agendamento-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-        }
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
-        <!-- Header -->
+        <!-- Header with animated gradient -->
         <header class="text-center mb-12" data-aos="fade-down">
             <h1 class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
                 Agendamento
@@ -201,38 +154,17 @@
                 </button>
             </div>
         </form>
-
-        <!-- Meus Agendamentos Section -->
-        <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" data-aos="fade-up">
-            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                <i data-feather="calendar" class="w-5 h-5"></i> Meus Agendamentos
-            </h2>
-            <div class="text-center py-8">
-                <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                    <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                </div>
-                <p class="text-gray-300">Nenhum agendamento encontrado</p>
-            </div>
-        </div>
     </div>
 
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
-    <script type="module">
-        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-
-        // Configuração do Supabase
-        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+    <script>
         let telefoneMask = null;
+        let pagamentoPendente = false;
         let paymentCheckInterval = null;
         let currentPaymentId = null;
         let paymentExpiresAt = null;
-        let clienteEmail = null;
-        let currentAgendamentoData = null;
 
         const form = document.getElementById('agendamentoForm');
         const agendarText = document.getElementById('agendarText');
@@ -240,7 +172,6 @@
         const telefoneInput = document.getElementById("Telefone");
         const dataInput = document.getElementById("Data");
         const horarioInput = document.getElementById("Horario");
-        const meusAgendamentos = document.getElementById("meusAgendamentos");
 
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
@@ -254,17 +185,10 @@
             // Permitir selecionar a partir de hoje (incluindo hoje)
             const hoje = new Date();
             const ontem = new Date(hoje);
-            ontem.setDate(ontem.getDate() - 1);
+            ontem.setDate(ontem.getDate() - 1); // Data de ontem
             
             if (dataInput) {
-                dataInput.min = ontem.toISOString().split('T')[0];
-            }
-            
-            // Verificar se há email salvo localmente
-            clienteEmail = localStorage.getItem('clienteEmail');
-            if (clienteEmail) {
-                document.querySelector('input[name="Email"]').value = clienteEmail;
-                listarAgendamentos();
+                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
             }
             
             feather.replace();
@@ -315,12 +239,14 @@
         }
 
         function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
             if (paymentCheckInterval) {
                 clearInterval(paymentCheckInterval);
             }
             
             const countdownElement = document.getElementById('countdownTimer');
             
+            // Atualizar o contador a cada segundo
             paymentCheckInterval = setInterval(async () => {
                 const now = new Date();
                 const expires = new Date(expiresAt);
@@ -331,6 +257,7 @@
                     countdownElement.innerHTML = 'Tempo esgotado!';
                     countdownElement.classList.add('countdown-warning');
                     
+                    // Limpar a área de pagamento
                     const pixDiv = document.getElementById("pixArea");
                     if (pixDiv) {
                         pixDiv.innerHTML = `
@@ -353,8 +280,10 @@
                     return;
                 }
                 
+                // Atualizar o contador
                 countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
                 
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
                 if (timeRemaining < 60) {
                     countdownElement.classList.add('countdown-warning');
                 } else {
@@ -363,144 +292,56 @@
             }, 1000);
         }
 
-        // ---------------- LISTAR AGENDAMENTOS ----------------
-        async function listarAgendamentos() {
-            if (!clienteEmail) return;
-            
-            try {
-                const { data, error } = await supabase
-                    .from('agendamentos')
-                    .select('*')
-                    .eq('email', clienteEmail)
-                    .order('data', { ascending: true })
-                    .order('horario', { ascending: true });
-                
-                if (error) throw error;
-                
-                if (data.length === 0) {
-                    meusAgendamentos.innerHTML = `
-                        <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                            <i data-feather="calendar" class="w-5 h-5"></i> Meus Agendamentos
-                        </h2>
-                        <div class="text-center py-8">
-                            <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                                <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                            </div>
-                            <p class="text-gray-300">Nenhum agendamento encontrado</p>
-                        </div>
-                    `;
-                    feather.replace();
-                    return;
-                }
-                
-                meusAgendamentos.innerHTML = `
-                    <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                        <i data-feather="calendar" class="w-5 h-5"></i> Meus Agendamentos
-                    </h2>
-                `;
-                
-                data.forEach(agendamento => {
-                    const div = document.createElement("div");
-                    div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300`;
-                    
-                    const dataFormatada = new Date(agendamento.data).toLocaleDateString('pt-BR');
-                    
-                    div.innerHTML = `
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="flex items-center gap-2">
-                                <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-                                <span class="font-medium">${agendamento.horario}</span>
-                            </div>
-                            <span class="text-sm px-2 py-1 rounded-full ${agendamento.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : agendamento.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
-                                ${agendamento.status}
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                                <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
-                            </div>
-                            <div>
-                                <h3 class="font-medium">${agendamento.nome}</h3>
-                                <p class="text-sm text-gray-300">${dataFormatada}</p>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-sm">
-                            <div class="flex items-center gap-2">
-                                <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-                                <span class="truncate">${agendamento.email}</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                                <span>${agendamento.telefone}</span>
-                            </div>
-                        </div>
-                    `;
-                    
-                    meusAgendamentos.appendChild(div);
-                });
-                
-                feather.replace();
-            } catch (error) {
-                console.error("Erro ao buscar agendamentos:", error);
-                showToast("Erro ao carregar agendamentos", "error");
-            }
-        }
-
-        // ---------------- VERIFICAR STATUS DO PAGAMENTO ----------------
         async function checkPaymentStatus(paymentId) {
             try {
-                // Verificar status do pagamento no Supabase
-                const { data: pagamento, error } = await supabase
-                    .from('pagamentos')
-                    .select('*')
-                    .eq('id', paymentId)
-                    .single();
+                const statusResponse = await fetch(`/check-payment/${paymentId}`);
+                if (!statusResponse.ok) {
+                    throw new Error('Erro ao verificar pagamento');
+                }
                 
-                if (error) throw error;
+                const statusData = await statusResponse.json();
                 
-                if (pagamento.status === 'approved') {
+                if (statusData.status === 'approved') {
+                    // Pagamento aprovado, parar de verificar
                     clearInterval(paymentCheckInterval);
                     
-                    // AGORA SIM criar o agendamento no Supabase após pagamento confirmado
-                    const { data: agendamento, error: insertError } = await supabase
-                        .from('agendamentos')
-                        .insert([
-                            {
-                                cliente: currentAgendamentoData.Nome.toLowerCase().replace(/\s+/g, '-'),
-                                nome: currentAgendamentoData.Nome,
-                                email: currentAgendamentoData.Email,
-                                telefone: currentAgendamentoData.Telefone,
-                                data: currentAgendamentoData.Data,
-                                horario: currentAgendamentoData.Horario,
-                                status: 'confirmado',
-                                confirmado: true,
-                                payment_id: paymentId
-                            }
-                        ])
-                        .select()
-                        .single();
+                    // Enviar agendamento
+                    const formData = new FormData(form);
+                    const dataToSend = {};
+                    formData.forEach((v,k) => dataToSend[k] = v);
                     
-                    if (insertError) throw insertError;
+                    const agendamentoResponse = await fetch(`/agendar`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
                     
-                    showToast("Agendamento confirmado com sucesso!", "success");
-                    form.reset();
-                    
-                    const pixDiv = document.getElementById("pixArea");
-                    if (pixDiv) {
-                        pixDiv.innerHTML = `
-                            <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                                <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                                <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                            </div>
-                        `;
-                        feather.replace();
+                    if (agendamentoResponse.ok) {
+                        showToast("Agendamento realizado com sucesso!", "success");
+                        form.reset();
+                        
+                        const pixDiv = document.getElementById("pixArea");
+                        if (pixDiv) {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                </div>
+                            `;
+                            feather.replace();
+                        }
+                    } else {
+                        const errorData = await agendamentoResponse.json();
+                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
                     }
                     
-                    listarAgendamentos();
                     return true;
-                } else if (pagamento.status === 'expired' || pagamento.status === 'cancelled') {
+                } else if (statusData.status === 'expired') {
+                    // Pagamento expirado
                     clearInterval(paymentCheckInterval);
-                    showToast("Pagamento não realizado a tempo.", "error");
+                    showToast("Tempo para pagamento expirado.", "error");
                     return true;
                 }
                 
@@ -514,9 +355,9 @@
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
         form.addEventListener('submit', async (e)=>{
             e.preventDefault();
-            const formData = new FormData(form);
-            const dataToSend = {};
-            formData.forEach((v,k) => dataToSend[k] = v);
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
 
             // Verifica campos obrigatórios
             if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
@@ -524,59 +365,35 @@
                 return;
             }
 
-            // Salvar email localmente
-            clienteEmail = dataToSend.Email;
-            localStorage.setItem('clienteEmail', clienteEmail);
-
-            // Armazenar dados do agendamento para uso posterior (após pagamento)
-            currentAgendamentoData = {...dataToSend};
-
             // Mostrar loading
             agendarText.classList.add('hidden');
             agendarSpinner.classList.remove('hidden');
             form.querySelector('button[type="submit"]').disabled = true;
             
             try {
-                // Verificar se já existe agendamento no mesmo horário
-                const { data: existingAppointments, error: checkError } = await supabase
-                    .from('agendamentos')
-                    .select('*')
-                    .eq('data', dataToSend.Data)
-                    .eq('horario', dataToSend.Horario);
-                
-                if (checkError) throw checkError;
-                
-                if (existingAppointments && existingAppointments.length > 0) {
-                    showToast("Já existe um agendamento para este horário. Escolha outro horário.", "error");
-                    return;
+                // Primeiro, criar o pagamento PIX - MERCADO PAGO
+                const valorEmReais = 0.01; // 1 centavo
+
+                const pagamentoResponse = await fetch('/create-pix', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                        email: dataToSend.Email
+                    })
+                });
+
+                if (!pagamentoResponse.ok) {
+                    const errorData = await pagamentoResponse.json();
+                    throw new Error(errorData.error || 'Erro ao criar pagamento');
                 }
+
+                const pagamentoData = await pagamentoResponse.json();
+                currentPaymentId = pagamentoData.payment_id;
+                paymentExpiresAt = pagamentoData.expires_at;
                 
-                // Simular criação de pagamento PIX (substitua pela sua lógica real)
-                const valorEmReais = 0.01; // 1 centavo para teste
-                const paymentId = Date.now(); // ID único para o pagamento
-                
-                // Registrar o pagamento no Supabase (ainda pendente)
-                const { data: pagamento, error: paymentError } = await supabase
-                    .from('pagamentos')
-                    .insert([
-                        {
-                            id: paymentId,
-                            email: dataToSend.Email,
-                            amount: valorEmReais,
-                            status: 'pending',
-                            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                            valid_until: new Date(Date.now() + 30 * 60 * 1000) // 30 minutos para expirar
-                        }
-                    ])
-                    .select()
-                    .single();
-                
-                if (paymentError) throw paymentError;
-                
-                currentPaymentId = paymentId;
-                paymentExpiresAt = pagamento.valid_until;
-                
-                // Exibir QR Code e código PIX (simulado)
+                // Exibir QR Code e código PIX
                 let pixDiv = document.getElementById("pixArea");
                 if (!pixDiv) {
                     pixDiv = document.createElement("div");
@@ -585,22 +402,17 @@
                     form.appendChild(pixDiv);
                 }
 
-                // QR Code simulado (em produção, use uma API real)
-                const qrCodeSimulado = `00020126580014br.gov.bcb.pix0136${paymentId}52040000530398654060.015802BR5909AGENDAMENTO6008SAO PAULO6304`;
-                
                 pixDiv.innerHTML = `
                     <h3 class="text-center mb-3">Pagamento via PIX</h3>
                     <div class="text-center mb-4">
                         <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
                         <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
                     </div>
-                    <div class="bg-white p-2 rounded mx-auto mb-4 w-48 h-48 flex items-center justify-center">
-                        <p class="text-black text-xs text-center">QR Code simulado para demonstração. Em produção, integre com uma API de pagamentos real.</p>
-                    </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
                     <div class="mb-4">
                         <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
                         <div class="flex items-center gap-2">
-                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${qrCodeSimulado}</textarea>
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
                             <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
                                 <i data-feather="copy" class="w-4 h-4"></i>
                             </button>
@@ -608,10 +420,7 @@
                     </div>
                     <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
                     <div class="text-center">
-                        <button id="simulatePaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700 mr-2">
-                            Simular Pagamento
-                        </button>
-                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
                             Já efetuei o pagamento
                         </button>
                     </div>
@@ -629,27 +438,38 @@
                     document.execCommand('copy');
                     showToast('Código PIX copiado!', 'success');
                 });
-                
-                // Configurar botão de simular pagamento (apenas para demonstração)
-                document.getElementById('simulatePaymentBtn').addEventListener('click', async () => {
-                    // Simular pagamento aprovado
-                    const { error: updatePaymentError } = await supabase
-                        .from('pagamentos')
-                        .update({ status: 'approved', updated_at: new Date() })
-                        .eq('id', currentPaymentId);
-                    
-                    if (updatePaymentError) {
-                        showToast("Erro ao simular pagamento", "error");
-                        return;
-                    }
-                    
-                    // Verificar o pagamento (que agora irá criar o agendamento)
-                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                    if (!paymentConfirmed) {
-                        showToast("Erro ao confirmar pagamento", "error");
-                    }
-                });
-                
+                // ---------------- Agora sim, criar agendamento ----------------
+            const { data: agendamento, error: insertError } = await supabase
+                .from('agendamentos')
+                .insert([{
+                    cliente: dataToSend.Nome.toLowerCase().replace(/\s+/g, '-'),
+                    nome: dataToSend.Nome,
+                    email: dataToSend.Email,
+                    telefone: dataToSend.Telefone,
+                    data: dataToSend.Data,
+                    horario: dataToSend.Horario,
+                    status: 'confirmado',
+                    confirmado: true,
+                    payment_id: currentPaymentId
+                }])
+                .select()
+                .single();
+            if (insertError) throw insertError;
+
+            showToast("Pagamento confirmado! Agendamento realizado.", "success");
+            listarAgendamentos();
+            pixDiv.innerHTML = '';
+        });
+
+    } catch(err) {
+        console.error(err);
+        showToast("Erro ao processar agendamento", "error");
+    } finally {
+        agendarText.classList.remove('hidden');
+        agendarSpinner.classList.add('hidden');
+        form.querySelector('button[type="submit"]').disabled = false;
+    }
+});
                 // Configurar verificação automática do pagamento a cada 10 segundos
                 const paymentStatusInterval = setInterval(async () => {
                     const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
@@ -666,9 +486,11 @@
                     }
                 });
                 
+                pagamentoPendente = true;
+                
             } catch(err) { 
                 console.error(err); 
-                showToast("Erro ao processar agendamento","error"); 
+                showToast("Erro ao processar pagamento","error"); 
             } finally {
                 // Esconder loading
                 agendarText.classList.remove('hidden');
