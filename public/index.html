@@ -827,241 +827,297 @@
         });
 
         // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
-        function formatTimeRemaining(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-        }
+function formatTimeRemaining(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
 
-        function startPaymentTimer(expiresAt) {
-            // Limpar qualquer intervalo existente
-            if (paymentCheckInterval) {
-                clearInterval(paymentCheckInterval);
-            }
+function startPaymentTimer(expiresAt) {
+    // Limpar qualquer intervalo existente
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+    }
+    
+    const countdownElement = document.getElementById('countdownTimer');
+    
+    // Atualizar o contador a cada segundo
+    paymentCheckInterval = setInterval(async () => {
+        const now = new Date();
+        const expires = new Date(expiresAt);
+        const timeRemaining = Math.floor((expires - now) / 1000);
+        
+        if (timeRemaining <= 0) {
+            clearInterval(paymentCheckInterval);
+            countdownElement.innerHTML = 'Tempo esgotado!';
+            countdownElement.classList.add('countdown-warning');
             
-            const countdownElement = document.getElementById('countdownTimer');
-            
-            // Atualizar o contador a cada segundo
-            paymentCheckInterval = setInterval(async () => {
-                const now = new Date();
-                const expires = new Date(expiresAt);
-                const timeRemaining = Math.floor((expires - now) / 1000);
-                
-                if (timeRemaining <= 0) {
-                    clearInterval(paymentCheckInterval);
-                    countdownElement.innerHTML = 'Tempo esgotado!';
-                    countdownElement.classList.add('countdown-warning');
-                    
-                    // Limpar a área de pagamento
-                    const pixDiv = document.getElementById("pixArea");
-                    if (pixDiv) {
-                        pixDiv.innerHTML = `
-                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
-                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
-                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
-                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                    Tentar novamente
-                                </button>
-                            </div>
-                        `;
-                        
-                        feather.replace();
-                        
-                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-                            form.dispatchEvent(new Event('submit'));
-                        });
-                    }
-                    
-                    return;
-                }
-                
-                // Atualizar o contador
-                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
-                
-                // Adicionar efeito de aviso quando faltar menos de 1 minuto
-                if (timeRemaining < 60) {
-                    countdownElement.classList.add('countdown-warning');
-                } else {
-                    countdownElement.classList.remove('countdown-warning');
-                }
-            }, 1000);
-        }
-
-        async function checkPaymentStatus(paymentId) {
-            try {
-                const statusResponse = await fetch(`/check-payment/${paymentId}`);
-                if (!statusResponse.ok) {
-                    throw new Error('Erro ao verificar pagamento');
-                }
-                
-                const statusData = await statusResponse.json();
-                
-                if (statusData.status === 'approved') {
-                    // Pagamento aprovado, parar de verificar
-                    clearInterval(paymentCheckInterval);
-                    
-                    // Enviar agendamento
-                    const formData = new FormData(form);
-                    const dataToSend = {};
-                    formData.forEach((v,k) => dataToSend[k] = v);
-                    
-                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
-                        method: 'POST',
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify(dataToSend)
-                    });
-                    
-                    if (agendamentoResponse.ok) {
-                        showToast("Agendamento realizado com sucesso!", "success");
-                        form.reset();
-                        
-                        const pixDiv = document.getElementById("pixArea");
-                        if (pixDiv) {
-                            pixDiv.innerHTML = `
-                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                                </div>
-                            `;
-                            feather.replace();
-                        }
-                        
-                        listarAgendamentos();
-                    } else {
-                        const errorData = await agendamentoResponse.json();
-                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                    }
-                    
-                    return true;
-                } else if (statusData.status === 'expired') {
-                    // Pagamento expirado
-                    clearInterval(paymentCheckInterval);
-                    showToast("Tempo para pagamento expirado.", "error");
-                    return true;
-                }
-                
-                return false;
-            } catch (err) {
-                console.error("Erro ao verificar pagamento:", err);
-                return false;
-            }
-        }
-
-        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
-
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
-
-            // Mostrar loading
-            agendarText.classList.add('hidden');
-            agendarSpinner.classList.remove('hidden');
-            form.querySelector('button[type="submit"]').disabled = true;
-            
-            try {
-                // Primeiro, criar o pagamento PIX - MERCADO PAGO
-                const valorEmReais = 0.01; // 1 centavo
-
-                const pagamentoResponse = await fetch('/create-pix', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
-                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                        email: dataToSend.Email
-                    })
-                });
-
-                if (!pagamentoResponse.ok) {
-                    const errorData = await pagamentoResponse.json();
-                    throw new Error(errorData.error || 'Erro ao criar pagamento');
-                }
-
-                const pagamentoData = await pagamentoResponse.json();
-                currentPaymentId = pagamentoData.payment_id;
-                paymentExpiresAt = pagamentoData.expires_at;
-                
-                // Exibir QR Code e código PIX
-                let pixDiv = document.getElementById("pixArea");
-                if (!pixDiv) {
-                    pixDiv = document.createElement("div");
-                    pixDiv.id = "pixArea";
-                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-                    form.appendChild(pixDiv);
-                }
-
+            // Limpar a área de pagamento
+            const pixDiv = document.getElementById("pixArea");
+            if (pixDiv) {
                 pixDiv.innerHTML = `
-                    <h3 class="text-center mb-3">Pagamento via PIX</h3>
-                    <div class="text-center mb-4">
-                        <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-                    </div>
-                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
-                    <div class="mb-4">
-                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                        <div class="flex items-center gap-2">
-                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
-                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                <i data-feather="copy" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
-                    <div class="text-center">
-                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
-                            Já efetuei o pagamento
+                    <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                        <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                        <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                        <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                            Tentar novamente
                         </button>
                     </div>
                 `;
                 
                 feather.replace();
                 
-                // Iniciar contador de tempo
-                startPaymentTimer(paymentExpiresAt);
-                
-                // Configurar botão de copiar
-                document.getElementById('copyPixBtn').addEventListener('click', () => {
-                    const textarea = document.querySelector('#pixArea textarea');
-                    textarea.select();
-                    document.execCommand('copy');
-                    showToast('Código PIX copiado!', 'success');
+                document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                    form.dispatchEvent(new Event('submit'));
                 });
+            }
+            
+            return;
+        }
+        
+        // Atualizar o contador
+        countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+        
+        // Adicionar efeito de aviso quando faltar menos de 1 minuto
+        if (timeRemaining < 60) {
+            countdownElement.classList.add('countdown-warning');
+        } else {
+            countdownElement.classList.remove('countdown-warning');
+        }
+    }, 1000);
+}
+
+async function checkPaymentStatus(paymentId) {
+    try {
+        const statusResponse = await fetch(`/check-payment/${paymentId}`);
+        if (!statusResponse.ok) {
+            throw new Error('Erro ao verificar pagamento');
+        }
+        
+        const statusData = await statusResponse.json();
+        
+        if (statusData.status === 'approved') {
+            // Pagamento aprovado, parar de verificar
+            clearInterval(paymentCheckInterval);
+            
+            // Enviar agendamento
+            const formData = new FormData(form);
+            const dataToSend = {};
+            formData.forEach((v,k) => dataToSend[k] = v);
+            
+            const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(dataToSend)
+            });
+            
+            if (agendamentoResponse.ok) {
+                const agendamentoData = await agendamentoResponse.json();
+                showToast("Agendamento realizado com sucesso!", "success");
                 
-                // Configurar verificação automática do pagamento a cada 10 segundos
-                const paymentStatusInterval = setInterval(async () => {
-                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                    if (paymentConfirmed) {
-                        clearInterval(paymentStatusInterval);
-                    }
-                }, 10000);
+                // ✅ MOSTRAR O LINK DE CONFIRMAÇÃO SE EXISTIR
+                if (agendamentoData.link_confirmacao) {
+                    exibirModalConfirmacao(
+                        agendamentoData.link_confirmacao, 
+                        agendamentoData.link_expira_em,
+                        agendamentoData.agendamento
+                    );
+                }
                 
-                // Configurar botão de confirmação de pagamento
-                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                    if (!paymentConfirmed) {
-                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
-                    }
-                });
+                form.reset();
                 
-                pagamentoPendente = true;
+                const pixDiv = document.getElementById("pixArea");
+                if (pixDiv) {
+                    pixDiv.innerHTML = `
+                        <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                            <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                            <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                        </div>
+                    `;
+                    feather.replace();
+                }
                 
-            } catch(err) { 
-                console.error(err); 
-                showToast("Erro ao processar pagamento","error"); 
-            } finally {
-                // Esconder loading
-                agendarText.classList.remove('hidden');
-                agendarSpinner.classList.add('hidden');
-                form.querySelector('button[type="submit"]').disabled = false;
+                listarAgendamentos();
+            } else {
+                const errorData = await agendamentoResponse.json();
+                showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+            }
+            
+            return true;
+        } else if (statusData.status === 'expired') {
+            // Pagamento expirado
+            clearInterval(paymentCheckInterval);
+            showToast("Tempo para pagamento expirado.", "error");
+            return true;
+        }
+        
+        return false;
+    } catch (err) {
+        console.error("Erro ao verificar pagamento:", err);
+        return false;
+    }
+}
+
+// ---------------- FUNÇÃO PARA EXIBIR MODAL DE CONFIRMAÇÃO ----------------
+function exibirModalConfirmacao(link, expiraEm, agendamento) {
+    const modal = document.createElement("div");
+    modal.innerHTML = `
+        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="bg-gray-900 rounded-xl p-6 max-w-md w-full">
+                <h2 class="text-xl font-bold mb-4">✅ Agendamento Confirmado!</h2>
+                
+                ${agendamento ? `
+                    <div class="mb-4 p-3 bg-gray-800 rounded">
+                        <p class="font-medium">${agendamento.nome}</p>
+                        <p class="text-sm">${agendamento.data} às ${agendamento.horario}</p>
+                    </div>
+                ` : ''}
+                
+                <p class="mb-4">Envie este link para seu cliente confirmar o agendamento:</p>
+                <div class="bg-gray-800 p-3 rounded mb-4">
+                    <input type="text" value="${link}" readonly 
+                           class="w-full bg-transparent text-sm" id="linkInput">
+                </div>
+                <button onclick="copiarLink()" class="w-full bg-indigo-600 text-white py-2 rounded mb-2">
+                    📋 Copiar Link
+                </button>
+                <button onclick="fecharModal()" class="w-full bg-gray-600 text-white py-2 rounded">
+                    Fechar
+                </button>
+                <p class="text-xs text-gray-400 mt-3">Expira: ${new Date(expiraEm).toLocaleString('pt-BR')}</p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    window.copiarLink = function() {
+        const input = document.getElementById("linkInput");
+        input.select();
+        document.execCommand("copy");
+        showToast("Link copiado para a área de transferência!", "success");
+    };
+    
+    window.fecharModal = function() {
+        document.body.removeChild(modal);
+    };
+}
+
+// ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const dataToSend = {};
+    formData.forEach((v,k) => dataToSend[k] = v);
+
+    // Verifica campos obrigatórios
+    if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+        showToast("Preencha todos os campos", "warning");
+        return;
+    }
+
+    // Mostrar loading
+    agendarText.classList.add('hidden');
+    agendarSpinner.classList.remove('hidden');
+    form.querySelector('button[type="submit"]').disabled = true;
+    
+    try {
+        // Primeiro, criar o pagamento PIX - MERCADO PAGO
+        const valorEmReais = 0.01; // 1 centavo
+
+        const pagamentoResponse = await fetch('/create-pix', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+                description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                email: dataToSend.Email
+            })
+        });
+
+        if (!pagamentoResponse.ok) {
+            const errorData = await pagamentoResponse.json();
+            throw new Error(errorData.error || 'Erro ao criar pagamento');
+        }
+
+        const pagamentoData = await pagamentoResponse.json();
+        currentPaymentId = pagamentoData.payment_id;
+        paymentExpiresAt = pagamentoData.expires_at;
+        
+        // Exibir QR Code e código PIX
+        let pixDiv = document.getElementById("pixArea");
+        if (!pixDiv) {
+            pixDiv = document.createElement("div");
+            pixDiv.id = "pixArea";
+            pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+            form.appendChild(pixDiv);
+        }
+
+        pixDiv.innerHTML = `
+            <h3 class="text-center mb-3">Pagamento via PIX</h3>
+            <div class="text-center mb-4">
+                <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+                <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+            </div>
+            <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+            <div class="mb-4">
+                <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                <div class="flex items-center gap-2">
+                    <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                    <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                        <i data-feather="copy" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+            <div class="text-center">
+                <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                    Já efetuei o pagamento
+                </button>
+            </div>
+        `;
+        
+        feather.replace();
+        
+        // Iniciar contador de tempo
+        startPaymentTimer(paymentExpiresAt);
+        
+        // Configurar botão de copiar
+        document.getElementById('copyPixBtn').addEventListener('click', () => {
+            const textarea = document.querySelector('#pixArea textarea');
+            textarea.select();
+            document.execCommand('copy');
+            showToast('Código PIX copiado!', 'success');
+        });
+        
+        // Configurar verificação automática do pagamento a cada 10 segundos
+        const paymentStatusInterval = setInterval(async () => {
+            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+            if (paymentConfirmed) {
+                clearInterval(paymentStatusInterval);
+            }
+        }, 10000);
+        
+        // Configurar botão de confirmação de pagamento
+        document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+            if (!paymentConfirmed) {
+                showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
             }
         });
+        
+        pagamentoPendente = true;
+        
+    } catch(err) { 
+        console.error(err); 
+        showToast("Erro ao processar pagamento","error"); 
+    } finally {
+        // Esconder loading
+        agendarText.classList.remove('hidden');
+        agendarSpinner.classList.add('hidden');
+        form.querySelector('button[type="submit"]').disabled = false;
+    }
+});
 
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
@@ -1402,3 +1458,4 @@
     </script>
 </body>
 </html>
+
