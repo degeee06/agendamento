@@ -158,10 +158,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('new-schedule').addEventListener('click', resetFlow);
 });
 
-function getClienteIdFromURL() {
-    const pathParts = window.location.pathname.split('/');
-    return pathParts[2] || 'default';
-}
+const clienteId = getClienteIdFromURL();
+
+fetch(`${BACKEND_URL}/create-pix/${clienteId}`, { ... });
+fetch(`${BACKEND_URL}/agendar/${clienteId}`, { ... });
+
 
 async function generatePix() {
     const email = document.getElementById('email').value;
