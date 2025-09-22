@@ -173,6 +173,7 @@ app.get("/:cliente", (req, res) => {
   });
 });
 
+
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
@@ -666,5 +667,3 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
-
-
