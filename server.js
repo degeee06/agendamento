@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import QRCode from "qrcode";
 import crypto from "crypto";
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
@@ -643,23 +644,26 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+
 app.post("/gerar-link-pix", async (req, res) => {
   try {
-    const { nome, email, telefone, data, horario, valor } = req.body;
-    if (!nome || !email || !telefone || !data || !horario || !valor)
-      return res.status(400).json({ error: "Todos os campos são obrigatórios" });
+    const { cliente, nome, email, telefone, data, horario, valor } = req.body;
+    if (!cliente || !nome || !data || !horario || !valor)
+      return res.status(400).json({ error: "Campos obrigatórios ausentes" });
 
+    // Token único para o link
     const token = crypto.randomBytes(16).toString("hex");
 
-    // Gera o payload PIX (exemplo simples)
+    // Payload PIX simples (substitua pela sua chave PIX real)
     const pixPayload = `00020126680014BR.GOV.BCB.PIX0114+55119999999990204${valor}520400005303986540${valor}5802BR5913${nome}6009Cidade62070503***6304`;
 
     // Gera QR Code Base64
     const qr_code_base64 = await QRCode.toDataURL(pixPayload);
 
-    // Salva token + QR Code + dados temporários no Supabase
-    await supabase.from("agendamentos_temp").insert({
+    // Salvar token temporário em Supabase
+    await supabase.from("pix_links_temp").insert({
       token,
+      cliente,
       nome,
       email,
       telefone,
@@ -667,7 +671,7 @@ app.post("/gerar-link-pix", async (req, res) => {
       horario,
       valor,
       qr_code_base64,
-      expiracao: new Date(Date.now() + 24*60*60*1000) // expira em 24h
+      expiracao: new Date(Date.now() + 24*60*60*1000)
     });
 
     res.json({
@@ -686,7 +690,7 @@ app.get("/agendamento-pix/:token", async (req, res) => {
     const { token } = req.params;
 
     const { data } = await supabase
-      .from("agendamentos_temp")
+      .from("pix_links_temp")
       .select("*")
       .eq("token", token)
       .single();
@@ -697,7 +701,7 @@ app.get("/agendamento-pix/:token", async (req, res) => {
       <h1>Agendamento - Pague via PIX</h1>
       <p>Valor: R$ ${data.valor}</p>
       <img src="${data.qr_code_base64}" alt="QR Code PIX" />
-      <p>Copie o QR Code ou pague pelo seu app.</p>
+      <p>Copie o QR Code ou pague pelo app do seu banco.</p>
     `);
   } catch (err) {
     console.error(err);
@@ -706,6 +710,46 @@ app.get("/agendamento-pix/:token", async (req, res) => {
 });
 
 
+async function confirmarPagamento(token) {
+  // Pega dados do link pago
+  const { data, error } = await supabase
+    .from("pix_links_temp")
+    .select("*")
+    .eq("token", token)
+    .single();
+
+  if (!data || error) return;
+
+  // Cria agendamento na tabela principal
+  const { data: agendamento, error: agendamentoError } = await supabase
+    .from("agendamentos")
+    .insert([{
+      cliente: data.cliente,
+      nome: data.nome,
+      email: data.email,
+      telefone: data.telefone,
+      data: data.data,
+      horario: data.horario,
+      status: "confirmado",
+      confirmado: true,
+      payment_id: token
+    }])
+    .select()
+    .single();
+
+  if (!agendamentoError) {
+    // Atualiza Google Sheets
+    try {
+      const doc = await accessSpreadsheet(data.cliente);
+      await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, agendamento);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // Remove link temporário
+    await supabase.from("pix_links_temp").delete().eq("token", token);
+  }
+}
 
 
 
@@ -721,4 +765,3 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
-
