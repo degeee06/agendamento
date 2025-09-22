@@ -5,40 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema de Agendamento</title>
 <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color: #333; min-height: 100vh; padding: 20px; display: flex; justify-content: center; align-items: center; }
-    .container { width: 100%; max-width: 800px; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
-    header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
-    header h1 { margin-bottom: 10px; font-size: 28px; }
-    header p { opacity: 0.8; }
-    .progress-bar { display: flex; background: #f1f1f1; padding: 10px; }
-    .progress-step { flex: 1; text-align: center; padding: 10px; font-weight: bold; position: relative; }
-    .progress-step.active { color: #3498db; }
-    .progress-step::after { content: "→"; position: absolute; right: -10px; top: 50%; transform: translateY(-50%); }
-    .progress-step:last-child::after { content: none; }
-    .section { padding: 30px; display: none; }
-    .section.active { display: block; animation: fadeIn 0.5s ease; }
-    h2 { color: #2c3e50; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #eee; }
-    .form-group { margin-bottom: 20px; }
-    label { display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50; }
-    input, select { width: 100%; padding: 12px 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; transition: border-color 0.3s; }
-    input:focus, select:focus { border-color: #3498db; outline: none; }
-    button { background: #3498db; color: white; border: none; padding: 15px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; margin-top: 10px; transition: background 0.3s; }
-    button:hover { background: #2980b9; }
-    button.secondary { background: #95a5a6; }
-    button.secondary:hover { background: #7f8c8d; }
-    #pix-container { text-align: center; margin-top: 20px; padding: 20px; background: #f9f9f9; border-radius: 10px; }
-    #qr-code-image { max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white; border-radius: 8px; }
-    .expiration { color: #e74c3c; font-weight: bold; margin: 15px 0; font-size: 18px; }
-    .success-msg { background-color: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
-    .confirmation-details { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-    .confirmation-details p { margin-bottom: 10px; font-size: 17px; }
-    .confirmation-details strong { color: #2c3e50; }
-    footer { text-align: center; padding: 20px; background: #f1f1f1; color: #7f8c8d; }
-    .hidden { display: none; }
-    .error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0; text-align: center; }
-    @keyframes fadeIn { from { opacity:0; transform: translateY(20px);} to { opacity:1; transform: translateY(0);} }
-    @media (max-width:768px) { body { padding:10px;} .container { border-radius:10px;} .section { padding:20px;} .progress-step { font-size:14px;} #qr-code-image { max-width:200px; } }
+/* --- Mantém todos os estilos existentes --- */
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+body { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color: #333; min-height: 100vh; padding: 20px; display: flex; justify-content: center; align-items: center; }
+.container { width: 100%; max-width: 800px; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
+header { background: #2c3e50; color: white; padding: 20px; text-align: center; }
+header h1 { margin-bottom: 10px; font-size: 28px; }
+header p { opacity: 0.8; }
+.progress-bar { display: flex; background: #f1f1f1; padding: 10px; }
+.progress-step { flex: 1; text-align: center; padding: 10px; font-weight: bold; position: relative; }
+.progress-step.active { color: #3498db; }
+.progress-step::after { content: "→"; position: absolute; right: -10px; top: 50%; transform: translateY(-50%); }
+.progress-step:last-child::after { content: none; }
+.section { padding: 30px; display: none; }
+.section.active { display: block; animation: fadeIn 0.5s ease; }
+h2 { color: #2c3e50; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #eee; }
+.form-group { margin-bottom: 20px; }
+label { display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50; }
+input, select { width: 100%; padding: 12px 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; transition: border-color 0.3s; }
+input:focus, select:focus { border-color: #3498db; outline: none; }
+button { background: #3498db; color: white; border: none; padding: 15px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; margin-top: 10px; transition: background 0.3s; }
+button:hover { background: #2980b9; }
+button.secondary { background: #95a5a6; }
+button.secondary:hover { background: #7f8c8d; }
+#pix-container { text-align: center; margin-top: 20px; padding: 20px; background: #f9f9f9; border-radius: 10px; }
+#qr-code-image { max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white; border-radius: 8px; }
+.expiration { color: #e74c3c; font-weight: bold; margin: 15px 0; font-size: 18px; }
+.success-msg { background-color: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+.confirmation-details { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+.confirmation-details p { margin-bottom: 10px; font-size: 17px; }
+.confirmation-details strong { color: #2c3e50; }
+footer { text-align: center; padding: 20px; background: #f1f1f1; color: #7f8c8d; }
+.hidden { display: none; }
+.error { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0; text-align: center; }
+.countdown-warning { color: #e74c3c; font-weight: bold; }
+@keyframes fadeIn { from { opacity:0; transform: translateY(20px);} to { opacity:1; transform: translateY(0);} }
+@media (max-width:768px) { body { padding:10px;} .container { border-radius:10px;} .section { padding:20px;} .progress-step { font-size:14px;} #qr-code-image { max-width:200px; } }
 </style>
 </head>
 <body>
@@ -57,53 +59,33 @@
 <main>
     <section id="payment-section" class="section active">
         <h2>Pagamento via PIX</h2>
-        <div class="form-group">
-            <label for="email">E-mail:</label>
-            <input type="email" id="email" placeholder="Seu e-mail para receber o comprovante" required>
-        </div>
-        <div class="form-group">
-            <label for="amount">Valor do Serviço:</label>
-            <input type="text" id="amount" value="100,00" readonly>
-        </div>
-        <button id="generate-pix">Gerar QR Code PIX</button>
-
-        <div id="pix-container" class="hidden">
-            <div id="qr-code-container">
-                <img id="qr-code-image" src="" alt="QR Code PIX">
-            </div>
-            <p class="expiration">Este PIX expira em <span id="expiration-time">15:00</span></p>
-            <p>Escaneie o QR Code com seu aplicativo bancário</p>
-            <button id="check-payment">Verificar Pagamento</button>
-        </div>
-
-        <div id="payment-error" class="error hidden"></div>
-    </section>
-
-    <section id="scheduling-section" class="section">
-        <h2>Agendamento</h2>
-        <p class="success-msg">Pagamento confirmado! Agora agende seu horário.</p>
-        <form id="scheduling-form">
+        <form id="payment-form">
             <div class="form-group">
-                <label for="name">Nome Completo:</label>
-                <input type="text" id="name" required>
+                <label for="Nome">Nome Completo:</label>
+                <input type="text" name="Nome" required>
             </div>
             <div class="form-group">
-                <label for="phone">Telefone:</label>
-                <input type="tel" id="phone" placeholder="(11) 99999-9999" required>
+                <label for="Email">E-mail:</label>
+                <input type="email" name="Email" required>
             </div>
             <div class="form-group">
-                <label for="date">Data:</label>
-                <input type="date" id="date" required min="">
+                <label for="Telefone">Telefone:</label>
+                <input type="tel" name="Telefone" required>
             </div>
             <div class="form-group">
-                <label for="time">Horário:</label>
-                <select id="time" required>
+                <label for="Data">Data:</label>
+                <input type="date" name="Data" required>
+            </div>
+            <div class="form-group">
+                <label for="Horario">Horário:</label>
+                <select name="Horario" required>
                     <option value="">Selecione um horário</option>
                 </select>
             </div>
-            <button type="submit">Confirmar Agendamento</button>
+            <button type="submit">Agendar e Gerar PIX</button>
+            <div class="mt-2 flex items-center justify-center hidden" id="agendarSpinner">Carregando...</div>
         </form>
-        <div id="scheduling-error" class="error hidden"></div>
+        <div id="pixArea" class="mt-4"></div>
     </section>
 
     <section id="confirmation-section" class="section">
@@ -113,9 +95,7 @@
             <p><strong>Data:</strong> <span id="confirm-date"></span></p>
             <p><strong>Horário:</strong> <span id="confirm-time"></span></p>
             <p><strong>Telefone:</strong> <span id="confirm-phone"></span></p>
-            <p><strong>Status:</strong> <span id="confirm-status">Pendente de confirmação</span></p>
         </div>
-        <p>Um e-mail de confirmação foi enviado para <span id="confirm-email"></span></p>
         <button id="new-schedule" class="secondary">Fazer Novo Agendamento</button>
     </section>
 </main>
@@ -125,173 +105,100 @@
 </footer>
 </div>
 
+<script src="https://unpkg.com/feather-icons"></script>
 <script>
-const BACKEND_URL = 'https://agendamento-iclh.onrender.com';
+const form = document.getElementById('payment-form');
+const cliente = location.pathname.split('/')[1] || 'default';
+let currentPaymentId = null;
+let paymentCheckInterval = null;
+let paymentExpiresAt = null;
 
-let paymentId = null, paymentCheckInterval = null, expirationTimer = null;
-
-// Captura o clienteId da URL (ex: /cliente1)
-function getClienteIdFromURL() {
-    const path = window.location.pathname;
-    return path.split('/')[1] || 'default';
-}
-const clienteId = getClienteIdFromURL();
-
-const sections = {
-    payment: document.getElementById('payment-section'),
-    scheduling: document.getElementById('scheduling-section'),
-    confirmation: document.getElementById('confirmation-section')
-};
-const steps = {
-    step1: document.getElementById('step-1'),
-    step2: document.getElementById('step-2'),
-    step3: document.getElementById('step-3')
-};
-
-document.addEventListener('DOMContentLoaded', function() {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    document.getElementById('date').min = tomorrow.toISOString().split('T')[0];
-
-    if (clienteId && clienteId !== 'default') {
-        document.querySelector('header h1').textContent += ` - Cliente ${clienteId}`;
-    }
-
-    document.getElementById('generate-pix').addEventListener('click', generatePix);
-    document.getElementById('check-payment').addEventListener('click', checkPayment);
-    document.getElementById('scheduling-form').addEventListener('submit', scheduleAppointment);
-    document.getElementById('date').addEventListener('change', loadAvailableTimes);
-    document.getElementById('new-schedule').addEventListener('click', resetFlow);
-});
-
-// ---------------- PIX ----------------
-async function generatePix() {
-    const email = document.getElementById('email').value;
-    const amount = parseFloat(document.getElementById('amount').value.replace(',', '.'));
-    if (!email) { showError('payment-error', 'Informe seu e-mail'); return; }
-
-    try {
-        document.getElementById('generate-pix').textContent = 'Gerando...';
-        document.getElementById('generate-pix').disabled = true;
-        hideError('payment-error');
-
-        const res = await fetch(`${BACKEND_URL}/create-pix/${clienteId}`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ amount, email, description: 'Agendamento de serviço' })
-        });
-        const data = await res.json();
-        if(res.ok){
-            paymentId = data.payment_id;
-            document.getElementById('qr-code-image').src = `data:image/png;base64,${data.qr_code_base64}`;
-            document.getElementById('pix-container').classList.remove('hidden');
-            setupExpirationTimer(data.expires_at);
-            startPaymentChecking();
-        } else showError('payment-error','Erro: '+(data.error||'Desconhecido'));
-    } catch(err){ console.error(err); showError('payment-error','Erro ao conectar ao servidor'); }
-    finally{
-        document.getElementById('generate-pix').textContent = 'Gerar QR Code PIX';
-        document.getElementById('generate-pix').disabled = false;
-    }
+// ---------- FUNÇÕES DE TEMPO ----------
+function formatTimeRemaining(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-function setupExpirationTimer(expiresAt){
-    const expirationTime = new Date(expiresAt).getTime();
-    if(expirationTimer) clearInterval(expirationTimer);
-    expirationTimer = setInterval(()=>{
-        const now = Date.now();
-        const distance = expirationTime - now;
-        const minutes = Math.floor((distance % (1000*60*60))/(1000*60));
-        const seconds = Math.floor((distance % (1000*60))/1000);
-        document.getElementById('expiration-time').textContent = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
-        if(distance < 0){
-            clearInterval(expirationTimer);
-            document.getElementById('expiration-time').textContent='EXPIRADO';
-            showError('payment-error','O PIX expirou. Gere um novo código.');
-            stopPaymentChecking();
+function startPaymentTimer(expiresAt) {
+    if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+    const countdownElement = document.getElementById('countdownTimer');
+    paymentCheckInterval = setInterval(async () => {
+        const now = new Date();
+        const expires = new Date(expiresAt);
+        const timeRemaining = Math.floor((expires - now)/1000);
+
+        if(timeRemaining <=0) {
+            clearInterval(paymentCheckInterval);
+            if(countdownElement) countdownElement.innerHTML = 'Tempo esgotado!';
+            return;
         }
+        if(countdownElement) countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+        if(timeRemaining < 60) countdownElement.classList.add('countdown-warning');
+        else countdownElement.classList.remove('countdown-warning');
     },1000);
 }
 
-async function checkPayment(){
-    if(!paymentId) return;
-    try{
-        document.getElementById('check-payment').textContent='Verificando...';
-        hideError('payment-error');
+// ---------- VERIFICAÇÃO DE PAGAMENTO ----------
+async function checkPaymentStatus(paymentId) {
+    try {
+        const statusResponse = await fetch(`/check-payment/${paymentId}`);
+        if(!statusResponse.ok) throw new Error('Erro ao verificar pagamento');
+        const statusData = await statusResponse.json();
 
-        const res = await fetch(`${BACKEND_URL}/check-payment/${paymentId}`);
-        const data = await res.json();
-
-        if(data.status==='approved'){
-            stopPaymentChecking(); clearInterval(expirationTimer);
-            showSection('scheduling'); updateProgress(2);
-        } else if(data.status==='pending') showError('payment-error','Pagamento ainda não confirmado.');
-        else showError('payment-error','Pagamento não aprovado: '+data.status);
-    } catch(err){ console.error(err); showError('payment-error','Erro ao verificar pagamento'); }
-    finally{ document.getElementById('check-payment').textContent='Verificar Pagamento'; }
+        if(statusData.status === 'approved') {
+            clearInterval(paymentCheckInterval);
+            alert('Pagamento aprovado! Agendamento realizado.');
+            return true;
+        }
+        return false;
+    } catch(err){ console.error(err); return false; }
 }
 
-function startPaymentChecking(){ stopPaymentChecking(); paymentCheckInterval=setInterval(checkPayment,5000); }
-function stopPaymentChecking(){ if(paymentCheckInterval){ clearInterval(paymentCheckInterval); paymentCheckInterval=null; } }
-
-// ---------------- Agendamento ----------------
-async function loadAvailableTimes(){
-    const date=document.getElementById('date').value;
-    if(!date) return;
-    const timeSelect=document.getElementById('time');
-    timeSelect.innerHTML='<option value="">Carregando...</option>';
-    await new Promise(r=>setTimeout(r,500));
-    const availableTimes=['08:00','09:00','10:00','11:00','14:00','15:00','16:00','17:00'];
-    timeSelect.innerHTML='<option value="">Selecione um horário</option>';
-    availableTimes.forEach(time=>{ const option=document.createElement('option'); option.value=time; option.textContent=time; timeSelect.appendChild(option); });
-}
-
-async function scheduleAppointment(e){
+// ---------- SUBMISSÃO DO FORMULÁRIO ----------
+form.addEventListener('submit', async (e)=>{
     e.preventDefault();
-    const name=document.getElementById('name').value;
-    const phone=document.getElementById('phone').value;
-    const date=document.getElementById('date').value;
-    const time=document.getElementById('time').value;
-    const email=document.getElementById('email').value;
-    if(!name||!phone||!date||!time){ showError('scheduling-error','Preencha todos os campos'); return; }
+    const formData = new FormData(form);
+    const dataToSend = {};
+    formData.forEach((v,k)=>dataToSend[k]=v);
 
-    try{
-        const btn=document.querySelector('#scheduling-form button');
-        btn.textContent='Agendando...'; btn.disabled=true;
-        hideError('scheduling-error');
+    if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario){
+        alert("Preencha todos os campos");
+        return;
+    }
 
-        const res=await fetch(`${BACKEND_URL}/agendar/${clienteId}`,{
+    // Criar pagamento PIX
+    try {
+        const pagamentoResponse = await fetch(`/create-pix/${cliente}`, {
             method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ Nome:name, Email:email, Telefone:phone, Data:date, Horario:time })
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                amount: 0.01,
+                description: `Agendamento - ${dataToSend.Nome}`,
+                email: dataToSend.Email
+            })
         });
-        const data=await res.json();
-        if(res.ok){
-            document.getElementById('confirm-name').textContent=name;
-            document.getElementById('confirm-date').textContent=formatDate(date);
-            document.getElementById('confirm-time').textContent=time;
-            document.getElementById('confirm-phone').textContent=phone;
-            document.getElementById('confirm-email').textContent=email;
-            showSection('confirmation'); updateProgress(3);
-        } else showError('scheduling-error','Erro ao agendar: '+(data.msg||'Desconhecido'));
-    } catch(err){ console.error(err); showError('scheduling-error','Erro ao conectar com o servidor'); }
-    finally{ const btn=document.querySelector('#scheduling-form button'); btn.textContent='Confirmar Agendamento'; btn.disabled=false; }
-}
+        const pagamentoData = await pagamentoResponse.json();
+        currentPaymentId = pagamentoData.payment_id;
+        paymentExpiresAt = pagamentoData.expires_at;
 
-// ---------------- Utils ----------------
-function showSection(name){ Object.values(sections).forEach(s=>s.classList.remove('active')); sections[name].classList.add('active'); }
-function updateProgress(step){ for(let i=1;i<=3;i++) document.getElementById(`step-${i}`).classList.remove('active'); for(let i=1;i<=step;i++) document.getElementById(`step-${i}`).classList.add('active'); }
-function formatDate(dateStr){ return new Date(dateStr).toLocaleDateString('pt-BR'); }
-function resetFlow(){
-    paymentId=null; stopPaymentChecking(); if(expirationTimer) clearInterval(expirationTimer);
-    ['email','name','phone','date'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('time').innerHTML='<option value="">Selecione um horário</option>';
-    document.getElementById('pix-container').classList.add('hidden');
-    hideError('payment-error'); hideError('scheduling-error');
-    showSection('payment'); updateProgress(1);
-}
-function showError(id,msg){ const el=document.getElementById(id); el.textContent=msg; el.classList.remove('hidden'); }
-function hideError(id){ document.getElementById(id).classList.add('hidden'); }
+        const pixDiv = document.getElementById('pixArea');
+        pixDiv.innerHTML = `
+            <h3 class="text-center mb-3">Pagamento via PIX</h3>
+            <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt)-new Date())/1000))}</div>
+            <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700 mt-2">Já efetuei o pagamento</button>
+        `;
+        feather.replace();
+        startPaymentTimer(paymentExpiresAt);
+
+        document.getElementById('confirmPaymentBtn').addEventListener('click', async ()=>{
+            const confirmed = await checkPaymentStatus(currentPaymentId);
+            if(!confirmed) alert("Pagamento ainda não confirmado.");
+        });
+
+    } catch(err){ console.error(err); alert('Erro ao processar pagamento'); }
+});
 </script>
 </body>
 </html>
