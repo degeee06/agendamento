@@ -3,10 +3,9 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import { MercadoPagoConfig, Payment, Preference } from "mercadopago";
+import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import crypto from "crypto";
-
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +24,6 @@ const supabase = createClient(
 // Inicializa Mercado Pago
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 const payment = new Payment(mpClient);
-const preference = new Preference(mpClient);
 
 let creds;
 try {
@@ -250,243 +248,6 @@ app.post("/create-pix", async (req, res) => {
   } catch (err) {
     console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: err.message });
-  }
-});
-
-// ==== GERAR LINK DE PAGAMENTO PARA AGENDAMENTO ====
-app.post("/gerar-link-pagamento/:agendamentoId", authMiddleware, async (req, res) => {
-  try {
-    const { agendamentoId } = req.params;
-    const { valor, titulo, descricao } = req.body;
-    
-    if (!valor) return res.status(400).json({ error: "Valor é obrigatório" });
-    
-    // Buscar informações do agendamento
-    const { data: agendamento, error: agendamentoError } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("id", agendamentoId)
-      .single();
-    
-    if (agendamentoError || !agendamento) {
-      return res.status(404).json({ error: "Agendamento não encontrado" });
-    }
-    
-    // Verificar se o usuário tem permissão para este agendamento
-    if (req.clienteId !== agendamento.cliente) {
-      return res.status(403).json({ error: "Acesso negado" });
-    }
-    
-    // Gerar token único para o link de confirmação
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiraEm = new Date(Date.now() + 24 * 60 * 60 * 1000); // Expira em 24 horas
-    
-    // Criar preferência no Mercado Pago
-    const preferenceResult = await preference.create({
-      body: {
-        items: [
-          {
-            title: titulo || "Pagamento de Agendamento",
-            description: descricao || `Agendamento para ${agendamento.data} às ${agendamento.horario}`,
-            quantity: 1,
-            currency_id: "BRL",
-            unit_price: parseFloat(valor)
-          }
-        ],
-        payer: {
-          email: agendamento.email,
-          name: agendamento.nome
-        },
-        payment_methods: {
-          excluded_payment_types: [],
-          installments: 1
-        },
-        external_reference: agendamentoId,
-        notification_url: `${process.env.BASE_URL}/webhook-pagamento`,
-        back_urls: {
-          success: `${process.env.FRONTEND_URL}/pagamento/sucesso`,
-          failure: `${process.env.FRONTEND_URL}/pagamento/erro`,
-          pending: `${process.env.FRONTEND_URL}/pagamento/pendente`
-        },
-        auto_return: "approved"
-      }
-    });
-    
-    // Salvar o link de confirmação no banco
-    const { error: linkError } = await supabase
-      .from("confirmacao_links")
-      .insert({
-        agendamento_id: agendamentoId,
-        token: token,
-        expira_em: expiraEm.toISOString(),
-        preference_id: preferenceResult.id,
-        link_pagamento: preferenceResult.init_point
-      });
-    
-    if (linkError) {
-      console.error("Erro ao salvar link de confirmação:", linkError);
-      return res.status(500).json({ error: "Erro ao gerar link de pagamento" });
-    }
-    
-    res.json({
-      success: true,
-      link: `${process.env.BASE_URL}/confirmar-pagamento/${token}`,
-      link_mp: preferenceResult.init_point,
-      expira_em: expiraEm
-    });
-    
-  } catch (error) {
-    console.error("Erro ao gerar link de pagamento:", error);
-    res.status(500).json({ error: "Erro interno ao gerar link de pagamento" });
-  }
-});
-
-// ==== ROTA PARA CONFIRMAÇÃO DE PAGAMENTO VIA LINK ====
-app.get("/confirmar-pagamento/:token", async (req, res) => {
-  try {
-    const { token } = req.params;
-    
-    // Buscar o link de confirmação
-    const { data: linkData, error: linkError } = await supabase
-      .from("confirmacao_links")
-      .select("*, agendamentos(*)")
-      .eq("token", token)
-      .single();
-    
-    if (linkError || !linkData) {
-      return res.status(404).send("Link de confirmação não encontrado ou inválido");
-    }
-    
-    // Verificar se o link já foi utilizado
-    if (linkData.utilizado) {
-      return res.status(400).send("Este link já foi utilizado");
-    }
-    
-    // Verificar se o link expirou
-    if (new Date(linkData.expira_em) < new Date()) {
-      return res.status(400).send("Este link expirou");
-    }
-    
-    // Buscar informações do pagamento no Mercado Pago
-    let statusPagamento = "pending";
-    try {
-      const paymentInfo = await payment.get({ id: linkData.preference_id });
-      statusPagamento = paymentInfo.status;
-    } catch (mpError) {
-      console.error("Erro ao buscar informações do pagamento:", mpError);
-    }
-    
-    // Se o pagamento já foi aprovado, atualizar o agendamento
-    if (statusPagamento === "approved") {
-      // Atualizar agendamento para confirmado
-      const { error: updateError } = await supabase
-        .from("agendamentos")
-        .update({ 
-          status: "confirmado", 
-          confirmado: true 
-        })
-        .eq("id", linkData.agendamento_id);
-      
-      if (updateError) {
-        console.error("Erro ao atualizar agendamento:", updateError);
-      } else {
-        // Marcar link como utilizado
-        await supabase
-          .from("confirmacao_links")
-          .update({ utilizado: true })
-          .eq("token", token);
-        
-        // Atualizar Google Sheet
-        try {
-          const doc = await accessSpreadsheet(linkData.agendamentos.cliente);
-          await updateRowInSheet(doc.sheetsByIndex[0], linkData.agendamento_id, {
-            status: "confirmado",
-            confirmado: true
-          });
-        } catch (sheetError) {
-          console.error("Erro ao atualizar Google Sheets:", sheetError);
-        }
-      }
-      
-      return res.redirect(`${process.env.FRONTEND_URL}/pagamento/sucesso?agendamento=${linkData.agendamento_id}`);
-    } else {
-      // Redirecionar para o checkout do Mercado Pago
-      return res.redirect(linkData.link_pagamento);
-    }
-    
-  } catch (error) {
-    console.error("Erro na confirmação de pagamento:", error);
-    res.status(500).send("Erro interno ao processar pagamento");
-  }
-});
-
-// ==== WEBHOOK ESPECÍFICO PARA PAGAMENTOS VIA LINK ====
-app.post("/webhook-pagamento", async (req, res) => {
-  try {
-    const { type, data } = req.body;
-    
-    if (type === "payment") {
-      const paymentId = data.id;
-      
-      // Buscar informações do pagamento
-      const paymentInfo = await payment.get({ id: paymentId });
-      
-      // Buscar o agendamento relacionado
-      const { data: linkData, error: linkError } = await supabase
-        .from("confirmacao_links")
-        .select("*, agendamentos(*)")
-        .eq("preference_id", paymentInfo.order.id)
-        .single();
-      
-      if (linkError || !linkData) {
-        return res.sendStatus(200); // Ignora pagamentos não relacionados a agendamentos
-      }
-      
-      // Atualizar status do pagamento
-      await supabase
-        .from("pagamentos")
-        .upsert({
-          id: paymentId,
-          email: paymentInfo.payer.email,
-          amount: paymentInfo.transaction_amount,
-          status: paymentInfo.status,
-          description: `Pagamento para agendamento ${linkData.agendamento_id}`,
-          agendamento_id: linkData.agendamento_id
-        });
-      
-      // Se o pagamento foi aprovado, confirmar o agendamento
-      if (paymentInfo.status === "approved") {
-        await supabase
-          .from("agendamentos")
-          .update({ 
-            status: "confirmado", 
-            confirmado: true 
-          })
-          .eq("id", linkData.agendamento_id);
-        
-        // Marcar link como utilizado
-        await supabase
-          .from("confirmacao_links")
-          .update({ utilizado: true })
-          .eq("preference_id", paymentInfo.order.id);
-        
-        // Atualizar Google Sheet
-        try {
-          const doc = await accessSpreadsheet(linkData.agendamentos.cliente);
-          await updateRowInSheet(doc.sheetsByIndex[0], linkData.agendamento_id, {
-            status: "confirmado",
-            confirmado: true
-          });
-        } catch (sheetError) {
-          console.error("Erro ao atualizar Google Sheets:", sheetError);
-        }
-      }
-    }
-    
-    res.sendStatus(200);
-  } catch (error) {
-    console.error("Erro no webhook de pagamento:", error);
-    res.sendStatus(500);
   }
 });
 
@@ -881,6 +642,72 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
+import crypto from "crypto";
+
+app.post("/gerar-link-pix/:agendamentoId", authMiddleware, async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+
+    // Buscar o agendamento
+    const { data: agendamento, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", agendamentoId)
+      .single();
+
+    if (error || !agendamento) return res.status(404).json({ error: "Agendamento não encontrado" });
+    if (req.clienteId !== agendamento.cliente) return res.status(403).json({ error: "Acesso negado" });
+
+    // Gerar token único para o link
+    const token = crypto.randomBytes(16).toString("hex");
+
+    // Salvar token + QR code existente no Supabase
+    await supabase.from("agendamentos_pix").insert({
+      agendamento_id: agendamentoId,
+      token,
+      qr_code_base64: agendamento.qr_code_base64, // supondo que já tenha sido gerado
+      expiracao: new Date(Date.now() + 24*60*60*1000) // expira em 24h
+    });
+
+    res.json({
+      link: `${process.env.BASE_URL}/agendamento-pix/${token}`
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao gerar link PIX" });
+  }
+});
+
+app.get("/agendamento-pix/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const { data, error } = await supabase
+      .from("agendamentos_pix")
+      .select("*")
+      .eq("token", token)
+      .single();
+
+    if (error || !data) return res.status(404).send("Link inválido ou expirado");
+
+    // Exibir QR Code PIX para pagamento
+    res.send(`
+      <h1>Agendamento - Pague via PIX</h1>
+      <p>Valor: R$ ${data.valor}</p>
+      <img src="${data.qr_code_base64}" alt="QR Code PIX" />
+      <p>Copie o QR Code ou pague pelo seu app.</p>
+    `);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Erro ao abrir link PIX");
+  }
+});
+
+
+
+
 
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
