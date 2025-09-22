@@ -127,8 +127,15 @@
 
 <script>
 const BACKEND_URL = 'https://agendamento-iclh.onrender.com';
+
 let paymentId = null, paymentCheckInterval = null, expirationTimer = null;
-let clienteId = null;
+
+// Captura o clienteId da URL (ex: /cliente1)
+function getClienteIdFromURL() {
+    const path = window.location.pathname;
+    return path.split('/')[1] || 'default';
+}
+const clienteId = getClienteIdFromURL();
 
 const sections = {
     payment: document.getElementById('payment-section'),
@@ -146,7 +153,6 @@ document.addEventListener('DOMContentLoaded', function() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById('date').min = tomorrow.toISOString().split('T')[0];
 
-    clienteId = getClienteIdFromURL();
     if (clienteId && clienteId !== 'default') {
         document.querySelector('header h1').textContent += ` - Cliente ${clienteId}`;
     }
@@ -158,58 +164,49 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('new-schedule').addEventListener('click', resetFlow);
 });
 
-const clienteId = getClienteIdFromURL();
-
-fetch(`${BACKEND_URL}/create-pix/${clienteId}`, { ... });
-fetch(`${BACKEND_URL}/agendar/${clienteId}`, { ... });
-
-
+// ---------------- PIX ----------------
 async function generatePix() {
     const email = document.getElementById('email').value;
-    const amount = document.getElementById('amount').value.replace(',', '.');
-    if (!email) { showError('payment-error', 'Por favor, informe seu e-mail'); return; }
+    const amount = parseFloat(document.getElementById('amount').value.replace(',', '.'));
+    if (!email) { showError('payment-error', 'Informe seu e-mail'); return; }
 
     try {
         document.getElementById('generate-pix').textContent = 'Gerando...';
         document.getElementById('generate-pix').disabled = true;
         hideError('payment-error');
 
-        const response = await fetch(`${BACKEND_URL}/create-pix/${clienteId}`, {
+        const res = await fetch(`${BACKEND_URL}/create-pix/${clienteId}`, {
             method:'POST',
             headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ amount: parseFloat(amount), description: 'Agendamento de serviço', email })
+            body: JSON.stringify({ amount, email, description: 'Agendamento de serviço' })
         });
-        const data = await response.json();
-
-        if(response.ok){
+        const data = await res.json();
+        if(res.ok){
             paymentId = data.payment_id;
             document.getElementById('qr-code-image').src = `data:image/png;base64,${data.qr_code_base64}`;
             document.getElementById('pix-container').classList.remove('hidden');
             setupExpirationTimer(data.expires_at);
             startPaymentChecking();
-        } else showError('payment-error', 'Erro ao gerar PIX: ' + (data.error || 'Erro desconhecido'));
-    } catch (err) {
-        console.error(err);
-        showError('payment-error', 'Erro ao conectar com o servidor');
-    } finally {
+        } else showError('payment-error','Erro: '+(data.error||'Desconhecido'));
+    } catch(err){ console.error(err); showError('payment-error','Erro ao conectar ao servidor'); }
+    finally{
         document.getElementById('generate-pix').textContent = 'Gerar QR Code PIX';
         document.getElementById('generate-pix').disabled = false;
     }
 }
 
-function setupExpirationTimer(expiresAt) {
+function setupExpirationTimer(expiresAt){
     const expirationTime = new Date(expiresAt).getTime();
-    if (expirationTimer) clearInterval(expirationTimer);
-
+    if(expirationTimer) clearInterval(expirationTimer);
     expirationTimer = setInterval(()=>{
-        const now = new Date().getTime();
+        const now = Date.now();
         const distance = expirationTime - now;
         const minutes = Math.floor((distance % (1000*60*60))/(1000*60));
         const seconds = Math.floor((distance % (1000*60))/1000);
         document.getElementById('expiration-time').textContent = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
         if(distance < 0){
             clearInterval(expirationTimer);
-            document.getElementById('expiration-time').textContent = 'EXPIRADO';
+            document.getElementById('expiration-time').textContent='EXPIRADO';
             showError('payment-error','O PIX expirou. Gere um novo código.');
             stopPaymentChecking();
         }
@@ -218,40 +215,32 @@ function setupExpirationTimer(expiresAt) {
 
 async function checkPayment(){
     if(!paymentId) return;
-    try {
+    try{
         document.getElementById('check-payment').textContent='Verificando...';
         hideError('payment-error');
 
-        const response = await fetch(`${BACKEND_URL}/check-payment/${paymentId}`);
-        const data = await response.json();
+        const res = await fetch(`${BACKEND_URL}/check-payment/${paymentId}`);
+        const data = await res.json();
 
         if(data.status==='approved'){
             stopPaymentChecking(); clearInterval(expirationTimer);
             showSection('scheduling'); updateProgress(2);
-        } else if(data.status==='pending'){
-            showError('payment-error','Pagamento ainda não confirmado. Aguarde.');
-        } else showError('payment-error','Pagamento não aprovado. Status: '+data.status);
-    } catch(err){
-        console.error(err); showError('payment-error','Erro ao verificar pagamento');
-    } finally{
-        document.getElementById('check-payment').textContent='Verificar Pagamento';
-    }
+        } else if(data.status==='pending') showError('payment-error','Pagamento ainda não confirmado.');
+        else showError('payment-error','Pagamento não aprovado: '+data.status);
+    } catch(err){ console.error(err); showError('payment-error','Erro ao verificar pagamento'); }
+    finally{ document.getElementById('check-payment').textContent='Verificar Pagamento'; }
 }
 
-function startPaymentChecking(){
-    stopPaymentChecking();
-    paymentCheckInterval=setInterval(checkPayment,5000);
-}
-function stopPaymentChecking(){
-    if(paymentCheckInterval){ clearInterval(paymentCheckInterval); paymentCheckInterval=null; }
-}
+function startPaymentChecking(){ stopPaymentChecking(); paymentCheckInterval=setInterval(checkPayment,5000); }
+function stopPaymentChecking(){ if(paymentCheckInterval){ clearInterval(paymentCheckInterval); paymentCheckInterval=null; } }
 
+// ---------------- Agendamento ----------------
 async function loadAvailableTimes(){
     const date=document.getElementById('date').value;
     if(!date) return;
     const timeSelect=document.getElementById('time');
     timeSelect.innerHTML='<option value="">Carregando...</option>';
-    await new Promise(r=>setTimeout(r,800));
+    await new Promise(r=>setTimeout(r,500));
     const availableTimes=['08:00','09:00','10:00','11:00','14:00','15:00','16:00','17:00'];
     timeSelect.innerHTML='<option value="">Selecione um horário</option>';
     availableTimes.forEach(time=>{ const option=document.createElement('option'); option.value=time; option.textContent=time; timeSelect.appendChild(option); });
@@ -264,45 +253,45 @@ async function scheduleAppointment(e){
     const date=document.getElementById('date').value;
     const time=document.getElementById('time').value;
     const email=document.getElementById('email').value;
-    if(!name || !phone || !date || !time){ showError('scheduling-error','Preencha todos os campos'); return; }
+    if(!name||!phone||!date||!time){ showError('scheduling-error','Preencha todos os campos'); return; }
 
     try{
-        document.querySelector('#scheduling-form button').textContent='Agendando...';
-        document.querySelector('#scheduling-form button').disabled=true;
+        const btn=document.querySelector('#scheduling-form button');
+        btn.textContent='Agendando...'; btn.disabled=true;
         hideError('scheduling-error');
 
-        const response=await fetch(`${BACKEND_URL}/agendar/${clienteId}`,{
+        const res=await fetch(`${BACKEND_URL}/agendar/${clienteId}`,{
             method:'POST',
             headers:{ 'Content-Type':'application/json' },
             body: JSON.stringify({ Nome:name, Email:email, Telefone:phone, Data:date, Horario:time })
         });
-        const data=await response.json();
-        if(response.ok){
+        const data=await res.json();
+        if(res.ok){
             document.getElementById('confirm-name').textContent=name;
             document.getElementById('confirm-date').textContent=formatDate(date);
             document.getElementById('confirm-time').textContent=time;
             document.getElementById('confirm-phone').textContent=phone;
             document.getElementById('confirm-email').textContent=email;
             showSection('confirmation'); updateProgress(3);
-        } else showError('scheduling-error','Erro ao agendar: '+(data.msg||'Erro desconhecido'));
+        } else showError('scheduling-error','Erro ao agendar: '+(data.msg||'Desconhecido'));
     } catch(err){ console.error(err); showError('scheduling-error','Erro ao conectar com o servidor'); }
-    finally{ document.querySelector('#scheduling-form button').textContent='Confirmar Agendamento'; document.querySelector('#scheduling-form button').disabled=false; }
+    finally{ const btn=document.querySelector('#scheduling-form button'); btn.textContent='Confirmar Agendamento'; btn.disabled=false; }
 }
 
-function showSection(sectionName){ Object.values(sections).forEach(s=>s.classList.remove('active')); sections[sectionName].classList.add('active'); }
-function updateProgress(step){ Object.values(steps).forEach(s=>s.classList.remove('active')); for(let i=1;i<=step;i++){ document.getElementById(`step-${i}`).classList.add('active'); } }
-function formatDate(dateString){ const date=new Date(dateString); return date.toLocaleDateString('pt-BR'); }
-
+// ---------------- Utils ----------------
+function showSection(name){ Object.values(sections).forEach(s=>s.classList.remove('active')); sections[name].classList.add('active'); }
+function updateProgress(step){ for(let i=1;i<=3;i++) document.getElementById(`step-${i}`).classList.remove('active'); for(let i=1;i<=step;i++) document.getElementById(`step-${i}`).classList.add('active'); }
+function formatDate(dateStr){ return new Date(dateStr).toLocaleDateString('pt-BR'); }
 function resetFlow(){
     paymentId=null; stopPaymentChecking(); if(expirationTimer) clearInterval(expirationTimer);
-    document.getElementById('email').value=''; document.getElementById('name').value=''; document.getElementById('phone').value='';
-    document.getElementById('date').value=''; document.getElementById('time').innerHTML='<option value="">Selecione um horário</option>';
-    document.getElementById('pix-container').classList.add('hidden'); hideError('payment-error'); hideError('scheduling-error');
+    ['email','name','phone','date'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('time').innerHTML='<option value="">Selecione um horário</option>';
+    document.getElementById('pix-container').classList.add('hidden');
+    hideError('payment-error'); hideError('scheduling-error');
     showSection('payment'); updateProgress(1);
 }
-
-function showError(elementId,message){ const el=document.getElementById(elementId); el.textContent=message; el.classList.remove('hidden'); }
-function hideError(elementId){ document.getElementById(elementId).classList.add('hidden'); }
+function showError(id,msg){ const el=document.getElementById(id); el.textContent=msg; el.classList.remove('hidden'); }
+function hideError(id){ document.getElementById(id).classList.add('hidden'); }
 </script>
 </body>
 </html>
