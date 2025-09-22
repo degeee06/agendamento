@@ -459,6 +459,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 // ---------------- Agendar ----------------
+// ---------------- Agendar COM LINK AUTOMÁTICO ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
@@ -499,6 +500,35 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       return res.status(500).json({ msg: "Erro ao criar agendamento" });
     }
 
+    // ✅✅✅ GERAR LINK DE CONFIRMAÇÃO AUTOMATICAMENTE ✅✅✅
+    try {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
+
+      const { error: linkError } = await supabase
+        .from("confirmacao_links")
+        .insert([{
+          agendamento_id: novoAgendamento.id, // ID do NOVO agendamento
+          token,
+          expira_em: expira_em.toISOString(),
+          utilizado: false
+        }]);
+
+      if (linkError) {
+        console.error("Erro ao criar link de confirmação:", linkError);
+        // Não falha o agendamento, só registra o erro
+      } else {
+        console.log("✅ Link de confirmação gerado para agendamento:", novoAgendamento.id);
+      }
+
+      // Adicionar o link à resposta
+      novoAgendamento.link_confirmacao = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/confirmar-presenca/${token}`;
+      novoAgendamento.link_expira_em = expira_em;
+
+    } catch (linkError) {
+      console.error("Erro no processo de gerar link:", linkError);
+    }
+
     // Atualiza Google Sheet se configurado
     try {
       if (creds) {
@@ -509,10 +539,15 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
-      // Não falha a requisição por erro no sheet
     }
 
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+    res.json({ 
+      msg: "Agendamento realizado com sucesso!", 
+      agendamento: novoAgendamento,
+      // ✅ Link incluído na resposta
+      link_confirmacao: novoAgendamento.link_confirmacao,
+      link_expira_em: novoAgendamento.link_expira_em
+    });
 
   } catch (err) {
     console.error("Erro no /agendar:", err);
@@ -1054,3 +1089,4 @@ app.listen(PORT, () => {
 
 // Export para testes
 export default app;
+
