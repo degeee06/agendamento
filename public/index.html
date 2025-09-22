@@ -157,26 +157,26 @@
             .dias-tabs-container::-webkit-scrollbar-thumb {
                 background: rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
-            }
-            
-            .dashboard-card {
-                transition: all 0.3s ease;
-            }
 
-            .dashboard-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
             }
+.dashboard-card {
+    transition: all 0.3s ease;
+}
 
-            .stat-number {
-                font-size: 1.875rem;
-                font-weight: 700;
-            }
+.dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
 
-            .stat-label {
-                font-size: 0.875rem;
-                color: #D1D5DB;
-            }
+.stat-number {
+    font-size: 1.875rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #D1D5DB;
+
         }
     </style>
 </head>
@@ -235,43 +235,43 @@
             </div>
         </div>
 
-        <!-- Dashboard de Estatísticas -->
-        <div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
-                    <div class="text-sm text-gray-300">Hoje</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
-                    <div class="text-sm text-gray-300">Esta Semana</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
-                    <div class="text-sm text-gray-300">Total</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
-                    <div class="text-sm text-gray-300">Taxa de Confirmação</div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Gráfico de Status -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
-                    <div id="chartStatus" class="h-48"></div>
-                </div>
-
-                <!-- Top Clientes -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">👥 Top Clientes</h3>
-                    <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
-                </div>
-            </div>
+<!-- Dashboard de Estatísticas -->
+<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+            <div class="text-sm text-gray-300">Hoje</div>
         </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+            <div class="text-sm text-gray-300">Esta Semana</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+            <div class="text-sm text-gray-300">Total</div>
+        </div>
+        <div class="bg-white/10 rounded-xl p-4 text-center">
+            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Gráfico de Status -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+            <div id="chartStatus" class="h-48"></div>
+        </div>
+
+        <!-- Top Clientes -->
+        <div class="bg-white/10 rounded-xl p-4">
+            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+    </div>
+</div>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -456,14 +456,6 @@
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
-        // ---------------- FUNÇÕES AUXILIARES ----------------
-        function getAuthHeaders() {
-            return {
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            };
-        }
-
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
             // Configurar máscara de telefone
@@ -489,11 +481,7 @@
                 loginSection.style.display = 'none';
                 form.style.display = 'block';
                 logoutBtn.style.display = 'flex';
-                document.getElementById('filtersSection').style.display = 'block';
-                document.getElementById('diasTabs').style.display = 'flex';
-                document.getElementById('dashboardSection').style.display = 'block';
                 listarAgendamentos();
-                verificarLinkConfirmacao();
             }
         }
 
@@ -707,6 +695,7 @@
                     return;
                 }
 
+
                 reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
                 modal.classList.add("hidden");
             });
@@ -724,7 +713,7 @@
             
             try{
                 const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: getAuthHeaders()
+                    headers: { "Authorization": `Bearer ${userToken}` }
                 });
                 
                 if (res.status === 401) {
@@ -737,8 +726,10 @@
                 const { agendamentos } = await res.json();
                 agendamentosCache = agendamentos;
                 meusAgendamentos.style.display = 'block';
-                renderAgendamentos();
-                carregarDashboard();
+                document.getElementById('filtersSection').style.display = 'block';
+                document.getElementById('diasTabs').style.display = 'flex';
+                initTabsDias();
+                renderAgendamentos(); 
             } catch(e){
                 console.error("Erro ao listar agendamentos:", e);
                 showToast("Erro ao listar agendamentos","error");
@@ -777,17 +768,18 @@
                 loginSection.style.display = 'none';
                 form.style.display = 'block';
                 logoutBtn.style.display = 'flex';
-                document.getElementById('filtersSection').style.display = 'block';
-                document.getElementById('diasTabs').style.display = 'flex';
-                document.getElementById('dashboardSection').style.display = 'block';
 
                 listarAgendamentos().then(() => {
-                    let hoje = new Date().getDay();
-                    if (hoje === 0) hoje = 1;
-                    document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
-                    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-                });
-                
+    let hoje = new Date().getDay();
+    if (hoje === 0) hoje = 1;
+    document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
+    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
+
+    // Adiciona pequeno delay para garantir que os agendamentos foram carregados
+    setTimeout(() => {
+        carregarDashboard();
+    }, 500);
+});
                 showToast("Login realizado com sucesso!", "success");
 
                 loginText.classList.remove('hidden');
@@ -817,7 +809,6 @@
                 meusAgendamentos.style.display = 'none';
                 document.getElementById('filtersSection').style.display = 'none';
                 document.getElementById('diasTabs').style.display = 'none';
-                document.getElementById('dashboardSection').style.display = 'none';
 
                 showToast("Logout realizado com sucesso!", "success");
             } catch (e) {
@@ -827,297 +818,244 @@
         });
 
         // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
-function formatTimeRemaining(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
+        function formatTimeRemaining(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
 
-function startPaymentTimer(expiresAt) {
-    // Limpar qualquer intervalo existente
-    if (paymentCheckInterval) {
-        clearInterval(paymentCheckInterval);
-    }
-    
-    const countdownElement = document.getElementById('countdownTimer');
-    
-    // Atualizar o contador a cada segundo
-    paymentCheckInterval = setInterval(async () => {
-        const now = new Date();
-        const expires = new Date(expiresAt);
-        const timeRemaining = Math.floor((expires - now) / 1000);
-        
-        if (timeRemaining <= 0) {
-            clearInterval(paymentCheckInterval);
-            countdownElement.innerHTML = 'Tempo esgotado!';
-            countdownElement.classList.add('countdown-warning');
+        function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
+            if (paymentCheckInterval) {
+                clearInterval(paymentCheckInterval);
+            }
             
-            // Limpar a área de pagamento
-            const pixDiv = document.getElementById("pixArea");
-            if (pixDiv) {
-                pixDiv.innerHTML = `
-                    <div class="text-center p-4 bg-red-900/20 rounded-lg">
-                        <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
-                        <p class="text-red-300">Tempo para pagamento esgotado.</p>
-                        <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                            Tentar novamente
+            const countdownElement = document.getElementById('countdownTimer');
+            
+            // Atualizar o contador a cada segundo
+            paymentCheckInterval = setInterval(async () => {
+                const now = new Date();
+                const expires = new Date(expiresAt);
+                const timeRemaining = Math.floor((expires - now) / 1000);
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(paymentCheckInterval);
+                    countdownElement.innerHTML = 'Tempo esgotado!';
+                    countdownElement.classList.add('countdown-warning');
+                    
+                    // Limpar a área de pagamento
+                    const pixDiv = document.getElementById("pixArea");
+                    if (pixDiv) {
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                    Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                        
+                        feather.replace();
+                        
+                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                            form.dispatchEvent(new Event('submit'));
+                        });
+                    }
+                    
+                    return;
+                }
+                
+                // Atualizar o contador
+                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+                
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
+                if (timeRemaining < 60) {
+                    countdownElement.classList.add('countdown-warning');
+                } else {
+                    countdownElement.classList.remove('countdown-warning');
+                }
+            }, 1000);
+        }
+
+        async function checkPaymentStatus(paymentId) {
+            try {
+                const statusResponse = await fetch(`/check-payment/${paymentId}`);
+                if (!statusResponse.ok) {
+                    throw new Error('Erro ao verificar pagamento');
+                }
+                
+                const statusData = await statusResponse.json();
+                
+                if (statusData.status === 'approved') {
+                    // Pagamento aprovado, parar de verificar
+                    clearInterval(paymentCheckInterval);
+                    
+                    // Enviar agendamento
+                    const formData = new FormData(form);
+                    const dataToSend = {};
+                    formData.forEach((v,k) => dataToSend[k] = v);
+                    
+                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            "Authorization": `Bearer ${userToken}`
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
+                    
+                    if (agendamentoResponse.ok) {
+                        showToast("Agendamento realizado com sucesso!", "success");
+                        form.reset();
+                        
+                        const pixDiv = document.getElementById("pixArea");
+                        if (pixDiv) {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                </div>
+                            `;
+                            feather.replace();
+                        }
+                        
+                        listarAgendamentos();
+                    } else {
+                        const errorData = await agendamentoResponse.json();
+                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                    }
+                    
+                    return true;
+                } else if (statusData.status === 'expired') {
+                    // Pagamento expirado
+                    clearInterval(paymentCheckInterval);
+                    showToast("Tempo para pagamento expirado.", "error");
+                    return true;
+                }
+                
+                return false;
+            } catch (err) {
+                console.error("Erro ao verificar pagamento:", err);
+                return false;
+            }
+        }
+
+        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
+
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
+
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
+            
+            try {
+    // Primeiro, criar o pagamento PIX - MERCADO PAGO
+    const valorEmReais = 0.01; // 1 centavo
+
+    const pagamentoResponse = await fetch('/create-pix', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+            email: dataToSend.Email
+        })
+    });
+
+    if (!pagamentoResponse.ok) {
+        const errorData = await pagamentoResponse.json();
+        throw new Error(errorData.error || 'Erro ao criar pagamento');
+    }
+
+    const pagamentoData = await pagamentoResponse.json();
+    currentPaymentId = pagamentoData.payment_id;
+    paymentExpiresAt = pagamentoData.expires_at;
+    
+    // Exibir QR Code e código PIX
+    let pixDiv = document.getElementById("pixArea");
+    if (!pixDiv) {
+        pixDiv = document.createElement("div");
+        pixDiv.id = "pixArea";
+        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+        form.appendChild(pixDiv);
+    }
+
+    pixDiv.innerHTML = `
+        <h3 class="text-center mb-3">Pagamento via PIX</h3>
+        <div class="text-center mb-4">
+            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+        </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div class="text-center">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                            Já efetuei o pagamento
                         </button>
                     </div>
                 `;
                 
                 feather.replace();
                 
-                document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-                    form.dispatchEvent(new Event('submit'));
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
                 });
-            }
-            
-            return;
-        }
-        
-        // Atualizar o contador
-        countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
-        
-        // Adicionar efeito de aviso quando faltar menos de 1 minuto
-        if (timeRemaining < 60) {
-            countdownElement.classList.add('countdown-warning');
-        } else {
-            countdownElement.classList.remove('countdown-warning');
-        }
-    }, 1000);
-}
-
-async function checkPaymentStatus(paymentId) {
-    try {
-        const statusResponse = await fetch(`/check-payment/${paymentId}`);
-        if (!statusResponse.ok) {
-            throw new Error('Erro ao verificar pagamento');
-        }
-        
-        const statusData = await statusResponse.json();
-        
-        if (statusData.status === 'approved') {
-            // Pagamento aprovado, parar de verificar
-            clearInterval(paymentCheckInterval);
-            
-            // Enviar agendamento
-            const formData = new FormData(form);
-            const dataToSend = {};
-            formData.forEach((v,k) => dataToSend[k] = v);
-            
-            const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(dataToSend)
-            });
-            
-            if (agendamentoResponse.ok) {
-                const agendamentoData = await agendamentoResponse.json();
-                showToast("Agendamento realizado com sucesso!", "success");
                 
-                // ✅ MOSTRAR O LINK DE CONFIRMAÇÃO SE EXISTIR
-                if (agendamentoData.link_confirmacao) {
-                    exibirModalConfirmacao(
-                        agendamentoData.link_confirmacao, 
-                        agendamentoData.link_expira_em,
-                        agendamentoData.agendamento
-                    );
-                }
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
                 
-                form.reset();
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    }
+                });
                 
-                const pixDiv = document.getElementById("pixArea");
-                if (pixDiv) {
-                    pixDiv.innerHTML = `
-                        <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                            <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                            <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                        </div>
-                    `;
-                    feather.replace();
-                }
+                pagamentoPendente = true;
                 
-                listarAgendamentos();
-            } else {
-                const errorData = await agendamentoResponse.json();
-                showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-            }
-            
-            return true;
-        } else if (statusData.status === 'expired') {
-            // Pagamento expirado
-            clearInterval(paymentCheckInterval);
-            showToast("Tempo para pagamento expirado.", "error");
-            return true;
-        }
-        
-        return false;
-    } catch (err) {
-        console.error("Erro ao verificar pagamento:", err);
-        return false;
-    }
-}
-
-// ---------------- FUNÇÃO PARA EXIBIR MODAL DE CONFIRMAÇÃO ----------------
-function exibirModalConfirmacao(link, expiraEm, agendamento) {
-    const modal = document.createElement("div");
-    modal.innerHTML = `
-        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div class="bg-gray-900 rounded-xl p-6 max-w-md w-full">
-                <h2 class="text-xl font-bold mb-4">✅ Agendamento Confirmado!</h2>
-                
-                ${agendamento ? `
-                    <div class="mb-4 p-3 bg-gray-800 rounded">
-                        <p class="font-medium">${agendamento.nome}</p>
-                        <p class="text-sm">${agendamento.data} às ${agendamento.horario}</p>
-                    </div>
-                ` : ''}
-                
-                <p class="mb-4">Envie este link para seu cliente confirmar o agendamento:</p>
-                <div class="bg-gray-800 p-3 rounded mb-4">
-                    <input type="text" value="${link}" readonly 
-                           class="w-full bg-transparent text-sm" id="linkInput">
-                </div>
-                <button onclick="copiarLink()" class="w-full bg-indigo-600 text-white py-2 rounded mb-2">
-                    📋 Copiar Link
-                </button>
-                <button onclick="fecharModal()" class="w-full bg-gray-600 text-white py-2 rounded">
-                    Fechar
-                </button>
-                <p class="text-xs text-gray-400 mt-3">Expira: ${new Date(expiraEm).toLocaleString('pt-BR')}</p>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    window.copiarLink = function() {
-        const input = document.getElementById("linkInput");
-        input.select();
-        document.execCommand("copy");
-        showToast("Link copiado para a área de transferência!", "success");
-    };
-    
-    window.fecharModal = function() {
-        document.body.removeChild(modal);
-    };
-}
-
-// ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const dataToSend = {};
-    formData.forEach((v,k) => dataToSend[k] = v);
-
-    // Verifica campos obrigatórios
-    if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast("Preencha todos os campos", "warning");
-        return;
-    }
-
-    // Mostrar loading
-    agendarText.classList.add('hidden');
-    agendarSpinner.classList.remove('hidden');
-    form.querySelector('button[type="submit"]').disabled = true;
-    
-    try {
-        // Primeiro, criar o pagamento PIX - MERCADO PAGO
-        const valorEmReais = 0.01; // 1 centavo
-
-        const pagamentoResponse = await fetch('/create-pix', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                amount: valorEmReais, // Valor EM REAIS para Mercado Pago
-                description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                email: dataToSend.Email
-            })
-        });
-
-        if (!pagamentoResponse.ok) {
-            const errorData = await pagamentoResponse.json();
-            throw new Error(errorData.error || 'Erro ao criar pagamento');
-        }
-
-        const pagamentoData = await pagamentoResponse.json();
-        currentPaymentId = pagamentoData.payment_id;
-        paymentExpiresAt = pagamentoData.expires_at;
-        
-        // Exibir QR Code e código PIX
-        let pixDiv = document.getElementById("pixArea");
-        if (!pixDiv) {
-            pixDiv = document.createElement("div");
-            pixDiv.id = "pixArea";
-            pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-            form.appendChild(pixDiv);
-        }
-
-        pixDiv.innerHTML = `
-            <h3 class="text-center mb-3">Pagamento via PIX</h3>
-            <div class="text-center mb-4">
-                <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-                <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-            </div>
-            <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
-            <div class="mb-4">
-                <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                <div class="flex items-center gap-2">
-                    <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
-                    <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                        <i data-feather="copy" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
-            <div class="text-center">
-                <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
-                    Já efetuei o pagamento
-                </button>
-            </div>
-        `;
-        
-        feather.replace();
-        
-        // Iniciar contador de tempo
-        startPaymentTimer(paymentExpiresAt);
-        
-        // Configurar botão de copiar
-        document.getElementById('copyPixBtn').addEventListener('click', () => {
-            const textarea = document.querySelector('#pixArea textarea');
-            textarea.select();
-            document.execCommand('copy');
-            showToast('Código PIX copiado!', 'success');
-        });
-        
-        // Configurar verificação automática do pagamento a cada 10 segundos
-        const paymentStatusInterval = setInterval(async () => {
-            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-            if (paymentConfirmed) {
-                clearInterval(paymentStatusInterval);
-            }
-        }, 10000);
-        
-        // Configurar botão de confirmação de pagamento
-        document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-            if (!paymentConfirmed) {
-                showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar pagamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
             }
         });
-        
-        pagamentoPendente = true;
-        
-    } catch(err) { 
-        console.error(err); 
-        showToast("Erro ao processar pagamento","error"); 
-    } finally {
-        // Esconder loading
-        agendarText.classList.remove('hidden');
-        agendarSpinner.classList.add('hidden');
-        form.querySelector('button[type="submit"]').disabled = false;
-    }
-});
 
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
@@ -1250,7 +1188,6 @@ form.addEventListener('submit', async (e) => {
             showToast("Exportado para PDF com sucesso", "success");
         });
 
-        // ---------------- CONFIRMAR AGENDAMENTO ----------------
         async function confirmarAgendamento(cliente, id) {
             if (!userToken) {
                 showToast("Faça login para confirmar um agendamento.", "warning");
@@ -1260,7 +1197,11 @@ form.addEventListener('submit', async (e) => {
             try {
                 const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
                     method: "POST",
-                    headers: getAuthHeaders()
+                    headers: {
+                        "Authorization": `Bearer ${userToken}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ status: "confirmado", confirmado: true })
                 });
 
                 const data = await res.json();
@@ -1271,6 +1212,7 @@ form.addEventListener('submit', async (e) => {
                 } else {
                     showToast("Erro ao confirmar: " + (data.msg || data.message), "error");
                 }
+
             } catch (e) {
                 console.error(e);
                 showToast("Erro de conexão ao confirmar.", "error");
@@ -1287,7 +1229,10 @@ form.addEventListener('submit', async (e) => {
             try {
                 const res = await fetch(`/agendamentos/${cliente}/cancelar/${id}`, {
                     method: "POST",
-                    headers: getAuthHeaders()
+                    headers: {
+                        "Authorization": `Bearer ${userToken}`,
+                        "Content-Type": "application/json"
+                    }
                 });
 
                 const data = await res.json();
@@ -1303,150 +1248,177 @@ form.addEventListener('submit', async (e) => {
             }
         }
 
-        // ---------------- REAGENDAR AGENDAMENTO ----------------
         async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-            if (!userToken) {
-                showToast("Faça login para reagendar um agendamento.", "warning");
-                return;
-            }
+    if (!userToken) {
+        showToast("Faça login para reagendar um agendamento.", "warning");
+        return;
+    }
 
-            try {
-                const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-                    method: "POST",
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ 
-                        novaData, 
-                        novoHorario
-                    })
-                });
+    try {
+        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ 
+                novaData, 
+                novoHorario, 
+                status: "pendente", // SEMPRE volta para pendente
+                confirmado: false   // SEMPRE volta para não confirmado
+            })
+        });
 
-                const data = await res.json();
+        const data = await res.json();
 
-                if (res.ok) {
-                    showToast("Agendamento reagendado com sucesso!", "success");
-                    listarAgendamentos();
-                } else {
-                    showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
-                }
-
-            } catch (e) {
-                console.error(e);
-                showToast("Erro de conexão ao reagendar.", "error");
+        if (res.ok) {
+            showToast("Agendamento reagendado com sucesso!", "success");
+            listarAgendamentos();
+        } else {
+            // Detecta conflito de horário (erro do índice único)
+            if (data.code === "23505") {
+                showToast("Já existe um agendamento nesse horário para este cliente.", "error");
+            } else {
+                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
             }
         }
 
-        // ---------------- DASHBOARD ----------------
-        async function carregarDashboard() {
-            try {
-                // Estatísticas básicas
-                const hoje = new Date().toISOString().split('T')[0];
-                const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
-                
-                // Calcula a semana (segunda a domingo)
-                const hojeObj = new Date();
-                const diaSemana = hojeObj.getDay();
-                const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-                const semanaInicio = new Date(hojeObj);
-                semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
-                const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
-                
-                const semanaCount = agendamentosCache.filter(a => {
-                    return a.data >= semanaInicioStr && a.data <= hoje;
-                }).length;
-                
-                const totalCount = agendamentosCache.length;
-                const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
-                const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
-                
-                // Atualiza os elementos
-                document.getElementById('statHoje').textContent = hojeCount;
-                document.getElementById('statSemana').textContent = semanaCount;
-                document.getElementById('statTotal').textContent = totalCount;
-                document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
-                
-                // Gráfico de status
-                const statusCount = {
-                    pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
-                    confirmado: confirmadosCount,
-                    cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
-                };
-                
-                const chartStatus = document.getElementById('chartStatus');
-                if (chartStatus) {
-                    chartStatus.innerHTML = `
-                        <div class="h-full flex flex-col justify-center">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm">Pendente: ${statusCount.pendente}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
+    } catch (e) {
+        console.error(e);
+        showToast("Erro de conexão ao reagendar.", "error");
+    }
+}
+       // ---------------- DASHBOARD ----------------
+// ---------------- DASHBOARD ----------------
+async function carregarDashboard() {
+    try {
+        console.log('Carregando dashboard...');
+        console.log('Total de agendamentos:', agendamentosCache.length);
+        
+        // Verifica se os elementos do dashboard existem
+        const dashboardSection = document.getElementById('dashboardSection');
+        if (!dashboardSection) {
+            console.error('Seção do dashboard não encontrada!');
+            return;
+        }
+        
+        // Mostra a seção do dashboard
+        dashboardSection.style.display = 'block';
+        
+        const hoje = new Date().toISOString().split('T')[0];
+        
+        // Corrige cálculo da semana (segunda-feira como início)
+        const hojeObj = new Date();
+        const diaSemana = hojeObj.getDay(); // 0 = domingo, 1 = segunda, etc.
+        
+        // Calcula a data de início da semana (segunda-feira)
+        const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+        const semanaInicio = new Date(hojeObj);
+        semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
+        const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
+        
+        console.log('Hoje:', hoje, 'Início da semana:', semanaInicioStr);
+        
+        // Estatísticas básicas
+        const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
+        const semanaCount = agendamentosCache.filter(a => {
+            const agendamentoDate = new Date(a.data);
+            return agendamentoDate >= new Date(semanaInicioStr) && a.data <= hoje;
+        }).length;
+        
+        const totalCount = agendamentosCache.length;
+        const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
+        const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
+        
+        // Atualiza os elementos se existirem
+        if (document.getElementById('statHoje')) {
+            document.getElementById('statHoje').textContent = hojeCount;
+        }
+        if (document.getElementById('statSemana')) {
+            document.getElementById('statSemana').textContent = semanaCount;
+        }
+        if (document.getElementById('statTotal')) {
+            document.getElementById('statTotal').textContent = totalCount;
+        }
+        if (document.getElementById('statTaxa')) {
+            document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
+        }
+        
+        console.log('Estatísticas:', {hojeCount, semanaCount, totalCount, taxaConfirmacao});
+        
+        // Gráfico de status (implementação simples)
+        const statusCount = {
+            pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
+            confirmado: confirmadosCount,
+            cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
+        };
+        
+        const chartStatus = document.getElementById('chartStatus');
+        if (chartStatus) {
+            chartStatus.innerHTML = `
+                <div class="h-full flex flex-col justify-center">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm">Pendente: ${statusCount.pendente}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
                         </div>
+                    </div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Top clientes
+        const clientesCount = {};
+        agendamentosCache.forEach(a => {
+            if (!clientesCount[a.nome]) {
+                clientesCount[a.nome] = 0;
+            }
+            clientesCount[a.nome]++;
+        });
+        
+        const topClientes = Object.entries(clientesCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+        
+        const topClientesDiv = document.getElementById('topClientes');
+        if (topClientesDiv) {
+            topClientesDiv.innerHTML = '';
+            
+            if (topClientes.length === 0) {
+                topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
+            } else {
+                topClientes.forEach(([nome, count]) => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
+                    div.innerHTML = `
+                        <span class="text-sm truncate">${nome}</span>
+                        <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
                     `;
-                }
-                
-                // Top clientes
-                const clientesCount = {};
-                agendamentosCache.forEach(a => {
-                    if (!clientesCount[a.nome]) {
-                        clientesCount[a.nome] = 0;
-                    }
-                    clientesCount[a.nome]++;
+                    topClientesDiv.appendChild(div);
                 });
-                
-                const topClientes = Object.entries(clientesCount)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5);
-                
-                const topClientesDiv = document.getElementById('topClientes');
-                if (topClientesDiv) {
-                    topClientesDiv.innerHTML = '';
-                    
-                    if (topClientes.length === 0) {
-                        topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
-                    } else {
-                        topClientes.forEach(([nome, count]) => {
-                            const div = document.createElement('div');
-                            div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
-                            div.innerHTML = `
-                                <span class="text-sm truncate">${nome}</span>
-                                <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
-                            `;
-                            topClientesDiv.appendChild(div);
-                        });
-                    }
-                }
-                
-            } catch (e) {
-                console.error('Erro ao carregar dashboard:', e);
             }
         }
+        
+        console.log('Dashboard carregado com sucesso!');
+        
+    } catch (e) {
+        console.error('Erro ao carregar dashboard:', e);
+    }
+}
 
-        // ---------------- VERIFICAÇÃO DE LINK DE CONFIRMAÇÃO ----------------
-        async function verificarLinkConfirmacao() {
-            // Implementação simplificada para verificação de link
-            // Esta função seria usada em uma página pública de confirmação
-            console.log("Verificação de link de confirmação - funcionalidade disponível");
-        }
-
-        // ---------------- INICIALIZAR TABS ----------------
-        function initTabs() {
-            initTabsDias();
-        }
-
-        // ---------------- INICIALIZAR ----------------
+        // ---------------- INIT ----------------
         AOS.init({
             duration: 800,
             easing: 'ease-out-quart',
@@ -1454,7 +1426,6 @@ form.addEventListener('submit', async (e) => {
         });
         feather.replace();
         init();
-        initTabs();
     </script>
 </body>
 </html>
