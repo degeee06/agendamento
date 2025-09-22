@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Agendamento</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        header h1 {
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        header p {
+            opacity: 0.8;
+        }
+        
+        .progress-bar {
+            display: flex;
+            background: #f1f1f1;
+            padding: 10px;
+        }
+        
+        .progress-step {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            position: relative;
+        }
+        
+        .progress-step.active {
+            color: #3498db;
+        }
+        
+        .progress-step::after {
+            content: "→";
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .progress-step:last-child::after {
+            content: none;
+        }
+        
+        .section {
+            padding: 30px;
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        button.secondary {
+            background: #95a5a6;
+        }
+        
+        button.secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        #pix-container {
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+        }
+        
+        #qr-code-image {
+            max-width: 250px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+        }
+        
+        .expiration {
+            color: #e74c3c;
+            font-weight: bold;
+            margin: 15px 0;
+            font-size: 18px;
+        }
+        
+        .success-msg {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .confirmation-details {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .confirmation-details p {
+            margin-bottom: 10px;
+            font-size: 17px;
+        }
+        
+        .confirmation-details strong {
+            color: #2c3e50;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            background: #f1f1f1;
+            color: #7f8c8d;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading::after {
+            content: "";
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                border-radius: 10px;
+            }
+            
+            .section {
+                padding: 20px;
+            }
+            
+            .progress-step {
+                font-size: 14px;
+            }
+            
+            #qr-code-image {
+                max-width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Agendamento de Serviços</h1>
+            <p>Realize seu pagamento e agendamento de forma rápida e segura</p>
+        </header>
+        
+        <div class="progress-bar">
+            <div class="progress-step active" id="step-1">1. Pagamento</div>
+            <div class="progress-step" id="step-2">2. Agendamento</div>
+            <div class="progress-step" id="step-3">3. Confirmação</div>
+        </div>
+        
+        <main>
+            <!-- Seção de Pagamento -->
+            <section id="payment-section" class="section active">
+                <h2>Pagamento via PIX</h2>
+                <div class="form-group">
+                    <label for="email">E-mail:</label>
+                    <input type="email" id="email" placeholder="Seu e-mail para receber o comprovante" required>
+                </div>
+                <div class="form-group">
+                    <label for="amount">Valor do Serviço:</label>
+                    <input type="text" id="amount" value="100,00" readonly>
+                </div>
+                <button id="generate-pix">Gerar QR Code PIX</button>
+                
+                <div id="pix-container" class="hidden">
+                    <div id="qr-code-container">
+                        <img id="qr-code-image" src="" alt="QR Code PIX">
+                    </div>
+                    <p class="expiration">Este PIX expira em <span id="expiration-time">15:00</span></p>
+                    <p>Escaneie o QR Code com seu aplicativo bancário</p>
+                    <button id="check-payment">Verificar Pagamento</button>
+                </div>
+                
+                <div id="payment-error" class="error hidden"></div>
+            </section>
+            
+            <!-- Seção de Agendamento -->
+            <section id="scheduling-section" class="section">
+                <h2>Agendamento</h2>
+                <p class="success-msg">Pagamento confirmado! Agora agende seu horário.</p>
+                
+                <form id="scheduling-form">
+                    <div class="form-group">
+                        <label for="name">Nome Completo:</label>
+                        <input type="text" id="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Telefone:</label>
+                        <input type="tel" id="phone" placeholder="(11) 99999-9999" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="date">Data:</label>
+                        <input type="date" id="date" required min="">
+                    </div>
+                    <div class="form-group">
+                        <label for="time">Horário:</label>
+                        <select id="time" required>
+                            <option value="">Selecione um horário</option>
+                        </select>
+                    </div>
+                    <button type="submit">Confirmar Agendamento</button>
+                </form>
+                
+                <div id="scheduling-error" class="error hidden"></div>
+            </section>
+            
+            <!-- Seção de Confirmação -->
+            <section id="confirmation-section" class="section">
+                <h2>Agendamento Confirmado!</h2>
+                <div class="confirmation-details">
+                    <p><strong>Nome:</strong> <span id="confirm-name"></span></p>
+                    <p><strong>Data:</strong> <span id="confirm-date"></span></p>
+                    <p><strong>Horário:</strong> <span id="confirm-time"></span></p>
+                    <p><strong>Telefone:</strong> <span id="confirm-phone"></span></p>
+                    <p><strong>Status:</strong> <span id="confirm-status">Pendente de confirmação</span></p>
+                </div>
+                <p>Um e-mail de confirmação foi enviado para <span id="confirm-email"></span></p>
+                <button id="new-schedule" class="secondary">Fazer Novo Agendamento</button>
+            </section>
+        </main>
+        
+        <footer>
+            <p>Dúvidas? Entre em contato: contato@empresa.com | (11) 9999-9999</p>
+        </footer>
+    </div>
+
+    <script>
+        // Configurações
+        const BACKEND_URL = 'https://seu-backend.onrender.com'; // Substitua pela URL do seu backend no Render
+        let paymentId = null;
+        let paymentCheckInterval = null;
+        let expirationTimer = null;
+        let clienteId = null;
+
+        // Elementos da interface
+        const sections = {
+            payment: document.getElementById('payment-section'),
+            scheduling: document.getElementById('scheduling-section'),
+            confirmation: document.getElementById('confirmation-section')
+        };
+
+        const steps = {
+            step1: document.getElementById('step-1'),
+            step2: document.getElementById('step-2'),
+            step3: document.getElementById('step-3')
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configurar data mínima para agendamento (amanhã)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('date').min = tomorrow.toISOString().split('T')[0];
+            
+            // Obter ID do cliente da URL
+            clienteId = getClienteIdFromURL();
+            
+            // Event listeners
+            document.getElementById('generate-pix').addEventListener('click', generatePix);
+            document.getElementById('check-payment').addEventListener('click', checkPayment);
+            document.getElementById('scheduling-form').addEventListener('submit', scheduleAppointment);
+            document.getElementById('date').addEventListener('change', loadAvailableTimes);
+            document.getElementById('new-schedule').addEventListener('click', resetFlow);
+            
+            // Verificar se há um parâmetro de cliente na URL
+            if (clienteId && clienteId !== 'default') {
+                document.querySelector('header h1').textContent += ` - Cliente ${clienteId}`;
+            }
+        });
+
+        // Gerar PIX
+        async function generatePix() {
+            const email = document.getElementById('email').value;
+            const amount = document.getElementById('amount').value.replace(',', '.');
+            
+            if (!email) {
+                showError('payment-error', 'Por favor, informe seu e-mail');
+                return;
+            }
+            
+            try {
+                // Mostrar loading
+                document.getElementById('generate-pix').textContent = 'Gerando...';
+                document.getElementById('generate-pix').disabled = true;
+                hideError('payment-error');
+                
+                const response = await fetch(`${BACKEND_URL}/create-pix`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        amount: parseFloat(amount),
+                        description: 'Agendamento de serviço',
+                        email: email
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    paymentId = data.payment_id;
+                    
+                    // Exibir QR Code
+                    document.getElementById('qr-code-image').src = `data:image/png;base64,${data.qr_code_base64}`;
+                    document.getElementById('pix-container').classList.remove('hidden');
+                    
+                    // Configurar contagem regressiva
+                    setupExpirationTimer(data.expires_at);
+                    
+                    // Iniciar verificação automática do pagamento
+                    startPaymentChecking();
+                } else {
+                    showError('payment-error', 'Erro ao gerar PIX: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                showError('payment-error', 'Erro ao conectar com o servidor');
+            } finally {
+                document.getElementById('generate-pix').textContent = 'Gerar QR Code PIX';
+                document.getElementById('generate-pix').disabled = false;
+            }
+        }
+
+        // Configurar contagem regressiva para expiração do PIX
+        function setupExpirationTimer(expiresAt) {
+            const expirationTime = new Date(expiresAt).getTime();
+            
+            // Limpar timer anterior se existir
+            if (expirationTimer) clearInterval(expirationTimer);
+            
+            // Atualizar a cada segundo
+            expirationTimer = setInterval(() => {
+                const now = new Date().getTime();
+                const distance = expirationTime - now;
+                
+                // Calcular minutos e segundos
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                
+                // Exibir o resultado
+                document.getElementById('expiration-time').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Se o tempo expirou
+                if (distance < 0) {
+                    clearInterval(expirationTimer);
+                    document.getElementById('expiration-time').textContent = 'EXPIRADO';
+                    showError('payment-error', 'O PIX expirou. Por favor, gere um novo código.');
+                    stopPaymentChecking();
+                }
+            }, 1000);
+        }
+
+        // Verificar pagamento
+        async function checkPayment() {
+            if (!paymentId) return;
+            
+            try {
+                document.getElementById('check-payment').textContent = 'Verificando...';
+                hideError('payment-error');
+                
+                const response = await fetch(`${BACKEND_URL}/check-payment/${paymentId}`);
+                const data = await response.json();
+                
+                if (data.status === 'approved') {
+                    // Pagamento aprovado
+                    stopPaymentChecking();
+                    clearInterval(expirationTimer);
+                    showSection('scheduling');
+                    updateProgress(2);
+                    
+                    // Verificar se o usuário é VIP
+                    const email = document.getElementById('email').value;
+                    await checkVipStatus(email);
+                } else if (data.status === 'pending') {
+                    showError('payment-error', 'Pagamento ainda não confirmado. Aguarde e tente novamente.');
+                } else {
+                    showError('payment-error', 'Pagamento não aprovado. Status: ' + data.status);
+                }
+            } catch (error) {
+                console.error('Erro ao verificar pagamento:', error);
+                showError('payment-error', 'Erro ao verificar pagamento');
+            } finally {
+                document.getElementById('check-payment').textContent = 'Verificar Pagamento';
+            }
+        }
+
+        // Verificar status VIP
+        async function checkVipStatus(email) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/check-vip/${encodeURIComponent(email)}`);
+                const data = await response.json();
+                
+                if (data.vip) {
+                    document.getElementById('amount').value = '80,00';
+                    document.querySelector('header h1').innerHTML += ' <span style="color: gold;">(Cliente VIP)</span>';
+                }
+            } catch (error) {
+                console.error('Erro ao verificar status VIP:', error);
+            }
+        }
+
+        // Iniciar verificação automática do pagamento
+        function startPaymentChecking() {
+            // Parar verificação anterior se existir
+            stopPaymentChecking();
+            
+            // Verificar a cada 5 segundos
+            paymentCheckInterval = setInterval(checkPayment, 5000);
+        }
+
+        // Parar verificação automática
+        function stopPaymentChecking() {
+            if (paymentCheckInterval) {
+                clearInterval(paymentCheckInterval);
+                paymentCheckInterval = null;
+            }
+        }
+
+        // Carregar horários disponíveis
+        async function loadAvailableTimes() {
+            const date = document.getElementById('date').value;
+            if (!date) return;
+            
+            const timeSelect = document.getElementById('time');
+            timeSelect.innerHTML = '<option value="">Carregando...</option>';
+            
+            try {
+                // Buscar horários disponíveis do backend
+                // Esta é uma simulação - você precisará implementar a lógica real
+                // baseada na função horarioDisponivel do seu backend
+                
+                // Simular uma requisição
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+                // Horários fixos para exemplo - na implementação real, você buscaria
+                // os horários disponíveis da sua base de dados
+                const availableTimes = [
+                    '08:00', '09:00', '10:00', '11:00', 
+                    '14:00', '15:00', '16:00', '17:00'
+                ];
+                
+                timeSelect.innerHTML = '<option value="">Selecione um horário</option>';
+                availableTimes.forEach(time => {
+                    const option = document.createElement('option');
+                    option.value = time;
+                    option.textContent = time;
+                    timeSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar horários:', error);
+                timeSelect.innerHTML = '<option value="">Erro ao carregar horários</option>';
+            }
+        }
+
+        // Agendar o serviço
+        async function scheduleAppointment(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value;
+            const phone = document.getElementById('phone').value;
+            const date = document.getElementById('date').value;
+            const time = document.getElementById('time').value;
+            const email = document.getElementById('email').value;
+            
+            if (!name || !phone || !date || !time) {
+                showError('scheduling-error', 'Por favor, preencha todos os campos');
+                return;
+            }
+            
+            try {
+                document.querySelector('#scheduling-form button').textContent = 'Agendando...';
+                document.querySelector('#scheduling-form button').disabled = true;
+                hideError('scheduling-error');
+                
+                // Fazer a chamada para a rota /agendar do backend
+                const response = await fetch(`${BACKEND_URL}/agendar/${clienteId || 'default'}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getUserToken()}` // Se necessário
+                    },
+                    body: JSON.stringify({
+                        Nome: name,
+                        Email: email,
+                        Telefone: phone,
+                        Data: date,
+                        Horario: time
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Preencher dados de confirmação
+                    document.getElementById('confirm-name').textContent = name;
+                    document.getElementById('confirm-date').textContent = formatDate(date);
+                    document.getElementById('confirm-time').textContent = time;
+                    document.getElementById('confirm-phone').textContent = phone;
+                    document.getElementById('confirm-email').textContent = email;
+                    
+                    // Mostrar seção de confirmação
+                    showSection('confirmation');
+                    updateProgress(3);
+                } else {
+                    showError('scheduling-error', 'Erro ao agendar: ' + (data.msg || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro ao agendar:', error);
+                showError('scheduling-error', 'Erro ao conectar com o servidor');
+            } finally {
+                document.querySelector('#scheduling-form button').textContent = 'Confirmar Agendamento';
+                document.querySelector('#scheduling-form button').disabled = false;
+            }
+        }
+
+        // Funções auxiliares
+        function showSection(sectionName) {
+            // Esconder todas as seções
+            Object.values(sections).forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Mostrar a seção solicitada
+            sections[sectionName].classList.add('active');
+        }
+        
+        function updateProgress(step) {
+            // Remover classe active de todos os steps
+            Object.values(steps).forEach(step => {
+                step.classList.remove('active');
+            });
+            
+            // Ativar os steps até o step atual
+            for (let i = 1; i <= step; i++) {
+                document.getElementById(`step-${i}`).classList.add('active');
+            }
+        }
+
+        function getClienteIdFromURL() {
+            // Extrair ID do cliente da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('cliente') || 'default';
+        }
+
+        function getUserToken() {
+            // Implementar lógica para obter token do usuário, se necessário
+            return localStorage.getItem('userToken');
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('pt-BR');
+        }
+        
+        function resetFlow() {
+            // Reiniciar todo o fluxo
+            paymentId = null;
+            stopPaymentChecking();
+            if (expirationTimer) clearInterval(expirationTimer);
+            
+            // Limpar formulários
+            document.getElementById('email').value = '';
+            document.getElementById('name').value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('date').value = '';
+            document.getElementById('time').innerHTML = '<option value="">Selecione um horário</option>';
+            
+            // Esconder QR code e mensagens de erro
+            document.getElementById('pix-container').classList.add('hidden');
+            hideError('payment-error');
+            hideError('scheduling-error');
+            
+            // Voltar para a primeira etapa
+            showSection('payment');
+            updateProgress(1);
+        }
+        
+        function showError(elementId, message) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+        }
+        
+        function hideError(elementId) {
+            const errorElement = document.getElementById(elementId);
+            errorElement.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
