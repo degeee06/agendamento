@@ -1039,7 +1039,6 @@ app.post("/webhook-confirmacao", async (req, res) => {
   }
 });
 
-// Confirmar presença via link único (sem PIX, só clique)
 app.get("/:cliente/confirmar-presenca/:token", async (req, res) => {
   const { token } = req.params;
   const { cliente } = req.params;
@@ -1066,13 +1065,6 @@ app.get("/:cliente/confirmar-presenca/:token", async (req, res) => {
     .eq("token", token);
 
   res.redirect("/confirmado");
-});
-
-
-  } catch (err) {
-    console.error("Erro em /confirmar-presenca:", err);
-    res.status(500).send("Erro interno");
-  }
 });
 
 
@@ -1108,6 +1100,7 @@ app.listen(PORT, () => {
 
 // Export para testes
 export default app;
+
 
 
 
