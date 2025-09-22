@@ -655,3 +655,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
+
