@@ -204,12 +204,12 @@ async function limparAgendamentosExpirados() {
 // ---------------- Rotas ----------------
 
 // Página inicial
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "src/index.html")));
 app.get("/:cliente", async (req, res) => {
   const cliente = req.params.cliente;
   const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
   if (error || !data) return res.status(404).send("Cliente não encontrado");
-  res.sendFile(path.join(__dirname, "public/index.html"));
+  res.sendFile(path.join(__dirname, "src/index.html"));
 });
 
 // Agendar
@@ -405,3 +405,4 @@ setTimeout(limparAgendamentosExpirados, 2000);
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
+
