@@ -352,7 +352,7 @@
             }
         }
 
-        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+       // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
         form.addEventListener('submit', async (e)=>{
             e.preventDefault();
             const formData=new FormData(form);
@@ -370,15 +370,13 @@
             agendarSpinner.classList.remove('hidden');
             form.querySelector('button[type="submit"]').disabled = true;
             
-            try {
-                // Primeiro, criar o pagamento PIX - MERCADO PAGO
-                const valorEmReais = 0.01; // 1 centavo
-
+            try{
+                // Primeiro, criar o pagamento PIX
                 const pagamentoResponse = await fetch('/create-pix', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+                        amount: 50.00, // Valor do agendamento
                         description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
                         email: dataToSend.Email
                     })
@@ -390,8 +388,6 @@
                 }
 
                 const pagamentoData = await pagamentoResponse.json();
-                currentPaymentId = pagamentoData.payment_id;
-                paymentExpiresAt = pagamentoData.expires_at;
                 
                 // Exibir QR Code e código PIX
                 let pixDiv = document.getElementById("pixArea");
@@ -405,7 +401,7 @@
                 pixDiv.innerHTML = `
                     <h3 class="text-center mb-3">Pagamento via PIX</h3>
                     <div class="text-center mb-4">
-                        <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+                        <p class="text-lg font-semibold">Valor: R$ 50,00</p>
                         <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
                     </div>
                     <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
@@ -418,7 +414,6 @@
                             </button>
                         </div>
                     </div>
-                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
                     <div class="text-center">
                         <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
                             Já efetuei o pagamento
@@ -428,9 +423,6 @@
                 
                 feather.replace();
                 
-                // Iniciar contador de tempo
-                startPaymentTimer(paymentExpiresAt);
-                
                 // Configurar botão de copiar
                 document.getElementById('copyPixBtn').addEventListener('click', () => {
                     const textarea = document.querySelector('#pixArea textarea');
@@ -438,51 +430,44 @@
                     document.execCommand('copy');
                     showToast('Código PIX copiado!', 'success');
                 });
-                // ---------------- Agora sim, criar agendamento ----------------
-            const { data: agendamento, error: insertError } = await supabase
-                .from('agendamentos')
-                .insert([{
-                    cliente: dataToSend.Nome.toLowerCase().replace(/\s+/g, '-'),
-                    nome: dataToSend.Nome,
-                    email: dataToSend.Email,
-                    telefone: dataToSend.Telefone,
-                    data: dataToSend.Data,
-                    horario: dataToSend.Horario,
-                    status: 'confirmado',
-                    confirmado: true,
-                    payment_id: currentPaymentId
-                }])
-                .select()
-                .single();
-            if (insertError) throw insertError;
-
-            showToast("Pagamento confirmado! Agendamento realizado.", "success");
-            listarAgendamentos();
-            pixDiv.innerHTML = '';
-        });
-
-    } catch(err) {
-        console.error(err);
-        showToast("Erro ao processar agendamento", "error");
-    } finally {
-        agendarText.classList.remove('hidden');
-        agendarSpinner.classList.add('hidden');
-        form.querySelector('button[type="submit"]').disabled = false;
-    }
-});
-                // Configurar verificação automática do pagamento a cada 10 segundos
-                const paymentStatusInterval = setInterval(async () => {
-                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                    if (paymentConfirmed) {
-                        clearInterval(paymentStatusInterval);
-                    }
-                }, 10000);
                 
                 // Configurar botão de confirmação de pagamento
                 document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                    if (!paymentConfirmed) {
-                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    try {
+                        // Verificar status do pagamento
+                        const statusResponse = await fetch(`/check-payment/${pagamentoData.payment_id}`);
+                        if (!statusResponse.ok) {
+                            throw new Error('Erro ao verificar pagamento');
+                        }
+                        
+                        const statusData = await statusResponse.json();
+                        
+                        if (statusData.status === 'approved') {
+                            // Pagamento aprovado, enviar agendamento
+                            const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    "Authorization": `Bearer ${userToken}`
+                                },
+                                body: JSON.stringify(dataToSend)
+                            });
+                            
+                            if (agendamentoResponse.ok) {
+                                showToast("Agendamento realizado com sucesso!", "success");
+                                form.reset();
+                                pixDiv.remove();
+                                listarAgendamentos();
+                            } else {
+                                const errorData = await agendamentoResponse.json();
+                                showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                            }
+                        } else {
+                            showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                        }
+                    } catch (err) {
+                        console.error("Erro ao confirmar pagamento:", err);
+                        showToast("Erro ao verificar pagamento", "error");
                     }
                 });
                 
