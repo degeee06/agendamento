@@ -1077,26 +1077,7 @@ app.get("/:cliente/confirmar-presenca/:token", async (req, res) => {
 
 
 
-// Limpar links expirados periodicamente
-async function limparLinksExpirados() {
-  try {
-    console.log("🔄 Verificando links de confirmação expirados...");
-    
-    const { error } = await supabase
-      .from("confirmacao_links")
-      .update({ utilizado: true })
-      .lt("expira_em", new Date().toISOString())
-      .eq("utilizado", false);
 
-    if (error) {
-      console.error("Erro ao limpar links expirados:", error);
-    } else {
-      console.log("✅ Links expirados limpos");
-    }
-  } catch (err) {
-    console.error("Erro na limpeza de links:", err);
-  }
-}
 
 // Adicione ao intervalo de limpeza
 setInterval(limparLinksExpirados, 60 * 60 * 1000); // A cada 1 hora
@@ -1127,6 +1108,7 @@ app.listen(PORT, () => {
 
 // Export para testes
 export default app;
+
 
 
 
