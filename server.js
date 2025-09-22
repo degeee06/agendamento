@@ -154,25 +154,13 @@ async function limparAgendamentosExpirados() {
 }
 
 // ---------------- Rotas ----------------
-// Serve o painel de admin
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// Serve páginas de cliente dinamicamente
-app.get("/:cliente", (req, res) => {
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
+app.get("/:cliente", async (req, res) => {
   const cliente = req.params.cliente;
-
-  // Define o caminho do arquivo do cliente
-  const filePath = path.join(__dirname, "public", `${cliente}.html`);
-
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      res.status(404).send("Página do cliente não encontrada");
-    }
-  });
+  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
+  if (error || !data) return res.status(404).send("Cliente não encontrado");
+  res.sendFile(path.join(__dirname, "public/index.html"));
 });
-
 
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
