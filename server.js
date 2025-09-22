@@ -154,23 +154,14 @@ async function limparAgendamentosExpirados() {
 }
 
 // ---------------- Rotas ----------------
-
-// Admin (frontend administrativo)
-app.get("/", (req, res) => {
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
+app.get("/:cliente", async (req, res) => {
+  const cliente = req.params.cliente;
+  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
+  if (error || !data) return res.status(404).send("Cliente não encontrado");
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-// Frontend cliente (página única)
-app.get("/cliente", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/cliente.html"));
-});
-
-// Frontend cliente por ID (ex: /cliente/cliente1)
-app.get("/cliente/:id", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/cliente.html"));
-});
-
-// Rotas de API continuam como antes
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
