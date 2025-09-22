@@ -942,140 +942,120 @@
         }
 
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const dataToSend = {};
-    formData.forEach((v,k) => dataToSend[k] = v);
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
 
-    // Validação
-    if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast("Preencha todos os campos", "warning");
-        return;
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
+
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
+            
+            try {
+    // Primeiro, criar o pagamento PIX - MERCADO PAGO
+    const valorEmReais = 0.01; // 1 centavo
+
+    const pagamentoResponse = await fetch('/create-pix', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+            email: dataToSend.Email
+        })
+    });
+
+    if (!pagamentoResponse.ok) {
+        const errorData = await pagamentoResponse.json();
+        throw new Error(errorData.error || 'Erro ao criar pagamento');
     }
 
-    clienteEmail = dataToSend.Email;
-    localStorage.setItem('clienteEmail', clienteEmail);
-
-    agendarText.classList.add('hidden');
-    agendarSpinner.classList.remove('hidden');
-    form.querySelector('button[type="submit"]').disabled = true;
-
-    try {
-        // Verificar se já existe agendamento no mesmo horário
-        const { data: existingAppointments, error: checkError } = await supabase
-            .from('agendamentos')
-            .select('*')
-            .eq('data', dataToSend.Data)
-            .eq('horario', dataToSend.Horario);
-        if (checkError) throw checkError;
-        if (existingAppointments && existingAppointments.length > 0) {
-            showToast("Já existe um agendamento para este horário. Escolha outro horário.", "error");
-            return;
-        }
-
-        // ---------------- Criar pagamento primeiro ----------------
-        const valorEmReais = 0.01; // 1 centavo para teste
-        const paymentId = Date.now(); // ID único para o pagamento
-        const { data: pagamento, error: paymentError } = await supabase
-            .from('pagamentos')
-            .insert([{
-                id: paymentId,
-                email: dataToSend.Email,
-                amount: valorEmReais,
-                status: 'pending',
-                description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                valid_until: new Date(Date.now() + 30 * 60 * 1000) // 30 minutos para expirar
-            }])
-            .select()
-            .single();
-        if (paymentError) throw paymentError;
-
-        currentPaymentId = paymentId;
-        paymentExpiresAt = pagamento.valid_until;
-
-        // ---------------- Mostrar QR Code PIX ----------------
-        let pixDiv = document.getElementById("pixArea");
-        if (!pixDiv) {
-            pixDiv = document.createElement("div");
-            pixDiv.id = "pixArea";
-            pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-            form.appendChild(pixDiv);
-        }
-
-        const qrCodeSimulado = `00020126580014br.gov.bcb.pix0136${paymentId}52040000530398654060.015802BR5909AGENDAMENTO6008SAO PAULO6304`;
-        pixDiv.innerHTML = `
-            <h3 class="text-center mb-3">Pagamento via PIX</h3>
-            <div class="text-center mb-4">
-                <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-                <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-            </div>
-            <div class="bg-white p-2 rounded mx-auto mb-4 w-48 h-48 flex items-center justify-center">
-                <p class="text-black text-xs text-center">QR Code simulado para demonstração.</p>
-            </div>
-            <div class="mb-4">
-                <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                <div class="flex items-center gap-2">
-                    <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${qrCodeSimulado}</textarea>
-                    <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                        <i data-feather="copy" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
-            <div class="text-center">
-                <button id="simulatePaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700 mr-2">
-                    Simular Pagamento
-                </button>
-            </div>
-        `;
-
-        feather.replace();
-        startPaymentTimer(paymentExpiresAt);
-
-        document.getElementById('copyPixBtn').addEventListener('click', () => {
-            const textarea = document.querySelector('#pixArea textarea');
-            textarea.select();
-            document.execCommand('copy');
-            showToast('Código PIX copiado!', 'success');
-        });
-
-        document.getElementById('simulatePaymentBtn').addEventListener('click', async () => {
-            // Simular pagamento aprovado
-            await supabase.from('pagamentos').update({status:'approved'}).eq('id', currentPaymentId);
-
-            // ---------------- Agora sim, criar agendamento ----------------
-            const { data: agendamento, error: insertError } = await supabase
-                .from('agendamentos')
-                .insert([{
-                    cliente: dataToSend.Nome.toLowerCase().replace(/\s+/g, '-'),
-                    nome: dataToSend.Nome,
-                    email: dataToSend.Email,
-                    telefone: dataToSend.Telefone,
-                    data: dataToSend.Data,
-                    horario: dataToSend.Horario,
-                    status: 'confirmado',
-                    confirmado: true,
-                    payment_id: currentPaymentId
-                }])
-                .select()
-                .single();
-            if (insertError) throw insertError;
-
-            showToast("Pagamento confirmado! Agendamento realizado.", "success");
-            listarAgendamentos();
-            pixDiv.innerHTML = '';
-        });
-
-    } catch(err) {
-        console.error(err);
-        showToast("Erro ao processar agendamento", "error");
-    } finally {
-        agendarText.classList.remove('hidden');
-        agendarSpinner.classList.add('hidden');
-        form.querySelector('button[type="submit"]').disabled = false;
+    const pagamentoData = await pagamentoResponse.json();
+    currentPaymentId = pagamentoData.payment_id;
+    paymentExpiresAt = pagamentoData.expires_at;
+    
+    // Exibir QR Code e código PIX
+    let pixDiv = document.getElementById("pixArea");
+    if (!pixDiv) {
+        pixDiv = document.createElement("div");
+        pixDiv.id = "pixArea";
+        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+        form.appendChild(pixDiv);
     }
-});
+
+    pixDiv.innerHTML = `
+        <h3 class="text-center mb-3">Pagamento via PIX</h3>
+        <div class="text-center mb-4">
+            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+        </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div class="text-center">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                            Já efetuei o pagamento
+                        </button>
+                    </div>
+                `;
+                
+                feather.replace();
+                
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
+                });
+                
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
+                
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    }
+                });
+                
+                pagamentoPendente = true;
+                
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar pagamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
+            }
+        });
 
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
@@ -1449,5 +1429,4 @@ async function carregarDashboard() {
     </script>
 </body>
 </html>
-
 
