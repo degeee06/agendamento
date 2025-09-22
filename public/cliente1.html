@@ -82,26 +82,26 @@
         }
         
         @keyframes successPulse {
-            0% { transform: scale(1); background-color: rgba(34, 197, 94, 0.2); }
-            50% { transform: scale(1.02); background-color: rgba(34, 197, 94, 0.3); }
-            100% { transform: scale(1); background-color: rgba(34, 197, 94, 0.2); }
+            0% { transform: scale(1); background-color: rgba(34, 197, 94, 0.1); }
+            50% { transform: scale(1.02); background-color: rgba(34, 197, 94, 0.2); }
+            100% { transform: scale(1); background-color: rgba(34, 197, 94, 0.1); }
         }
 
-        .fade-out {
-            animation: fadeOut 0.5s ease-out forwards;
+        .fade-out-up {
+            animation: fadeOutUp 0.5s ease-out forwards;
         }
         
-        @keyframes fadeOut {
+        @keyframes fadeOutUp {
             from { opacity: 1; transform: translateY(0); }
             to { opacity: 0; transform: translateY(-20px); }
         }
 
-        .slide-in {
-            animation: slideIn 0.5s ease-out forwards;
+        .slide-in-down {
+            animation: slideInDown 0.5s ease-out forwards;
         }
         
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(20px); }
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
         }
     </style>
@@ -191,14 +191,6 @@
                 </button>
             </div>
         </form>
-
-        <!-- Seção de Agendamentos -->
-        <div id="agendamentosSection" class="glass-card rounded-2xl p-8 mt-8 hidden">
-            <h2 class="text-2xl font-semibold text-center mb-6">Meus Agendamentos</h2>
-            <div id="listaAgendamentos" class="space-y-4">
-                <!-- Agendamentos serão carregados aqui -->
-            </div>
-        </div>
     </div>
 
     <!-- Toast Container -->
@@ -212,10 +204,11 @@
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let telefoneMask = null;
+        let pagamentoPendente = false;
         let paymentCheckInterval = null;
-        let paymentStatusInterval = null;
         let currentPaymentId = null;
         let paymentExpiresAt = null;
+        let paymentStatusInterval = null;
 
         const form = document.getElementById('agendamentoForm');
         const agendarText = document.getElementById('agendarText');
@@ -223,8 +216,6 @@
         const telefoneInput = document.getElementById("Telefone");
         const dataInput = document.getElementById("Data");
         const horarioInput = document.getElementById("Horario");
-        const agendamentosSection = document.getElementById('agendamentosSection');
-        const listaAgendamentos = document.getElementById('listaAgendamentos');
 
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
@@ -243,7 +234,6 @@
             }
             
             feather.replace();
-            carregarAgendamentos();
         }
 
         // ---------------- TOASTS ----------------
@@ -283,46 +273,6 @@
             },3000);
         }
 
-        // ---------------- FUNÇÕES PARA AGENDAMENTOS ----------------
-        async function carregarAgendamentos() {
-            try {
-                const { data, error } = await supabase
-                    .from('agendamentos')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-                
-                if (error) throw error;
-                
-                if (data && data.length > 0) {
-                    agendamentosSection.classList.remove('hidden');
-                    listaAgendamentos.innerHTML = '';
-                    
-                    data.forEach(agendamento => {
-                        const statusClass = agendamento.status === 'confirmado' ? 'status-confirmado' : 
-                                          agendamento.status === 'pendente' ? 'status-pendente' : 'status-cancelado';
-                        
-                        const card = document.createElement('div');
-                        card.className = 'agendamento-card bg-white/5 rounded-lg p-4';
-                        card.innerHTML = `
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <h3 class="font-semibold">${agendamento.Nome}</h3>
-                                    <p class="text-sm opacity-80">${agendamento.Data} às ${agendamento.Horario}</p>
-                                    <p class="text-sm opacity-80">${agendamento.Telefone} • ${agendamento.Email}</p>
-                                </div>
-                                <span class="${statusClass}">${agendamento.status}</span>
-                            </div>
-                        `;
-                        listaAgendamentos.appendChild(card);
-                    });
-                } else {
-                    agendamentosSection.classList.add('hidden');
-                }
-            } catch (error) {
-                console.error('Erro ao carregar agendamentos:', error);
-            }
-        }
-
         // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
         function formatTimeRemaining(seconds) {
             const minutes = Math.floor(seconds / 60);
@@ -360,10 +310,10 @@
                     
                     const pixDiv = document.getElementById("pixArea");
                     if (pixDiv) {
-                        pixDiv.classList.add('fade-out');
+                        pixDiv.classList.add('fade-out-up');
                         setTimeout(() => {
                             pixDiv.innerHTML = `
-                                <div class="text-center p-4 bg-red-900/20 rounded-lg slide-in">
+                                <div class="text-center p-4 bg-red-900/20 rounded-lg slide-in-down">
                                     <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
                                     <p class="text-red-300">Tempo para pagamento esgotado.</p>
                                     <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
@@ -390,21 +340,29 @@
 
         async function salvarAgendamentoNoSupabase(dadosAgendamento) {
             try {
-                // Adicionar dados adicionais
-                dadosAgendamento.status = 'confirmado';
-                dadosAgendamento.created_at = new Date().toISOString();
-                dadosAgendamento.payment_id = currentPaymentId;
+                // Adicionar dados adicionais para o Supabase
+                const agendamentoCompleto = {
+                    ...dadosAgendamento,
+                    status: 'confirmado',
+                    created_at: new Date().toISOString(),
+                    payment_id: currentPaymentId,
+                    updated_at: new Date().toISOString()
+                };
                 
                 const { data, error } = await supabase
                     .from('agendamentos')
-                    .insert([dadosAgendamento])
+                    .insert([agendamentoCompleto])
                     .select();
                 
-                if (error) throw error;
+                if (error) {
+                    console.error('Erro Supabase:', error);
+                    throw error;
+                }
                 
+                console.log('Agendamento salvo no Supabase:', data);
                 return data;
             } catch (error) {
-                console.error('Erro ao salvar agendamento:', error);
+                console.error('Erro ao salvar agendamento no Supabase:', error);
                 throw error;
             }
         }
@@ -421,7 +379,7 @@
                 if (statusData.status === 'approved') {
                     limparIntervals();
                     
-                    // Salvar no Supabase
+                    // Salvar agendamento no Supabase
                     const formData = new FormData(form);
                     const dataToSend = {};
                     formData.forEach((v,k) => dataToSend[k] = v);
@@ -433,12 +391,14 @@
                     
                     const pixDiv = document.getElementById("pixArea");
                     if (pixDiv) {
+                        // Animação de sucesso
                         pixDiv.classList.add('payment-success');
+                        
                         setTimeout(() => {
-                            pixDiv.classList.add('fade-out');
+                            pixDiv.classList.add('fade-out-up');
                             setTimeout(() => {
                                 pixDiv.innerHTML = `
-                                    <div class="text-center p-4 bg-green-900/20 rounded-lg slide-in">
+                                    <div class="text-center p-4 bg-green-900/20 rounded-lg slide-in-down">
                                         <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
                                         <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
                                     </div>
@@ -447,11 +407,6 @@
                             }, 500);
                         }, 2000);
                     }
-                    
-                    // Atualizar lista de agendamentos
-                    setTimeout(() => {
-                        carregarAgendamentos();
-                    }, 1000);
                     
                     return true;
                 } else if (statusData.status === 'expired') {
@@ -463,6 +418,7 @@
                 return false;
             } catch (err) {
                 console.error("Erro ao verificar pagamento:", err);
+                showToast("Erro ao verificar pagamento", "error");
                 return false;
             }
         }
@@ -513,7 +469,7 @@
                     form.appendChild(pixDiv);
                 } else {
                     pixDiv.innerHTML = '';
-                    pixDiv.classList.remove('fade-out', 'payment-success');
+                    pixDiv.classList.remove('fade-out-up', 'payment-success');
                     pixDiv.classList.add('animate-fade-in');
                 }
 
