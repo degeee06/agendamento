@@ -801,7 +801,7 @@ app.post("/gerar-link-confirmacao/:agendamento_id", authMiddleware, async (req, 
 
     if (linkExistente) {
       return res.json({
-        link: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/confirmar-presenca/${linkExistente.token}`,
+        link_confirmacao = `${process.env.BASE_URL || 'http://localhost:3000'}/${cliente}/confirmar-presenca/${token}`;
         expira_em: linkExistente.expira_em
       });
     }
@@ -1040,63 +1040,34 @@ app.post("/webhook-confirmacao", async (req, res) => {
 });
 
 // Confirmar presença via link único (sem PIX, só clique)
-app.get("/confirmar-presenca/:token", async (req, res) => {
-  try {
-    const { token } = req.params;
+app.get("/:cliente/confirmar-presenca/:token", async (req, res) => {
+  const { token } = req.params;
+  const { cliente } = req.params;
 
-    // Buscar token na tabela
-    const { data: link, error } = await supabase
-      .from("confirmacao_links")
-      .select(`
-        *,
-        agendamentos (
-          id,
-          cliente,
-          nome,
-          email,
-          telefone,
-          data,
-          horario,
-          status,
-          confirmado
-        )
-      `)
-      .eq("token", token)
-      .single();
+  // Buscar link no Supabase
+  const { data: link } = await supabase
+    .from("confirmacao_links")
+    .select("*, agendamentos(*)")
+    .eq("token", token)
+    .single();
 
-    if (error || !link) {
-      return res.status(404).send("❌ Link inválido ou não encontrado");
-    }
+  if (!link) return res.status(404).send("Link inválido");
+  if (link.agendamentos.cliente !== cliente) return res.status(403).send("Cliente inválido");
 
-    if (new Date(link.expira_em) < new Date()) {
-      return res.status(400).send("⚠️ Link expirado");
-    }
+  // Confirmar agendamento e marcar token como usado
+  await supabase
+    .from("agendamentos")
+    .update({ confirmado: true, status: "confirmado" })
+    .eq("id", link.agendamentos.id);
 
-    if (link.utilizado) {
-      return res.status(400).send("⚠️ Este link já foi usado");
-    }
+  await supabase
+    .from("confirmacao_links")
+    .update({ utilizado: true })
+    .eq("token", token);
 
-    const agendamento = link.agendamentos;
+  res.redirect("/confirmado");
+});
 
-    // Atualiza o agendamento como confirmado
-    const { error: updateError } = await supabase
-      .from("agendamentos")
-      .update({ confirmado: true, status: "confirmado" })
-      .eq("id", agendamento.id);
-
-    if (updateError) {
-      console.error("Erro ao confirmar agendamento:", updateError);
-      return res.status(500).send("Erro ao confirmar presença");
-    }
-
-    // Marcar o token como utilizado
-    await supabase
-      .from("confirmacao_links")
-      .update({ utilizado: true })
-      .eq("token", token);
-
-    // Redireciona para página de sucesso (pode customizar frontend)
-    res.redirect("/confirmado");
 
   } catch (err) {
     console.error("Erro em /confirmar-presenca:", err);
@@ -1156,6 +1127,7 @@ app.listen(PORT, () => {
 
 // Export para testes
 export default app;
+
 
 
 
