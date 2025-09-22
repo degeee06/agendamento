@@ -232,6 +232,7 @@
         let currentPaymentId = null;
         let paymentExpiresAt = null;
         let clienteEmail = null;
+        let currentAgendamentoData = null;
 
         const form = document.getElementById('agendamentoForm');
         const agendarText = document.getElementById('agendarText');
@@ -460,13 +461,26 @@
                 if (pagamento.status === 'approved') {
                     clearInterval(paymentCheckInterval);
                     
-                    // Atualizar status do agendamento para confirmado
-                    const { error: updateError } = await supabase
+                    // AGORA SIM criar o agendamento no Supabase após pagamento confirmado
+                    const { data: agendamento, error: insertError } = await supabase
                         .from('agendamentos')
-                        .update({ status: 'confirmado', confirmado: true })
-                        .eq('payment_id', paymentId);
+                        .insert([
+                            {
+                                cliente: currentAgendamentoData.Nome.toLowerCase().replace(/\s+/g, '-'),
+                                nome: currentAgendamentoData.Nome,
+                                email: currentAgendamentoData.Email,
+                                telefone: currentAgendamentoData.Telefone,
+                                data: currentAgendamentoData.Data,
+                                horario: currentAgendamentoData.Horario,
+                                status: 'confirmado',
+                                confirmado: true,
+                                payment_id: paymentId
+                            }
+                        ])
+                        .select()
+                        .single();
                     
-                    if (updateError) throw updateError;
+                    if (insertError) throw insertError;
                     
                     showToast("Agendamento confirmado com sucesso!", "success");
                     form.reset();
@@ -498,141 +512,170 @@
         }
 
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const dataToSend = {};
-    formData.forEach((v,k) => dataToSend[k] = v);
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData = new FormData(form);
+            const dataToSend = {};
+            formData.forEach((v,k) => dataToSend[k] = v);
 
-    // Validação
-    if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast("Preencha todos os campos", "warning");
-        return;
-    }
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
 
-    clienteEmail = dataToSend.Email;
-    localStorage.setItem('clienteEmail', clienteEmail);
+            // Salvar email localmente
+            clienteEmail = dataToSend.Email;
+            localStorage.setItem('clienteEmail', clienteEmail);
 
-    agendarText.classList.add('hidden');
-    agendarSpinner.classList.remove('hidden');
-    form.querySelector('button[type="submit"]').disabled = true;
+            // Armazenar dados do agendamento para uso posterior (após pagamento)
+            currentAgendamentoData = {...dataToSend};
 
-    try {
-        // Verificar se já existe agendamento no mesmo horário
-        const { data: existingAppointments, error: checkError } = await supabase
-            .from('agendamentos')
-            .select('*')
-            .eq('data', dataToSend.Data)
-            .eq('horario', dataToSend.Horario);
-        if (checkError) throw checkError;
-        if (existingAppointments && existingAppointments.length > 0) {
-            showToast("Já existe um agendamento para este horário. Escolha outro horário.", "error");
-            return;
-        }
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
+            
+            try {
+                // Verificar se já existe agendamento no mesmo horário
+                const { data: existingAppointments, error: checkError } = await supabase
+                    .from('agendamentos')
+                    .select('*')
+                    .eq('data', dataToSend.Data)
+                    .eq('horario', dataToSend.Horario);
+                
+                if (checkError) throw checkError;
+                
+                if (existingAppointments && existingAppointments.length > 0) {
+                    showToast("Já existe um agendamento para este horário. Escolha outro horário.", "error");
+                    return;
+                }
+                
+                // Simular criação de pagamento PIX (substitua pela sua lógica real)
+                const valorEmReais = 0.01; // 1 centavo para teste
+                const paymentId = Date.now(); // ID único para o pagamento
+                
+                // Registrar o pagamento no Supabase (ainda pendente)
+                const { data: pagamento, error: paymentError } = await supabase
+                    .from('pagamentos')
+                    .insert([
+                        {
+                            id: paymentId,
+                            email: dataToSend.Email,
+                            amount: valorEmReais,
+                            status: 'pending',
+                            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                            valid_until: new Date(Date.now() + 30 * 60 * 1000) // 30 minutos para expirar
+                        }
+                    ])
+                    .select()
+                    .single();
+                
+                if (paymentError) throw paymentError;
+                
+                currentPaymentId = paymentId;
+                paymentExpiresAt = pagamento.valid_until;
+                
+                // Exibir QR Code e código PIX (simulado)
+                let pixDiv = document.getElementById("pixArea");
+                if (!pixDiv) {
+                    pixDiv = document.createElement("div");
+                    pixDiv.id = "pixArea";
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+                    form.appendChild(pixDiv);
+                }
 
-        // ---------------- Criar pagamento primeiro ----------------
-        const valorEmReais = 0.01; // 1 centavo para teste
-        const paymentId = Date.now(); // ID único para o pagamento
-        const { data: pagamento, error: paymentError } = await supabase
-            .from('pagamentos')
-            .insert([{
-                id: paymentId,
-                email: dataToSend.Email,
-                amount: valorEmReais,
-                status: 'pending',
-                description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                valid_until: new Date(Date.now() + 30 * 60 * 1000) // 30 minutos para expirar
-            }])
-            .select()
-            .single();
-        if (paymentError) throw paymentError;
-
-        currentPaymentId = paymentId;
-        paymentExpiresAt = pagamento.valid_until;
-
-        // ---------------- Mostrar QR Code PIX ----------------
-        let pixDiv = document.getElementById("pixArea");
-        if (!pixDiv) {
-            pixDiv = document.createElement("div");
-            pixDiv.id = "pixArea";
-            pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-            form.appendChild(pixDiv);
-        }
-
-        const qrCodeSimulado = `00020126580014br.gov.bcb.pix0136${paymentId}52040000530398654060.015802BR5909AGENDAMENTO6008SAO PAULO6304`;
-        pixDiv.innerHTML = `
-            <h3 class="text-center mb-3">Pagamento via PIX</h3>
-            <div class="text-center mb-4">
-                <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-                <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-            </div>
-            <div class="bg-white p-2 rounded mx-auto mb-4 w-48 h-48 flex items-center justify-center">
-                <p class="text-black text-xs text-center">QR Code simulado para demonstração.</p>
-            </div>
-            <div class="mb-4">
-                <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                <div class="flex items-center gap-2">
-                    <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${qrCodeSimulado}</textarea>
-                    <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                        <i data-feather="copy" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
-            <div class="text-center">
-                <button id="simulatePaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700 mr-2">
-                    Simular Pagamento
-                </button>
-            </div>
-        `;
-
-        feather.replace();
-        startPaymentTimer(paymentExpiresAt);
-
-        document.getElementById('copyPixBtn').addEventListener('click', () => {
-            const textarea = document.querySelector('#pixArea textarea');
-            textarea.select();
-            document.execCommand('copy');
-            showToast('Código PIX copiado!', 'success');
+                // QR Code simulado (em produção, use uma API real)
+                const qrCodeSimulado = `00020126580014br.gov.bcb.pix0136${paymentId}52040000530398654060.015802BR5909AGENDAMENTO6008SAO PAULO6304`;
+                
+                pixDiv.innerHTML = `
+                    <h3 class="text-center mb-3">Pagamento via PIX</h3>
+                    <div class="text-center mb-4">
+                        <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+                    </div>
+                    <div class="bg-white p-2 rounded mx-auto mb-4 w-48 h-48 flex items-center justify-center">
+                        <p class="text-black text-xs text-center">QR Code simulado para demonstração. Em produção, integre com uma API de pagamentos real.</p>
+                    </div>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${qrCodeSimulado}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div class="text-center">
+                        <button id="simulatePaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700 mr-2">
+                            Simular Pagamento
+                        </button>
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700">
+                            Já efetuei o pagamento
+                        </button>
+                    </div>
+                `;
+                
+                feather.replace();
+                
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
+                });
+                
+                // Configurar botão de simular pagamento (apenas para demonstração)
+                document.getElementById('simulatePaymentBtn').addEventListener('click', async () => {
+                    // Simular pagamento aprovado
+                    const { error: updatePaymentError } = await supabase
+                        .from('pagamentos')
+                        .update({ status: 'approved', updated_at: new Date() })
+                        .eq('id', currentPaymentId);
+                    
+                    if (updatePaymentError) {
+                        showToast("Erro ao simular pagamento", "error");
+                        return;
+                    }
+                    
+                    // Verificar o pagamento (que agora irá criar o agendamento)
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Erro ao confirmar pagamento", "error");
+                    }
+                });
+                
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
+                
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    }
+                });
+                
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar agendamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
+            }
         });
-
-        document.getElementById('simulatePaymentBtn').addEventListener('click', async () => {
-            // Simular pagamento aprovado
-            await supabase.from('pagamentos').update({status:'approved'}).eq('id', currentPaymentId);
-
-            // ---------------- Agora sim, criar agendamento ----------------
-            const { data: agendamento, error: insertError } = await supabase
-                .from('agendamentos')
-                .insert([{
-                    cliente: dataToSend.Nome.toLowerCase().replace(/\s+/g, '-'),
-                    nome: dataToSend.Nome,
-                    email: dataToSend.Email,
-                    telefone: dataToSend.Telefone,
-                    data: dataToSend.Data,
-                    horario: dataToSend.Horario,
-                    status: 'confirmado',
-                    confirmado: true,
-                    payment_id: currentPaymentId
-                }])
-                .select()
-                .single();
-            if (insertError) throw insertError;
-
-            showToast("Pagamento confirmado! Agendamento realizado.", "success");
-            listarAgendamentos();
-            pixDiv.innerHTML = '';
-        });
-
-    } catch(err) {
-        console.error(err);
-        showToast("Erro ao processar agendamento", "error");
-    } finally {
-        agendarText.classList.remove('hidden');
-        agendarSpinner.classList.add('hidden');
-        form.querySelector('button[type="submit"]').disabled = false;
-    }
-});
-
 
         // ---------------- INIT ----------------
         AOS.init({
