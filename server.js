@@ -5,7 +5,6 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { MercadoPagoConfig, Payment } from "mercadopago";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import crypto from "crypto";
 
 // ---------------- Config ----------------
 const __filename = fileURLToPath(import.meta.url);
@@ -17,50 +16,30 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// Verifica se as variáveis de ambiente necessárias estão definidas
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("❌ Variáveis de ambiente do Supabase não configuradas");
-  process.exit(1);
-}
-
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // Inicializa Mercado Pago
-if (!process.env.MP_ACCESS_TOKEN) {
-  console.error("❌ Token de acesso do Mercado Pago não configurado");
-  process.exit(1);
-}
-
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 const payment = new Payment(mpClient);
 
 let creds;
 try {
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT) {
-    console.warn("⚠️  Variável GOOGLE_SERVICE_ACCOUNT não configurada - funcionalidade do Google Sheets desativada");
-  } else {
-    creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-  }
+  creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
 } catch (e) {
-  console.error("❌ Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
-  // Não encerra o processo, apenas desativa funcionalidades do Google Sheets
+  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
+  process.exit(1);
 }
 
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet(clienteId) {
-  if (!creds) {
-    throw new Error("Google Sheets não configurado");
-  }
-
   const { data, error } = await supabase
     .from("clientes")
     .select("spreadsheet_id")
     .eq("id", clienteId)
     .single();
-  
   if (error || !data) throw new Error(`Cliente ${clienteId} não encontrado`);
 
   const doc = new GoogleSpreadsheet(data.spreadsheet_id);
@@ -70,91 +49,55 @@ async function accessSpreadsheet(clienteId) {
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
-  try {
-    await sheet.loadHeaderRow();
-  } catch (error) {
-    await sheet.setHeaderRow(newKeys);
-    return;
-  }
-  
+  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
   const currentHeaders = sheet.headerValues || [];
   const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
-  
   if (headersToAdd.length > 0) {
     await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
   }
 }
 
 async function updateRowInSheet(sheet, rowId, updatedData) {
-  try {
-    await sheet.loadHeaderRow();
-    const rows = await sheet.getRows();
-    const row = rows.find(r => r.id === rowId);
-    
-    if (row) {
-      Object.keys(updatedData).forEach(key => {
-        if (sheet.headerValues.includes(key)) {
-          row[key] = updatedData[key];
-        }
-      });
-      await row.save();
-    } else {
-      await ensureDynamicHeaders(sheet, Object.keys(updatedData));
-      await sheet.addRow({ id: rowId, ...updatedData });
-    }
-  } catch (error) {
-    console.error("Erro ao atualizar planilha:", error);
-    throw error;
+  await sheet.loadHeaderRow();
+  const rows = await sheet.getRows();
+  const row = rows.find(r => r.id === rowId);
+  if (row) {
+    Object.keys(updatedData).forEach(key => {
+      if (sheet.headerValues.includes(key)) row[key] = updatedData[key];
+    });
+    await row.save();
+  } else {
+    await ensureDynamicHeaders(sheet, Object.keys(updatedData));
+    await sheet.addRow(updatedData);
   }
 }
 
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
-  try {
-    const token = req.headers["authorization"]?.split("Bearer ")[1];
-    if (!token) return res.status(401).json({ msg: "Token não enviado" });
+  const token = req.headers["authorization"]?.split("Bearer ")[1];
+  if (!token) return res.status(401).json({ msg: "Token não enviado" });
 
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
-    req.user = data.user;
-    req.clienteId = data.user.user_metadata?.cliente_id;
-    
-    if (!req.clienteId) {
-      return res.status(403).json({ msg: "Usuário sem cliente_id" });
-    }
-    
-    next();
-  } catch (error) {
-    console.error("Erro no middleware de autenticação:", error);
-    res.status(500).json({ msg: "Erro interno no servidor" });
-  }
+  req.user = data.user;
+  req.clienteId = data.user.user_metadata.cliente_id;
+  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
+  next();
 }
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  try {
-    let query = supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", data)
-      .eq("horario", horario)
-      .neq("status", "cancelado");
+  let query = supabase
+    .from("agendamentos")
+    .select("*")
+    .eq("cliente", cliente)
+    .eq("data", data)
+    .eq("horario", horario)
+    .neq("status", "cancelado");
 
-    if (ignoreId) query = query.neq("id", ignoreId);
-    
-    const { data: agendamentos, error } = await query;
-    
-    if (error) {
-      console.error("Erro ao verificar horário disponível:", error);
-      return false;
-    }
-    
-    return agendamentos.length === 0;
-  } catch (error) {
-    console.error("Erro na função horarioDisponivel:", error);
-    return false;
-  }
+  if (ignoreId) query = query.neq("id", ignoreId);
+  const { data: agendamentos } = await query;
+  return agendamentos.length === 0;
 }
 
 // ==== FUNÇÃO PARA LIMPAR AGENDAMENTOS EXPIRADOS ====
@@ -190,15 +133,13 @@ async function limparAgendamentosExpirados() {
         } else {
           console.log(`✅ Agendamento ${agendamento.id} cancelado por falta de pagamento`);
           
-          // Atualiza Google Sheet se configurado
+          // Atualiza Google Sheet
           try {
-            if (creds) {
-              const doc = await accessSpreadsheet(agendamento.cliente);
-              await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
-                status: "cancelado",
-                confirmado: false
-              });
-            }
+            const doc = await accessSpreadsheet(agendamento.cliente);
+            await updateRowInSheet(doc.sheetsByIndex[0], agendamento.id, {
+              status: "cancelado",
+              confirmado: false
+            });
           } catch (sheetError) {
             console.error("Erro ao atualizar Google Sheets:", sheetError);
           }
@@ -214,21 +155,11 @@ async function limparAgendamentosExpirados() {
 
 // ---------------- Rotas ----------------
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
-
 app.get("/:cliente", async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
-    
-    if (error || !data) {
-      return res.status(404).send("Cliente não encontrado");
-    }
-    
-    res.sendFile(path.join(__dirname, "public/index.html"));
-  } catch (error) {
-    console.error("Erro na rota cliente:", error);
-    res.status(500).send("Erro interno do servidor");
-  }
+  const cliente = req.params.cliente;
+  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
+  if (error || !data) return res.status(404).send("Cliente não encontrado");
+  res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
@@ -267,6 +198,7 @@ app.post("/create-pix", async (req, res) => {
         description: description || "Pagamento de Agendamento",
         payment_method_id: "pix",
         payer: { email },
+        // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
         date_of_expiration: dateOfExpiration
       },
     });
@@ -309,9 +241,9 @@ app.post("/create-pix", async (req, res) => {
     res.json({
       payment_id: result.id,
       status: result.status,
-      qr_code: result.point_of_interaction?.transaction_data?.qr_code,
-      qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
-      expires_at: dateOfExpiration
+      qr_code: result.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+      expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
     });
   } catch (err) {
     console.error("Erro ao criar PIX:", err);
@@ -329,7 +261,7 @@ app.get("/check-payment/:paymentId", async (req, res) => {
       .from("pagamentos")
       .select("*")
       .eq("id", paymentId)
-      .maybeSingle();
+      .maybeSingle();  // Usa maybeSingle para evitar erro quando não encontra
 
     if (dbError && dbError.code !== 'PGRST116') {
       console.error("Erro ao buscar pagamento no banco:", dbError);
@@ -396,30 +328,25 @@ app.get("/check-vip/:email", async (req, res) => {
   const email = req.params.email;
   if (!email) return res.status(400).json({ error: "Faltando email" });
 
-  try {
-    const now = new Date();
-    const { data, error } = await supabase
-      .from("pagamentos")
-      .select("valid_until")
-      .eq("email", email)
-      .eq("status", "approved")
-      .gt("valid_until", now.toISOString())
-      .order("valid_until", { ascending: false })
-      .limit(1)
-      .single();
+  const now = new Date();
+  const { data, error } = await supabase
+    .from("pagamentos")
+    .select("valid_until")
+    .eq("email", email)
+    .eq("status", "approved")
+    .gt("valid_until", now.toISOString())
+    .order("valid_until", { ascending: false })
+    .limit(1)
+    .single();
 
-    if (error && error.code !== "PGRST116") {
-      return res.status(500).json({ error: error.message });
-    }
-
-    res.json({
-      vip: !!data,
-      valid_until: data?.valid_until || null
-    });
-  } catch (error) {
-    console.error("Erro em /check-vip:", error);
-    res.status(500).json({ error: "Erro interno" });
+  if (error && error.code !== "PGRST116") {
+    return res.status(500).json({ error: error.message });
   }
+
+  res.json({
+    vip: !!data,
+    valid_until: data?.valid_until || null
+  });
 });
 
 // Webhook Mercado Pago
@@ -459,16 +386,15 @@ app.post("/webhook", async (req, res) => {
 });
 
 // ---------------- Agendar ----------------
-// ---------------- Agendar COM LINK AUTOMÁTICO ----------------
+// ---------------- Agendar COM LINK DE PAGAMENTO ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario) {
+    const { Nome, Email, Telefone, Data, Horario, Valor } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario || !Valor)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
-    }
 
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
@@ -500,142 +426,126 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       return res.status(500).json({ msg: "Erro ao criar agendamento" });
     }
 
-    // ✅✅✅ GERAR LINK DE CONFIRMAÇÃO AUTOMATICAMENTE ✅✅✅
+    // Atualiza Google Sheet
     try {
-      const token = crypto.randomBytes(32).toString('hex');
-      const expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
-
-      const { error: linkError } = await supabase
-        .from("confirmacao_links")
-        .insert([{
-          agendamento_id: novoAgendamento.id, // ID do NOVO agendamento
-          token,
-          expira_em: expira_em.toISOString(),
-          utilizado: false
-        }]);
-
-      if (linkError) {
-        console.error("Erro ao criar link de confirmação:", linkError);
-        // Não falha o agendamento, só registra o erro
-      } else {
-        console.log("✅ Link de confirmação gerado para agendamento:", novoAgendamento.id);
-      }
-
-      // Adicionar o link à resposta
-      novoAgendamento.link_confirmacao = `${process.env.BASE_URL || 'http://localhost:3000'}/confirmar-presenca/${token}`;
-      novoAgendamento.link_expira_em = expira_em;
-
-    } catch (linkError) {
-      console.error("Erro no processo de gerar link:", linkError);
-    }
-
-    // Atualiza Google Sheet se configurado
-    try {
-      if (creds) {
-        const doc = await accessSpreadsheet(cliente);
-        const sheet = doc.sheetsByIndex[0];
-        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-        await sheet.addRow(novoAgendamento);
-      }
+      const doc = await accessSpreadsheet(cliente);
+      const sheet = doc.sheetsByIndex[0];
+      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+      await sheet.addRow(novoAgendamento);
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    res.json({ 
-      msg: "Agendamento realizado com sucesso!", 
+    // ------------------- CRIAR PIX -------------------
+    const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const paymentResult = await payment.create({
+      body: {
+        transaction_amount: Number(Valor),
+        description: `Agendamento: ${Data} - ${Horario} - ${Nome}`,
+        payment_method_id: "pix",
+        payer: { email: emailNormalizado },
+        date_of_expiration: dateOfExpiration
+      },
+    });
+
+    // Salvar pagamento no Supabase
+    await supabase.from("pagamentos").upsert([{
+      id: paymentResult.id,
+      email: emailNormalizado,
+      amount: Number(Valor),
+      status: paymentResult.status || "pending",
+      description: `Agendamento: ${Data} - ${Horario} - ${Nome}`,
+      valid_until: null
+    }]);
+
+    // Retorna agendamento + link PIX
+    res.json({
+      msg: "Agendamento criado com sucesso!",
       agendamento: novoAgendamento,
-      // ✅ Link incluído na resposta
-      link_confirmacao: novoAgendamento.link_confirmacao,
-      link_expira_em: novoAgendamento.link_expira_em
+      pagamento: {
+        payment_id: paymentResult.id,
+        status: paymentResult.status,
+        qr_code: paymentResult.point_of_interaction.transaction_data.qr_code,
+        qr_code_base64: paymentResult.point_of_interaction.transaction_data.qr_code_base64,
+        expires_at: dateOfExpiration
+      }
     });
 
   } catch (err) {
-    console.error("Erro no /agendar:", err);
+    console.error("Erro no /agendar com pagamento:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
 
 // ---------------- Confirmar / Cancelar / Reagendar ----------------
-app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req, res) => {
+app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
   try {
     const { cliente, id } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
     
     const { data, error } = await supabase.from("agendamentos")
-      .update({ confirmado: true, status: "confirmado" })
-      .eq("id", id).eq("cliente", cliente).select().single();
+      .update({confirmado:true,status:"confirmado"})
+      .eq("id",id).eq("cliente",cliente).select().single();
     
     if (error) throw error;
     
-    // Atualiza Google Sheet se configurado
+    // Atualiza Google Sheet
     try {
-      if (creds) {
-        const doc = await accessSpreadsheet(cliente);
-        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-      }
+      const doc = await accessSpreadsheet(cliente);
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
     
-    res.json({ msg: "Agendamento confirmado", agendamento: data });
+    res.json({msg:"Agendamento confirmado", agendamento:data});
   } catch (error) {
     console.error("Erro ao confirmar agendamento:", error);
-    res.status(500).json({ msg: "Erro interno" });
+    res.status(500).json({msg:"Erro interno"});
   }
 });
 
-app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req, res) => {
+app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=>{
   try {
     const { cliente, id } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
     
     const { data, error } = await supabase.from("agendamentos")
-      .update({ status: "cancelado", confirmado: false })
-      .eq("id", id).eq("cliente", cliente).select().single();
+      .update({status:"cancelado", confirmado:false})
+      .eq("id",id).eq("cliente",cliente).select().single();
     
     if (error) throw error;
     
-    // Atualiza Google Sheet se configurado
+    // Atualiza Google Sheet
     try {
-      if (creds) {
-        const doc = await accessSpreadsheet(cliente);
-        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-      }
+      const doc = await accessSpreadsheet(cliente);
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
     
-    res.json({ msg: "Agendamento cancelado", agendamento: data });
+    res.json({msg:"Agendamento cancelado", agendamento:data});
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);
-    res.status(500).json({ msg: "Erro interno" });
+    res.status(500).json({msg:"Erro interno"});
   }
 });
 
-app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res) => {
+app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)=>{
   try {
     const { cliente, id } = req.params;
     const { novaData, novoHorario } = req.body;
-    
-    if (!novaData || !novoHorario) {
-      return res.status(400).json({ msg: "Data e horário obrigatórios" });
-    }
-    
-    if (req.clienteId !== cliente) {
-      return res.status(403).json({ msg: "Acesso negado" });
-    }
+    if (!novaData || !novoHorario) return res.status(400).json({msg:"Data e horário obrigatórios"});
+    if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
     
     const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
-    if (!disponivel) {
-      return res.status(400).json({ msg: "Horário indisponível" });
-    }
+    if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
     
     const { data, error } = await supabase.from("agendamentos")
       .update({
         data: novaData, 
         horario: novoHorario,
-        status: "pendente",
-        confirmado: false
+        status: "pendente",        // SEMPRE volta para pendente
+        confirmado: false          // SEMPRE volta para não confirmado
       })
       .eq("id", id)
       .eq("cliente", cliente)
@@ -644,20 +554,18 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res
     
     if (error) throw error;
     
-    // Atualiza Google Sheet se configurado
+    // Atualiza Google Sheet
     try {
-      if (creds) {
-        const doc = await accessSpreadsheet(cliente);
-        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-      }
+      const doc = await accessSpreadsheet(cliente);
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
     
-    res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
+    res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
   } catch (error) {
     console.error("Erro ao reagendar:", error);
-    res.status(500).json({ msg: "Erro interno" });
+    res.status(500).json({msg:"Erro interno"});
   }
 });
 
@@ -730,15 +638,13 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    const { data: agendamentos, error } = await supabase
+    const { data: agendamentos } = await supabase
       .from("agendamentos")
       .select("nome, email, telefone")
       .eq("cliente", cliente)
       .neq("status", "cancelado");
 
-    if (error) throw error;
-
-    if (!agendamentos || agendamentos.length === 0) {
+    if (!agendamentos) {
       return res.json([]);
     }
 
@@ -770,310 +676,6 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- Sistema de Confirmação com PIX ----------------
-
-// Gerar link de confirmação
-app.post("/gerar-link-confirmacao/:agendamento_id", authMiddleware, async (req, res) => {
-  try {
-    const { agendamento_id } = req.params;
-    const { valor, descricao } = req.body;
-
-    // Verificar se o agendamento existe e pertence ao cliente
-    const { data: agendamento, error: agendamentoError } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("id", agendamento_id)
-      .eq("cliente", req.clienteId)
-      .single();
-
-    if (agendamentoError || !agendamento) {
-      return res.status(404).json({ msg: "Agendamento não encontrado" });
-    }
-
-    // Verificar se já existe um link ativo para este agendamento
-    const { data: linkExistente } = await supabase
-      .from("confirmacao_links")
-      .select("*")
-      .eq("agendamento_id", agendamento_id)
-      .eq("utilizado", false)
-      .gt("expira_em", new Date().toISOString())
-      .maybeSingle();
-
-    if (linkExistente) {
-      return res.json({
-        link_confirmacao = `${process.env.BASE_URL || 'http://localhost:3000'}/${cliente}/confirmar-presenca/${token}`;
-        expira_em: linkExistente.expira_em
-      });
-    }
-
-    // Gerar token único
-    const token = crypto.randomBytes(32).toString('hex');
-    const expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
-
-    // Criar registro do link de confirmação
-    const { data: novoLink, error: linkError } = await supabase
-      .from("confirmacao_links")
-      .insert([{
-        agendamento_id,
-        token,
-        expira_em: expira_em.toISOString(),
-        utilizado: false
-      }])
-      .select()
-      .single();
-
-    if (linkError) {
-      console.error("Erro ao criar link de confirmação:", linkError);
-      return res.status(500).json({ msg: "Erro ao gerar link de confirmação" });
-    }
-
-    res.json({
-      link: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/confirmar-presenca/${token}`,
-      expira_em: novoLink.expira_em
-    });
-
-  } catch (err) {
-    console.error("Erro em /gerar-link-confirmacao:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// Verificar link de confirmação
-app.get("/verificar-link-confirmacao/:token", async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    const { data: link, error } = await supabase
-      .from("confirmacao_links")
-      .select(`
-        *,
-        agendamentos (
-          id,
-          cliente,
-          nome,
-          email,
-          telefone,
-          data,
-          horario,
-          status,
-          confirmado
-        )
-      `)
-      .eq("token", token)
-      .single();
-
-    if (error || !link) {
-      return res.status(404).json({ msg: "Link inválido ou expirado" });
-    }
-
-    // Verificar se o link expirou
-    if (new Date(link.expira_em) < new Date()) {
-      return res.status(400).json({ msg: "Link expirado" });
-    }
-
-    // Verificar se já foi utilizado
-    if (link.utilizado) {
-      return res.status(400).json({ msg: "Link já utilizado" });
-    }
-
-    res.json({
-      valido: true,
-      agendamento: link.agendamentos,
-      expira_em: link.expira_em
-    });
-
-  } catch (err) {
-    console.error("Erro em /verificar-link-confirmacao:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// Processar confirmação com PIX
-app.post("/confirmar-com-pix/:token", async (req, res) => {
-  try {
-    const { token } = req.params;
-    const { email } = req.body;
-
-    // Verificar link
-    const { data: link, error: linkError } = await supabase
-      .from("confirmacao_links")
-      .select(`
-        *,
-        agendamentos (
-          id,
-          cliente,
-          nome,
-          email,
-          telefone,
-          data,
-          horario,
-          status,
-          confirmado
-        )
-      `)
-      .eq("token", token)
-      .single();
-
-    if (linkError || !link) {
-      return res.status(404).json({ msg: "Link inválido ou expirado" });
-    }
-
-    if (new Date(link.expira_em) < new Date()) {
-      return res.status(400).json({ msg: "Link expirado" });
-    }
-
-    if (link.utilizado) {
-      return res.status(400).json({ msg: "Link já utilizado" });
-    }
-
-    const agendamento = link.agendamentos;
-
-    // Criar pagamento PIX
-    const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    
-    const result = await payment.create({
-      body: {
-        transaction_amount: 1.00,
-        description: `Confirmação de presença - ${agendamento.nome}`,
-        payment_method_id: "pix",
-        payer: { email: email || agendamento.email },
-        date_of_expiration: dateOfExpiration,
-        metadata: {
-          agendamento_id: agendamento.id,
-          confirmacao_token: token
-        }
-      },
-    });
-
-    // Marcar link como utilizado
-    await supabase
-      .from("confirmacao_links")
-      .update({ utilizado: true })
-      .eq("token", token);
-
-    // Registrar pagamento
-    await supabase
-      .from("pagamentos")
-      .insert([{ 
-        id: result.id, 
-        email: (email || agendamento.email).toLowerCase().trim(), 
-        amount: 1.00, 
-        status: result.status || 'pending', 
-        valid_until: null,
-        description: `Confirmação de presença - ${agendamento.nome}`,
-        metadata: {
-          agendamento_id: agendamento.id,
-          tipo: "confirmacao_presenca"
-        }
-      }]);
-
-    res.json({
-      payment_id: result.id,
-      status: result.status,
-      qr_code: result.point_of_interaction?.transaction_data?.qr_code,
-      qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
-      expires_at: dateOfExpiration
-    });
-
-  } catch (err) {
-    console.error("Erro em /confirmar-com-pix:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// Webhook para confirmação automática após pagamento
-app.post("/webhook-confirmacao", async (req, res) => {
-  try {
-    const paymentId = req.body?.data?.id || req.query["data.id"];
-    if (!paymentId) return res.sendStatus(400);
-
-    const paymentDetails = await payment.get({ id: paymentId });
-
-    // Verificar se é um pagamento de confirmação
-    if (paymentDetails.metadata?.tipo === "confirmacao_presenca" && 
-        ["approved", "paid"].includes(paymentDetails.status.toLowerCase())) {
-      
-      const agendamentoId = paymentDetails.metadata.agendamento_id;
-
-      // Atualizar agendamento para confirmado
-      const { error: updateError } = await supabase
-        .from("agendamentos")
-        .update({ 
-          status: "confirmado", 
-          confirmado: true 
-        })
-        .eq("id", agendamentoId);
-
-      if (updateError) {
-        console.error("Erro ao confirmar agendamento:", updateError);
-      } else {
-        console.log(`✅ Agendamento ${agendamentoId} confirmado via PIX`);
-
-        // Atualizar Google Sheet se configurado
-        try {
-          if (creds) {
-            const { data: agendamento } = await supabase
-              .from("agendamentos")
-              .select("cliente")
-              .eq("id", agendamentoId)
-              .single();
-
-            if (agendamento) {
-              const doc = await accessSpreadsheet(agendamento.cliente);
-              await updateRowInSheet(doc.sheetsByIndex[0], agendamentoId, {
-                status: "confirmado",
-                confirmado: true
-              });
-            }
-          }
-        } catch (sheetError) {
-          console.error("Erro ao atualizar Google Sheets:", sheetError);
-        }
-      }
-    }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Erro no webhook de confirmação:", err);
-    res.sendStatus(500);
-  }
-});
-
-app.get("/:cliente/confirmar-presenca/:token", async (req, res) => {
-  const { token } = req.params;
-  const { cliente } = req.params;
-
-  // Buscar link no Supabase
-  const { data: link } = await supabase
-    .from("confirmacao_links")
-    .select("*, agendamentos(*)")
-    .eq("token", token)
-    .single();
-
-  if (!link) return res.status(404).send("Link inválido");
-  if (link.agendamentos.cliente !== cliente) return res.status(403).send("Cliente inválido");
-
-  // Confirmar agendamento e marcar token como usado
-  await supabase
-    .from("agendamentos")
-    .update({ confirmado: true, status: "confirmado" })
-    .eq("id", link.agendamentos.id);
-
-  await supabase
-    .from("confirmacao_links")
-    .update({ utilizado: true })
-    .eq("token", token);
-
-  res.redirect("/confirmado");
-});
-
-
-
-
-
-// Adicione ao intervalo de limpeza
-setInterval(limparLinksExpirados, 60 * 60 * 1000); // A cada 1 hora
-
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
 setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
@@ -1081,28 +683,8 @@ setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
 // Executar imediatamente ao iniciar o servidor
 setTimeout(limparAgendamentosExpirados, 2000);
 
-// Middleware para tratamento de erros não capturados
-app.use((err, req, res, next) => {
-  console.error('Erro não capturado:', err);
-  res.status(500).json({ msg: 'Erro interno do servidor' });
-});
-
-// Rota para health check
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
 // ---------------- Servidor ----------------
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
-
-// Export para testes
-export default app;
-
-
-
-
-
-
