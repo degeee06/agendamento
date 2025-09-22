@@ -522,7 +522,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       }
 
       // Adicionar o link à resposta
-      novoAgendamento.link_confirmacao = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/confirmar-presenca/${token}`;
+      novoAgendamento.link_confirmacao = `${process.env.BASE_URL || 'http://localhost:3000'}/confirmar-presenca/${token}`;
       novoAgendamento.link_expira_em = expira_em;
 
     } catch (linkError) {
@@ -1156,5 +1156,6 @@ app.listen(PORT, () => {
 
 // Export para testes
 export default app;
+
 
 
