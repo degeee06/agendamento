@@ -643,35 +643,36 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-import crypto from "crypto";
-
-app.post("/gerar-link-pix/:agendamentoId", authMiddleware, async (req, res) => {
+app.post("/gerar-link-pix", async (req, res) => {
   try {
-    const { agendamentoId } = req.params;
+    const { nome, email, telefone, data, horario, valor } = req.body;
+    if (!nome || !email || !telefone || !data || !horario || !valor)
+      return res.status(400).json({ error: "Todos os campos são obrigatórios" });
 
-    // Buscar o agendamento
-    const { data: agendamento, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("id", agendamentoId)
-      .single();
-
-    if (error || !agendamento) return res.status(404).json({ error: "Agendamento não encontrado" });
-    if (req.clienteId !== agendamento.cliente) return res.status(403).json({ error: "Acesso negado" });
-
-    // Gerar token único para o link
     const token = crypto.randomBytes(16).toString("hex");
 
-    // Salvar token + QR code existente no Supabase
-    await supabase.from("agendamentos_pix").insert({
-      agendamento_id: agendamentoId,
+    // Gera o payload PIX (exemplo simples)
+    const pixPayload = `00020126680014BR.GOV.BCB.PIX0114+55119999999990204${valor}520400005303986540${valor}5802BR5913${nome}6009Cidade62070503***6304`;
+
+    // Gera QR Code Base64
+    const qr_code_base64 = await QRCode.toDataURL(pixPayload);
+
+    // Salva token + QR Code + dados temporários no Supabase
+    await supabase.from("agendamentos_temp").insert({
       token,
-      qr_code_base64: agendamento.qr_code_base64, // supondo que já tenha sido gerado
+      nome,
+      email,
+      telefone,
+      data,
+      horario,
+      valor,
+      qr_code_base64,
       expiracao: new Date(Date.now() + 24*60*60*1000) // expira em 24h
     });
 
     res.json({
-      link: `${process.env.BASE_URL}/agendamento-pix/${token}`
+      link: `${process.env.BASE_URL}/agendamento-pix/${token}`,
+      qr_code_base64
     });
 
   } catch (err) {
@@ -684,15 +685,14 @@ app.get("/agendamento-pix/:token", async (req, res) => {
   try {
     const { token } = req.params;
 
-    const { data, error } = await supabase
-      .from("agendamentos_pix")
+    const { data } = await supabase
+      .from("agendamentos_temp")
       .select("*")
       .eq("token", token)
       .single();
 
-    if (error || !data) return res.status(404).send("Link inválido ou expirado");
+    if (!data) return res.status(404).send("Link inválido ou expirado");
 
-    // Exibir QR Code PIX para pagamento
     res.send(`
       <h1>Agendamento - Pague via PIX</h1>
       <p>Valor: R$ ${data.valor}</p>
@@ -721,3 +721,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
 });
+
