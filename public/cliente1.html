@@ -131,6 +131,34 @@
             50% { opacity: 0.5; }
             100% { opacity: 1; }
         }
+
+        .payment-success-animation {
+            animation: successPulse 2s ease-in-out;
+        }
+        
+        @keyframes successPulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.9; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .fade-out-up {
+            animation: fadeOutUp 0.5s ease-out forwards;
+        }
+        
+        @keyframes fadeOutUp {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-20px); }
+        }
+
+        .slide-in-down {
+            animation: slideInDown 0.5s ease-out forwards;
+        }
+        
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         
         @media (max-width: 640px) {
             .mobile-flex-col {
@@ -157,26 +185,26 @@
             .dias-tabs-container::-webkit-scrollbar-thumb {
                 background: rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
-
             }
-.dashboard-card {
-    transition: all 0.3s ease;
-}
-
-.dashboard-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
-
-.stat-number {
-    font-size: 1.875rem;
-    font-weight: 700;
-}
-
-.stat-label {
-    font-size: 0.875rem;
-    color: #D1D5DB;
-
+            
+            .dashboard-card {
+                transition: all 0.3s ease;
+            }
+            
+            .dashboard-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
+            
+            .stat-number {
+                font-size: 1.875rem;
+                font-weight: 700;
+            }
+            
+            .stat-label {
+                font-size: 0.875rem;
+                color: #D1D5DB;
+            }
         }
     </style>
 </head>
@@ -375,24 +403,26 @@
                     countdownElement.innerHTML = 'Tempo esgotado!';
                     countdownElement.classList.add('countdown-warning');
                     
-                    // Limpar a área de pagamento
+                    // Limpar a área de pagamento com animação
                     const pixDiv = document.getElementById("pixArea");
                     if (pixDiv) {
-                        pixDiv.innerHTML = `
-                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
-                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
-                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
-                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                    Tentar novamente
-                                </button>
-                            </div>
-                        `;
-                        
-                        feather.replace();
-                        
-                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-                            form.dispatchEvent(new Event('submit'));
-                        });
+                        pixDiv.classList.add('fade-out-up');
+                        setTimeout(() => {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-red-900/20 rounded-lg slide-in-down">
+                                    <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                    <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                    <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                        Tentar novamente
+                                    </button>
+                                </div>
+                            `;
+                            feather.replace();
+                            
+                            document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                                form.dispatchEvent(new Event('submit'));
+                            });
+                        }, 500);
                     }
                     
                     return;
@@ -443,13 +473,19 @@
                         
                         const pixDiv = document.getElementById("pixArea");
                         if (pixDiv) {
-                            pixDiv.innerHTML = `
-                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                                </div>
-                            `;
-                            feather.replace();
+                            pixDiv.classList.add('payment-success-animation');
+                            setTimeout(() => {
+                                pixDiv.classList.add('fade-out-up');
+                                setTimeout(() => {
+                                    pixDiv.innerHTML = `
+                                        <div class="text-center p-4 bg-green-900/20 rounded-lg slide-in-down">
+                                            <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                            <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                        </div>
+                                    `;
+                                    feather.replace();
+                                }, 500);
+                            }, 2000);
                         }
                         
                         listarAgendamentos();
@@ -492,43 +528,46 @@
             form.querySelector('button[type="submit"]').disabled = true;
             
             try {
-    // Primeiro, criar o pagamento PIX - MERCADO PAGO
-    const valorEmReais = 0.01; // 1 centavo
+                // Primeiro, criar o pagamento PIX - MERCADO PAGO
+                const valorEmReais = 0.01; // 1 centavo
 
-    const pagamentoResponse = await fetch('/create-pix', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
-            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-            email: dataToSend.Email
-        })
-    });
+                const pagamentoResponse = await fetch('/create-pix', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                        email: dataToSend.Email
+                    })
+                });
 
-    if (!pagamentoResponse.ok) {
-        const errorData = await pagamentoResponse.json();
-        throw new Error(errorData.error || 'Erro ao criar pagamento');
-    }
+                if (!pagamentoResponse.ok) {
+                    const errorData = await pagamentoResponse.json();
+                    throw new Error(errorData.error || 'Erro ao criar pagamento');
+                }
 
-    const pagamentoData = await pagamentoResponse.json();
-    currentPaymentId = pagamentoData.payment_id;
-    paymentExpiresAt = pagamentoData.expires_at;
-    
-    // Exibir QR Code e código PIX
-    let pixDiv = document.getElementById("pixArea");
-    if (!pixDiv) {
-        pixDiv = document.createElement("div");
-        pixDiv.id = "pixArea";
-        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-        form.appendChild(pixDiv);
-    }
+                const pagamentoData = await pagamentoResponse.json();
+                currentPaymentId = pagamentoData.payment_id;
+                paymentExpiresAt = pagamentoData.expires_at;
+                
+                // Exibir QR Code e código PIX
+                let pixDiv = document.getElementById("pixArea");
+                if (!pixDiv) {
+                    pixDiv = document.createElement("div");
+                    pixDiv.id = "pixArea";
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg animate-fade-in';
+                    form.appendChild(pixDiv);
+                } else {
+                    pixDiv.classList.add('animate-fade-in');
+                    pixDiv.innerHTML = '';
+                }
 
-    pixDiv.innerHTML = `
-        <h3 class="text-center mb-3">Pagamento via PIX</h3>
-        <div class="text-center mb-4">
-            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-        </div>
+                pixDiv.innerHTML = `
+                    <h3 class="text-center mb-3">Pagamento via PIX</h3>
+                    <div class="text-center mb-4">
+                        <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+                    </div>
                     <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
                     <div class="mb-4">
                         <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
@@ -588,7 +627,6 @@
                 form.querySelector('button[type="submit"]').disabled = false;
             }
         });
-
 
         // ---------------- INIT ----------------
         AOS.init({
