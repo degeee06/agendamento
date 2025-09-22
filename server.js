@@ -1039,6 +1039,73 @@ app.post("/webhook-confirmacao", async (req, res) => {
   }
 });
 
+// Confirmar presença via link único (sem PIX, só clique)
+app.get("/confirmar-presenca/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Buscar token na tabela
+    const { data: link, error } = await supabase
+      .from("confirmacao_links")
+      .select(`
+        *,
+        agendamentos (
+          id,
+          cliente,
+          nome,
+          email,
+          telefone,
+          data,
+          horario,
+          status,
+          confirmado
+        )
+      `)
+      .eq("token", token)
+      .single();
+
+    if (error || !link) {
+      return res.status(404).send("❌ Link inválido ou não encontrado");
+    }
+
+    if (new Date(link.expira_em) < new Date()) {
+      return res.status(400).send("⚠️ Link expirado");
+    }
+
+    if (link.utilizado) {
+      return res.status(400).send("⚠️ Este link já foi usado");
+    }
+
+    const agendamento = link.agendamentos;
+
+    // Atualiza o agendamento como confirmado
+    const { error: updateError } = await supabase
+      .from("agendamentos")
+      .update({ confirmado: true, status: "confirmado" })
+      .eq("id", agendamento.id);
+
+    if (updateError) {
+      console.error("Erro ao confirmar agendamento:", updateError);
+      return res.status(500).send("Erro ao confirmar presença");
+    }
+
+    // Marcar o token como utilizado
+    await supabase
+      .from("confirmacao_links")
+      .update({ utilizado: true })
+      .eq("token", token);
+
+    // Redireciona para página de sucesso (pode customizar frontend)
+    res.redirect("/confirmado");
+
+  } catch (err) {
+    console.error("Erro em /confirmar-presenca:", err);
+    res.status(500).send("Erro interno");
+  }
+});
+
+
+
 // Limpar links expirados periodicamente
 async function limparLinksExpirados() {
   try {
@@ -1089,4 +1156,5 @@ app.listen(PORT, () => {
 
 // Export para testes
 export default app;
+
 
