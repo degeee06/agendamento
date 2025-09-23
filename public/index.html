@@ -33,7 +33,7 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 2rem;
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
         }
 
@@ -107,7 +107,7 @@
 
         .card-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 1.5rem;
             padding-bottom: 1rem;
@@ -202,6 +202,12 @@
             border-color: #3b82f6;
         }
 
+        .time-slot.ocupado {
+            background: #fef2f2;
+            color: #dc2626;
+            border-color: #fca5a5;
+        }
+
         .btn {
             padding: 0.75rem 1.5rem;
             border: none;
@@ -285,8 +291,30 @@
             border-radius: 6px;
             margin-bottom: 0.5rem;
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
+        }
+
+        .status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status.pendente {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status.confirmado {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status.cancelado {
+            background: #fee2e2;
+            color: #dc2626;
         }
 
         .loading {
@@ -431,7 +459,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Data</label>
-                            <input type="date" class="form-input" id="data-agendamentos" onchange="carregarAgendamentos()">
+                            <input type="date" class="form-input" id="data-agendamentos">
                         </div>
                         <div id="lista-agendamentos" class="agendamentos-list"></div>
                     </div>
@@ -441,51 +469,117 @@
     </div>
 
     <script>
-        // Configuração Supabase
-        const supabaseUrl = '<%= process.env.SUPABASE_URL %>';
-        const supabaseKey = '<%= process.env.SUPABASE_ANON_KEY %>';
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
+        // Configuração Supabase - AGUARDA CARREGAMENTO COMPLETO
+        let supabase;
         let currentUser = null;
         let clienteId = null;
         let configGeral = null;
 
-        // Inicialização
+        // Inicialização após carregamento completo da página
         document.addEventListener('DOMContentLoaded', async () => {
-            await checkAuth();
-            await loadDashboard();
-            await loadConfigGeral();
-            Lucide.createIcons();
+            await initializeApp();
         });
+
+        async function initializeApp() {
+            try {
+                // Inicializa Supabase apenas após o DOM estar pronto
+                supabase = supabase.createClient(
+                    window.location.origin.replace('admin', ''), // Usa a mesma origem do backend
+                    await getAnonKey() // Busca a chave anônima do backend
+                );
+                
+                await checkAuth();
+                await loadDashboard();
+                await loadConfigGeral();
+                Lucide.createIcons();
+                
+                // Configura event listeners
+                setupEventListeners();
+                
+            } catch (error) {
+                console.error('Erro na inicialização:', error);
+                showError('Erro ao inicializar aplicação: ' + error.message);
+            }
+        }
+
+        // Busca a chave anônima do backend
+        async function getAnonKey() {
+            try {
+                const response = await fetch('/health');
+                // Para desenvolvimento, use uma chave fixa ou configure via environment
+                return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+            } catch {
+                // Fallback para desenvolvimento
+                return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+            }
+        }
+
+        function setupEventListeners() {
+            // Configuração geral
+            document.getElementById('configGeralForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await salvarConfigGeral();
+            });
+
+            // Data selecionada no calendário
+            document.getElementById('data-selecionada').addEventListener('change', async () => {
+                await loadConfigDataEspecifica();
+            });
+
+            // Data para agendamentos
+            document.getElementById('data-agendamentos').addEventListener('change', async () => {
+                await carregarAgendamentos();
+            });
+
+            // Define data padrão para agendamentos
+            document.getElementById('data-agendamentos').value = new Date().toISOString().split('T')[0];
+        }
 
         // Autenticação
         async function checkAuth() {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    window.location.href = '/';
+                    return;
+                }
+
+                currentUser = session.user;
+                clienteId = currentUser.user_metadata?.cliente_id;
+                document.getElementById('userEmail').textContent = currentUser.email;
+
+                if (!clienteId) {
+                    showError('Usuário sem cliente_id configurado');
+                    return;
+                }
+            } catch (error) {
+                console.error('Erro na autenticação:', error);
                 window.location.href = '/';
-                return;
-            }
-
-            currentUser = session.user;
-            clienteId = currentUser.user_metadata?.cliente_id;
-            document.getElementById('userEmail').textContent = currentUser.email;
-
-            if (!clienteId) {
-                showError('Usuário sem cliente_id configurado');
-                return;
             }
         }
 
         async function logout() {
-            await supabase.auth.signOut();
-            window.location.href = '/';
+            try {
+                await supabase.auth.signOut();
+                window.location.href = '/';
+            } catch (error) {
+                console.error('Erro ao fazer logout:', error);
+            }
         }
 
         // Navegação
         function showSection(sectionName) {
-            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            document.querySelectorAll('[id$="-section"]').forEach(section => section.classList.add('hidden'));
+            // Remove classe active de todos os itens
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
             
+            // Esconde todas as seções
+            document.querySelectorAll('[id$="-section"]').forEach(section => {
+                section.classList.add('hidden');
+            });
+            
+            // Ativa item clicado e mostra seção correspondente
             event.currentTarget.classList.add('active');
             document.getElementById(`${sectionName}-section`).classList.remove('hidden');
 
@@ -509,8 +603,12 @@
         // Dashboard
         async function loadDashboard() {
             try {
+                const token = await getToken();
                 const response = await fetch(`/admin/${clienteId}/dashboard`, {
-                    headers: { 'Authorization': `Bearer ${await getToken()}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 if (!response.ok) throw new Error('Erro ao carregar dashboard');
@@ -520,7 +618,6 @@
                 document.getElementById('statHoje').textContent = data.estatisticas.hoje;
                 document.getElementById('statPendentes').textContent = data.estatisticas.pendentes;
                 
-                // Carrega disponibilidade de hoje
                 await loadDisponibilidadeHoje();
             } catch (error) {
                 showError('Erro ao carregar dashboard: ' + error.message);
@@ -530,9 +627,15 @@
         async function loadDisponibilidadeHoje() {
             const hoje = new Date().toISOString().split('T')[0];
             try {
-                const response = await fetch(`/admin/${clienteId}/disponibilidade?data=${hoje}`, {
-                    headers: { 'Authorization': `Bearer ${await getToken()}` }
+                const token = await getToken();
+                const response = await fetch(`/api/horarios-disponiveis/${clienteId}?data=${hoje}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
+                
+                if (!response.ok) throw new Error('Erro ao carregar disponibilidade');
                 
                 const data = await response.json();
                 const container = document.getElementById('disponibilidade-hoje');
@@ -540,10 +643,9 @@
                 container.innerHTML = `
                     <p><strong>Data:</strong> ${formatarData(hoje)}</p>
                     <p><strong>Horários disponíveis:</strong> ${data.horarios_disponiveis.length}</p>
-                    <p><strong>Agendamentos confirmados:</strong> ${data.agendamentos.length}</p>
                     <div class="time-slots" style="margin-top: 1rem;">
                         ${data.horarios_disponiveis.map(horario => 
-                            `<span class="time-slot">${horario}</span>`
+                            `<span class="time-slot selected">${horario}</span>`
                         ).join('')}
                     </div>
                 `;
@@ -555,14 +657,18 @@
         // Configuração Geral
         async function loadConfigGeral() {
             try {
-                const response = await fetch(`/admin/${clienteId}/config/completa`, {
-                    headers: { 'Authorization': `Bearer ${await getToken()}` }
+                const token = await getToken();
+                const response = await fetch(`/admin/config/${clienteId}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 if (!response.ok) throw new Error('Erro ao carregar configuração');
                 
                 const data = await response.json();
-                configGeral = data.config_geral;
+                configGeral = data;
                 
                 renderDiasSemana(configGeral.dias_semana);
                 renderHorariosDisponiveis(configGeral.horarios_disponiveis);
@@ -612,14 +718,12 @@
             element.classList.toggle('selected');
         }
 
-        document.getElementById('configGeralForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
+        async function salvarConfigGeral() {
             const diasSemana = Array.from(document.querySelectorAll('#dias-semana-checkboxes input:checked'))
                 .map(cb => parseInt(cb.value));
             
             const horariosDisponiveis = Array.from(document.querySelectorAll('#horarios-disponiveis .time-slot.selected'))
-                .map(slot => slot.textContent);
+                .map(slot => slot.textContent.trim());
             
             const config = {
                 dias_semana: diasSemana,
@@ -629,22 +733,24 @@
             };
             
             try {
-                const response = await fetch(`/admin/${clienteId}/config/geral`, {
+                const token = await getToken();
+                const response = await fetch(`/admin/config/${clienteId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${await getToken()}`
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify(config)
                 });
                 
                 if (!response.ok) throw new Error('Erro ao salvar configuração');
                 
+                const result = await response.json();
                 showSuccess('Configuração salva com sucesso!');
             } catch (error) {
                 showError('Erro ao salvar configuração: ' + error.message);
             }
-        });
+        }
 
         // Calendário
         async function loadCalendario() {
@@ -664,18 +770,28 @@
                 dias.push(data);
             }
             
+            // Encontra o primeiro dia da semana do primeiro dia mostrado
+            const primeiroDia = new Date(dias[0]);
+            const diff = primeiroDia.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+            
+            // Cria dias vazios para alinhar o calendário
+            const diasVazios = Array(diff).fill(null);
+            const todosDias = [...diasVazios, ...dias];
+            
             container.innerHTML = `
                 <div class="calendar">
                     ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(dia => 
                         `<div class="calendar-header">${dia}</div>`
                     ).join('')}
-                    ${dias.map(dia => {
+                    ${todosDias.map(dia => {
+                        if (!dia) return '<div class="calendar-day"></div>';
+                        
                         const isToday = dia.toDateString() === hoje.toDateString();
                         return `
                             <div class="calendar-day ${isToday ? 'today' : ''}" 
                                  onclick="selecionarData('${dia.toISOString().split('T')[0]}')">
                                 <div class="day-number">${dia.getDate()}</div>
-                                <small>${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dia.getDay()]}</small>
+                                <small>${dia.getDate()}</small>
                             </div>
                         `;
                     }).join('')}
@@ -688,77 +804,71 @@
             await loadConfigDataEspecifica();
         }
 
-        document.getElementById('data-selecionada').addEventListener('change', async () => {
-            await loadConfigDataEspecifica();
-        });
-
         async function loadConfigDataEspecifica() {
             const data = document.getElementById('data-selecionada').value;
             if (!data) return;
             
             try {
-                const response = await fetch(`/admin/${clienteId}/disponibilidade?data=${data}`, {
-                    headers: { 'Authorization': `Bearer ${await getToken()}` }
+                const token = await getToken();
+                const response = await fetch(`/api/horarios-disponiveis/${clienteId}?data=${data}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
+                
+                if (!response.ok) throw new Error('Erro ao carregar disponibilidade');
                 
                 const disponibilidade = await response.json();
                 const container = document.getElementById('config-data-especifica');
                 
+                // Busca configurações específicas da data
+                const configResponse = await fetch(`/admin/config/${clienteId}/datas?startDate=${data}&endDate=${data}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const configData = configResponse.ok ? await configResponse.json() : { configs: [] };
+                const configEspecifica = configData.configs[0];
+                
                 container.innerHTML = `
                     <div class="form-group">
                         <label class="checkbox-label">
-                            <input type="checkbox" id="bloquear-data" ${disponibilidade.config_data?.bloqueada ? 'checked' : ''} 
+                            <input type="checkbox" id="bloquear-data" ${configEspecifica?.bloqueada ? 'checked' : ''} 
                                    onchange="toggleBloqueioData()">
                             Bloquear esta data completamente
                         </label>
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label">Horários Disponíveis para esta Data</label>
+                        <label class="form-label">Horários para ${formatarData(data)}</label>
                         <div class="time-slots" id="horarios-data-especifica"></div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label">Máximo de Agendamentos para este Dia</label>
-                        <input type="number" class="form-input" id="max-agendamentos-data" 
-                               value="${disponibilidade.config_data?.max_agendamentos || disponibilidade.config_geral.max_agendamentos_dia}">
-                    </div>
-                    
                     <button class="btn btn-primary" onclick="salvarConfigData()">Salvar Configuração da Data</button>
-                    
-                    <div style="margin-top: 1rem;">
-                        <h4>Agendamentos para ${formatarData(data)}</h4>
-                        <div id="agendamentos-data">
-                            ${disponibilidade.agendamentos.map(ag => `
-                                <div class="agendamento-item">
-                                    <span>${ag.horario} - ${ag.nome}</span>
-                                    <span class="status">${ag.status}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
                 `;
                 
-                renderHorariosDataEspecifica(disponibilidade);
+                renderHorariosDataEspecifica(disponibilidade, configEspecifica);
             } catch (error) {
                 showError('Erro ao carregar configuração da data: ' + error.message);
             }
         }
 
-        function renderHorariosDataEspecifica(disponibilidade) {
+        function renderHorariosDataEspecifica(disponibilidade, configEspecifica) {
             const container = document.getElementById('horarios-data-especifica');
-            const horariosPermitidos = disponibilidade.config_data?.horarios_disponiveis || disponibilidade.config_geral.horarios_disponiveis;
-            const horariosBloqueados = disponibilidade.config_data?.horarios_bloqueados || [];
+            const horariosPermitidos = configGeral.horarios_disponiveis;
             
             container.innerHTML = horariosPermitidos.map(horario => {
-                const isBloqueado = horariosBloqueados.includes(horario);
-                const isOcupado = disponibilidade.agendamentos.some(ag => ag.horario === horario);
+                const isDisponivel = disponibilidade.horarios_disponiveis.includes(horario);
+                const isBloqueado = configEspecifica?.horarios_bloqueados?.includes(horario);
                 
                 return `
-                    <div class="time-slot ${isBloqueado ? '' : 'selected'} ${isOcupado ? 'ocupado' : ''}" 
+                    <div class="time-slot ${isDisponivel && !isBloqueado ? 'selected' : ''} ${isBloqueado ? 'ocupado' : ''}" 
                          onclick="toggleHorarioData(this, '${horario}')">
                         ${horario}
-                        ${isOcupado ? ' (Ocupado)' : ''}
+                        ${!isDisponivel ? ' (Indisponível)' : ''}
                     </div>
                 `;
             }).join('');
@@ -769,36 +879,81 @@
             const bloquear = document.getElementById('bloquear-data').checked;
             
             try {
-                const response = await fetch(`/admin/${clienteId}/data/bloquear`, {
+                const token = await getToken();
+                const response = await fetch(`/admin/config/${clienteId}/datas`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${await getToken()}`
+                        'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ data, bloquear })
+                    body: JSON.stringify({ 
+                        data: data, 
+                        bloqueada: bloquear 
+                    })
                 });
                 
                 if (!response.ok) throw new Error('Erro ao bloquear data');
                 
                 showSuccess(`Data ${bloquear ? 'bloqueada' : 'desbloqueada'} com sucesso!`);
+                await loadConfigDataEspecifica();
             } catch (error) {
                 showError('Erro ao atualizar bloqueio: ' + error.message);
             }
         }
 
-        // Agendamentos
-        async function carregarAgendamentos() {
-            const data = document.getElementById('data-agendamentos').value || new Date().toISOString().split('T')[0];
+        function toggleHorarioData(element, horario) {
+            element.classList.toggle('selected');
+            element.classList.toggle('ocupado');
+        }
+
+        async function salvarConfigData() {
+            const data = document.getElementById('data-selecionada').value;
+            const horariosSelecionados = Array.from(document.querySelectorAll('#horarios-data-especifica .time-slot.selected'))
+                .map(slot => slot.textContent.split(' ')[0].trim()); // Remove "(Indisponível)" se existir
+            
+            const horariosBloqueados = configGeral.horarios_disponiveis.filter(horario => 
+                !horariosSelecionados.includes(horario)
+            );
             
             try {
+                const token = await getToken();
+                const response = await fetch(`/admin/config/${clienteId}/datas`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        data: data,
+                        horarios_bloqueados: horariosBloqueados
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Erro ao salvar configuração');
+                
+                showSuccess('Configuração da data salva com sucesso!');
+            } catch (error) {
+                showError('Erro ao salvar configuração da data: ' + error.message);
+            }
+        }
+
+        // Agendamentos
+        async function carregarAgendamentos() {
+            const data = document.getElementById('data-agendamentos').value;
+            
+            try {
+                const token = await getToken();
                 const response = await fetch(`/agendamentos/${clienteId}`, {
-                    headers: { 'Authorization': `Bearer ${await getToken()}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 if (!response.ok) throw new Error('Erro ao carregar agendamentos');
                 
-                const data = await response.json();
-                const agendamentosDoDia = data.agendamentos.filter(ag => ag.data === data);
+                const result = await response.json();
+                const agendamentosDoDia = result.agendamentos.filter(ag => ag.data === data);
                 
                 const container = document.getElementById('lista-agendamentos');
                 container.innerHTML = agendamentosDoDia.map(ag => `
@@ -821,15 +976,19 @@
 
         async function confirmarAgendamento(id) {
             try {
+                const token = await getToken();
                 const response = await fetch(`/agendamentos/${clienteId}/confirmar/${id}`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${await getToken()}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 if (!response.ok) throw new Error('Erro ao confirmar agendamento');
                 
                 showSuccess('Agendamento confirmado com sucesso!');
-                carregarAgendamentos();
+                await carregarAgendamentos();
             } catch (error) {
                 showError('Erro ao confirmar agendamento: ' + error.message);
             }
@@ -839,15 +998,19 @@
             if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return;
             
             try {
+                const token = await getToken();
                 const response = await fetch(`/agendamentos/${clienteId}/cancelar/${id}`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${await getToken()}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 if (!response.ok) throw new Error('Erro ao cancelar agendamento');
                 
                 showSuccess('Agendamento cancelado com sucesso!');
-                carregarAgendamentos();
+                await carregarAgendamentos();
             } catch (error) {
                 showError('Erro ao cancelar agendamento: ' + error.message);
             }
@@ -864,6 +1027,9 @@
         }
 
         function showError(message) {
+            // Remove mensagens anteriores
+            document.querySelectorAll('.error, .success').forEach(el => el.remove());
+            
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error';
             errorDiv.textContent = message;
@@ -872,6 +1038,9 @@
         }
 
         function showSuccess(message) {
+            // Remove mensagens anteriores
+            document.querySelectorAll('.error, .success').forEach(el => el.remove());
+            
             const successDiv = document.createElement('div');
             successDiv.className = 'success';
             successDiv.textContent = message;
