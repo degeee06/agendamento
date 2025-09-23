@@ -241,8 +241,8 @@
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
                                 </div>
-                                <input type="text" id="Data" name="Data" placeholder="Selecione a data" required 
-           class="w-full pl-3 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                                <input type="date" id="Data" name="Data" placeholder="Data do Agendamento" required 
+                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                             </div>
                         </div>
                         <div>
@@ -267,6 +267,8 @@
             </div>
         </form>
     </div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
@@ -632,9 +634,14 @@ async function carregarConfiguracoesCliente() {
             .single();
 
         if (error) {
+            if (error.code === 'PGRST116') { // registro não encontrado
+                console.warn('Nenhuma configuração encontrada para este cliente');
+                return null;
+            }
             console.error('Erro ao carregar configuração:', error);
             return null;
         }
+
         return data;
     } catch (err) {
         console.error('Erro ao acessar Supabase:', err);
@@ -643,6 +650,34 @@ async function carregarConfiguracoesCliente() {
 }
 
 
+async function initDatepicker() {
+    const config = await carregarConfiguracoesCliente();
+    if (!config) return;
+
+    const diasPermitidos = config.dias_semana.map(Number); // transforma em inteiros
+    const datasBloqueadas = config.datas_bloqueadas || [];
+
+    flatpickr("#Data", {
+        dateFormat: "Y-m-d",
+        minDate: "today",
+        disable: [
+            function(date) {
+                const day = date.getDay(); // 0=domingo, 1=segunda
+                const formatted = date.toISOString().split('T')[0];
+
+                // Bloquear dia da semana não permitido
+                if (!diasPermitidos.includes(day)) return true;
+
+                // Bloquear datas específicas
+                if (datasBloqueadas.includes(formatted)) return true;
+
+                return false; // data permitida
+            }
+        ]
+    });
+}
+
+        
 // ---------------- APLICAR CONFIGURAÇÕES NO FORMULÁRIO ----------------
 dataInput.addEventListener('change', async () => {
     const config = await carregarConfiguracoesCliente();
