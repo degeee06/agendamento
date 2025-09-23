@@ -1007,102 +1007,29 @@
             }
             
             try{
-                // Simulação de dados para demonstração
-                agendamentosCache = [
-                    {
-                        id: 1,
-                        cliente: "cliente1",
-                        nome: "João Silva",
-                        email: "joao@email.com",
-                        telefone: "(11) 99999-9999",
-                        data: "2024-01-15",
-                        horario: "10:00",
-                        status: "pendente"
-                    },
-                    {
-                        id: 2,
-                        cliente: "cliente1",
-                        nome: "Maria Santos",
-                        email: "maria@email.com",
-                        telefone: "(11) 88888-8888",
-                        data: "2024-01-16",
-                        horario: "14:00",
-                        status: "confirmado"
-                    },
-                    {
-                        id: 3,
-                        cliente: "cliente1",
-                        nome: "Pedro Oliveira",
-                        email: "pedro@email.com",
-                        telefone: "(11) 77777-7777",
-                        data: "2024-01-17",
-                        horario: "11:00",
-                        status: "cancelado"
-                    }
-                ];
+                const res = await fetch(`/agendamentos/${cliente}`, {
+                    headers: { "Authorization": `Bearer ${userToken}` }
+                });
                 
-                document.getElementById('meusAgendamentos').style.display = 'block';
+                if (res.status === 401) {
+                    // Token expirado ou inválido
+                    showToast("Sessão expirada. Faça login novamente.", "error");
+                    logoutBtn.click(); // Força logout
+                    return;
+                }
+                
+                const { agendamentos } = await res.json();
+                agendamentosCache = agendamentos;
+                meusAgendamentos.style.display = 'block';
                 document.getElementById('filtersSection').style.display = 'block';
                 document.getElementById('diasTabs').style.display = 'flex';
                 initTabsDias();
-                renderAgendamentos();
-                carregarDashboard();
+                renderAgendamentos(); 
             } catch(e){
                 console.error("Erro ao listar agendamentos:", e);
                 showToast("Erro ao listar agendamentos","error");
             }
         }
-
-        // ---------------- LOGIN ----------------
-        document.getElementById('loginBtn').addEventListener('click', async () => {
-            const email = document.getElementById('email').value;
-            const senha = document.getElementById('senha').value;
-            if(!email || !senha) {
-                showToast("Preencha email e senha", "warning");
-                return;
-            }
-            
-            try {
-                document.getElementById('loginText').classList.add('hidden');
-                document.getElementById('loginSpinner').classList.remove('hidden');
-                document.getElementById('loginBtn').disabled = true;
-                
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-                if(error){ 
-                    showToast(error.message,"error"); 
-                    document.getElementById('loginText').classList.remove('hidden');
-                    document.getElementById('loginSpinner').classList.add('hidden');
-                    document.getElementById('loginBtn').disabled = false;
-                    return; 
-                }
-
-                userToken = data.session.access_token;
-                localStorage.setItem('userToken', userToken);
-                localStorage.setItem('userEmail', email);
-
-                document.getElementById('loginSection').style.display = 'none';
-                document.getElementById('logoutBtn').style.display = 'flex';
-                document.getElementById('configSection').style.display = 'block';
-                document.getElementById('calendarSection').style.display = 'block';
-
-                await carregarConfiguracoes();
-                await listarAgendamentos();
-                gerarCalendario();
-                
-                showToast("Login realizado com sucesso!", "success");
-
-                document.getElementById('loginText').classList.remove('hidden');
-                document.getElementById('loginSpinner').classList.add('hidden');
-                document.getElementById('loginBtn').disabled = false;
-
-            } catch(e) {
-                console.error(e);
-                showToast("Erro ao fazer login", "error");
-                document.getElementById('loginText').classList.remove('hidden');
-                document.getElementById('loginSpinner').classList.add('hidden');
-                document.getElementById('loginBtn').disabled = false;
-            }
-        });
 
         // ---------------- LOGOUT ----------------
         document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -1472,3 +1399,4 @@ async function carregarDashboard() {
     </script>
 </body>
 </html>
+
