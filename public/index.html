@@ -508,7 +508,7 @@
         const configSection = document.getElementById("configSection");
         const calendarSection = document.getElementById("calendarSection");
 
-        const pathParts = window.location.pathname.split('/');
+        const cliente = 'cliente1';
         const cliente = pathParts[1] || '';
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
@@ -1509,3 +1509,4 @@
     </script>
 </body>
 </html>
+
