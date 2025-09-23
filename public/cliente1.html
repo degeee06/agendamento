@@ -508,7 +508,19 @@
             }
         }
 
-
+// ---------------- DATEPICKER ----------------
+async function initDatepicker() {
+    const config = await carregarConfiguracoesCliente();
+    if (!config) return;
+    flatpickr(dataInput, {
+        dateFormat: "Y-m-d",
+        minDate: "today",
+        disable: [
+            ...config.datas_bloqueadas,
+            function(date) { return !config.dias_semana.includes(date.getDay() || 7); }
+        ]
+    });
+}
        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
