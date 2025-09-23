@@ -25,8 +25,26 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
         
+        .scrollbar-hide::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
         .animate-fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
+            animation: fadeIn 0.3s ease-out forwards;
         }
         
         @keyframes fadeIn {
@@ -40,6 +58,43 @@
         
         .input-field:focus {
             box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
+        }
+        
+        .status-pendente {
+            color: #fbbf24;
+            background-color: rgba(251, 191, 36, 0.15);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .status-confirmado {
+            color: #34d399;
+            background-color: rgba(52, 211, 153, 0.15);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .status-cancelado {
+            color: #f87171;
+            background-color: rgba(248, 113, 113, 0.15);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        
+        .tab-dia.active {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .agendamento-card {
+            transition: all 0.3s ease;
+        }
+        
+        .agendamento-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
         
         .loading-spinner {
@@ -76,44 +131,64 @@
             50% { opacity: 0.5; }
             100% { opacity: 1; }
         }
-
-        .payment-success {
-            animation: successPulse 2s ease-in-out;
-        }
         
-        @keyframes successPulse {
-            0% { transform: scale(1); background-color: rgba(34, 197, 94, 0.1); }
-            50% { transform: scale(1.02); background-color: rgba(34, 197, 94, 0.2); }
-            100% { transform: scale(1); background-color: rgba(34, 197, 94, 0.1); }
-        }
-
-        .fade-out-up {
-            animation: fadeOutUp 0.5s ease-out forwards;
-        }
-        
-        @keyframes fadeOutUp {
-            from { opacity: 1; transform: translateY(0); }
-            to { opacity: 0; transform: translateY(-20px); }
-        }
-
-        .slide-in-down {
-            animation: slideInDown 0.5s ease-out forwards;
-        }
-        
-        @keyframes slideInDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
+        @media (max-width: 640px) {
+            .mobile-flex-col {
+                flex-direction: column;
+            }
+            
+            .mobile-w-full {
+                width: 100%;
+            }
+            
+            .mobile-text-center {
+                text-align: center;
+            }
+            
+            .dias-tabs-container {
+                overflow-x: auto;
+                padding-bottom: 8px;
+            }
+            
+            .dias-tabs-container::-webkit-scrollbar {
+                height: 4px;
+            }
+            
+            .dias-tabs-container::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+            }
+            
+            .dashboard-card {
+                transition: all 0.3s ease;
+            }
+            
+            .dashboard-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
+            
+            .stat-number {
+                font-size: 1.875rem;
+                font-weight: 700;
+            }
+            
+            .stat-label {
+                font-size: 0.875rem;
+                color: #D1D5DB;
+            }
         }
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header with animated gradient -->
         <header class="text-center mb-12" data-aos="fade-down">
             <h1 class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
                 Agendamento
             </h1>
             <p class="text-lg opacity-90 max-w-2xl mx-auto">
-                Faça seu agendamento de forma rápida e segura
+                Gerencie seus compromissos com uma interface intuitiva e elegante
             </p>
         </header>
 
@@ -185,8 +260,8 @@
             </div>
             <div class="max-w-md mx-auto mt-8">
                 <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
-                    <i data-feather="credit-card" class="w-5 h-5"></i>
-                    <span id="agendarText">Agendar e Pagar</span>
+                    <i data-feather="plus" class="w-5 h-5"></i>
+                    <span id="agendarText">Agendar</span>
                     <div id="agendarSpinner" class="loading-spinner hidden"></div>
                 </button>
             </div>
@@ -208,32 +283,34 @@
         let paymentCheckInterval = null;
         let currentPaymentId = null;
         let paymentExpiresAt = null;
-        let paymentStatusInterval = null;
 
         const form = document.getElementById('agendamentoForm');
-        const agendarText = document.getElementById('agendarText');
-        const agendarSpinner = document.getElementById('agendarSpinner');
+        const agendarText = document.getElementById("agendarText");
+        const agendarSpinner = document.getElementById("agendarSpinner");
         const telefoneInput = document.getElementById("Telefone");
         const dataInput = document.getElementById("Data");
         const horarioInput = document.getElementById("Horario");
 
+        const pathParts = window.location.pathname.split('/');
+        const cliente = pathParts[1] || '';
+
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
+            // Configurar máscara de telefone
             if (telefoneInput) {
                 telefoneMask = IMask(telefoneInput, {
                     mask: '(00) 00000-0000'
                 });
             }
             
+            // Permitir selecionar a partir de hoje (incluindo hoje)
             const hoje = new Date();
             const ontem = new Date(hoje);
-            ontem.setDate(ontem.getDate() - 1);
+            ontem.setDate(ontem.getDate() - 1); // Data de ontem
             
             if (dataInput) {
-                dataInput.min = ontem.toISOString().split('T')[0];
+                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
             }
-            
-            feather.replace();
         }
 
         // ---------------- TOASTS ----------------
@@ -280,91 +357,58 @@
             return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
-        function limparIntervals() {
+        function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
             if (paymentCheckInterval) {
                 clearInterval(paymentCheckInterval);
-                paymentCheckInterval = null;
             }
-            if (paymentStatusInterval) {
-                clearInterval(paymentStatusInterval);
-                paymentStatusInterval = null;
-            }
-        }
-
-        function startPaymentTimer(expiresAt) {
-            limparIntervals();
             
             const countdownElement = document.getElementById('countdownTimer');
             
-            paymentCheckInterval = setInterval(() => {
+            // Atualizar o contador a cada segundo
+            paymentCheckInterval = setInterval(async () => {
                 const now = new Date();
                 const expires = new Date(expiresAt);
                 const timeRemaining = Math.floor((expires - now) / 1000);
                 
                 if (timeRemaining <= 0) {
-                    limparIntervals();
-                    if (countdownElement) {
-                        countdownElement.innerHTML = 'Tempo esgotado!';
-                        countdownElement.classList.add('countdown-warning');
-                    }
+                    clearInterval(paymentCheckInterval);
+                    countdownElement.innerHTML = 'Tempo esgotado!';
+                    countdownElement.classList.add('countdown-warning');
                     
+                    // Limpar a área de pagamento
                     const pixDiv = document.getElementById("pixArea");
                     if (pixDiv) {
-                        pixDiv.classList.add('fade-out-up');
-                        setTimeout(() => {
-                            pixDiv.innerHTML = `
-                                <div class="text-center p-4 bg-red-900/20 rounded-lg slide-in-down">
-                                    <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
-                                    <p class="text-red-300">Tempo para pagamento esgotado.</p>
-                                    <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                        Tentar novamente
-                                    </button>
-                                </div>
-                            `;
-                            feather.replace();
-                            
-                            document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-                                form.dispatchEvent(new Event('submit'));
-                            });
-                        }, 500);
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                    Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                        
+                        feather.replace();
+                        
+                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                            form.dispatchEvent(new Event('submit'));
+                        });
                     }
+                    
                     return;
                 }
                 
-                if (countdownElement) {
-                    countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
-                    countdownElement.classList.toggle('countdown-warning', timeRemaining < 60);
+                // Atualizar o contador
+                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+                
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
+                if (timeRemaining < 60) {
+                    countdownElement.classList.add('countdown-warning');
+                } else {
+                    countdownElement.classList.remove('countdown-warning');
                 }
             }, 1000);
-        }
-
-        async function salvarAgendamentoNoSupabase(dadosAgendamento) {
-            try {
-                // Adicionar dados adicionais para o Supabase
-                const agendamentoCompleto = {
-                    ...dadosAgendamento,
-                    status: 'confirmado',
-                    created_at: new Date().toISOString(),
-                    payment_id: currentPaymentId,
-                    updated_at: new Date().toISOString()
-                };
-                
-                const { data, error } = await supabase
-                    .from('agendamentos')
-                    .insert([agendamentoCompleto])
-                    .select();
-                
-                if (error) {
-                    console.error('Erro Supabase:', error);
-                    throw error;
-                }
-                
-                console.log('Agendamento salvo no Supabase:', data);
-                return data;
-            } catch (error) {
-                console.error('Erro ao salvar agendamento no Supabase:', error);
-                throw error;
-            }
         }
 
         async function checkPaymentStatus(paymentId) {
@@ -377,40 +421,45 @@
                 const statusData = await statusResponse.json();
                 
                 if (statusData.status === 'approved') {
-                    limparIntervals();
+                    // Pagamento aprovado, parar de verificar
+                    clearInterval(paymentCheckInterval);
                     
-                    // Salvar agendamento no Supabase
+                    // Enviar agendamento
                     const formData = new FormData(form);
                     const dataToSend = {};
                     formData.forEach((v,k) => dataToSend[k] = v);
                     
-                    await salvarAgendamentoNoSupabase(dataToSend);
+                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
                     
-                    showToast("Agendamento realizado com sucesso!", "success");
-                    form.reset();
-                    
-                    const pixDiv = document.getElementById("pixArea");
-                    if (pixDiv) {
-                        // Animação de sucesso
-                        pixDiv.classList.add('payment-success');
+                    if (agendamentoResponse.ok) {
+                        showToast("Agendamento realizado com sucesso!", "success");
+                        form.reset();
                         
-                        setTimeout(() => {
-                            pixDiv.classList.add('fade-out-up');
-                            setTimeout(() => {
-                                pixDiv.innerHTML = `
-                                    <div class="text-center p-4 bg-green-900/20 rounded-lg slide-in-down">
-                                        <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                                        <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                                    </div>
-                                `;
-                                feather.replace();
-                            }, 500);
-                        }, 2000);
+                        const pixDiv = document.getElementById("pixArea");
+                        if (pixDiv) {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                </div>
+                            `;
+                            feather.replace();
+                        }
+                    } else {
+                        const errorData = await agendamentoResponse.json();
+                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
                     }
                     
                     return true;
                 } else if (statusData.status === 'expired') {
-                    limparIntervals();
+                    // Pagamento expirado
+                    clearInterval(paymentCheckInterval);
                     showToast("Tempo para pagamento expirado.", "error");
                     return true;
                 }
@@ -418,7 +467,6 @@
                 return false;
             } catch (err) {
                 console.error("Erro ao verificar pagamento:", err);
-                showToast("Erro ao verificar pagamento", "error");
                 return false;
             }
         }
@@ -430,23 +478,26 @@
             const dataToSend={};
             formData.forEach((v,k)=>dataToSend[k]=v);
 
+            // Verifica campos obrigatórios
             if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
                 showToast("Preencha todos os campos", "warning");
                 return;
             }
 
+            // Mostrar loading
             agendarText.classList.add('hidden');
             agendarSpinner.classList.remove('hidden');
             form.querySelector('button[type="submit"]').disabled = true;
             
             try {
-                const valorEmReais = 0.01;
+                // Primeiro, criar o pagamento PIX - MERCADO PAGO
+                const valorEmReais = 0.01; // 1 centavo
 
                 const pagamentoResponse = await fetch('/create-pix', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        amount: valorEmReais,
+                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
                         description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
                         email: dataToSend.Email
                     })
@@ -461,16 +512,13 @@
                 currentPaymentId = pagamentoData.payment_id;
                 paymentExpiresAt = pagamentoData.expires_at;
                 
+                // Exibir QR Code e código PIX
                 let pixDiv = document.getElementById("pixArea");
                 if (!pixDiv) {
                     pixDiv = document.createElement("div");
                     pixDiv.id = "pixArea";
-                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg animate-fade-in';
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
                     form.appendChild(pixDiv);
-                } else {
-                    pixDiv.innerHTML = '';
-                    pixDiv.classList.remove('fade-out-up', 'payment-success');
-                    pixDiv.classList.add('animate-fade-in');
                 }
 
                 pixDiv.innerHTML = `
@@ -499,8 +547,10 @@
                 
                 feather.replace();
                 
+                // Iniciar contador de tempo
                 startPaymentTimer(paymentExpiresAt);
                 
+                // Configurar botão de copiar
                 document.getElementById('copyPixBtn').addEventListener('click', () => {
                     const textarea = document.querySelector('#pixArea textarea');
                     textarea.select();
@@ -508,14 +558,15 @@
                     showToast('Código PIX copiado!', 'success');
                 });
                 
-                // Verificação automática do pagamento
-                paymentStatusInterval = setInterval(async () => {
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
                     const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
                     if (paymentConfirmed) {
-                        limparIntervals();
+                        clearInterval(paymentStatusInterval);
                     }
                 }, 10000);
                 
+                // Configurar botão de confirmação de pagamento
                 document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
                     const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
                     if (!paymentConfirmed) {
@@ -523,10 +574,13 @@
                     }
                 });
                 
+                pagamentoPendente = true;
+                
             } catch(err) { 
                 console.error(err); 
                 showToast("Erro ao processar pagamento","error"); 
             } finally {
+                // Esconder loading
                 agendarText.classList.remove('hidden');
                 agendarSpinner.classList.add('hidden');
                 form.querySelector('button[type="submit"]').disabled = false;
@@ -539,6 +593,7 @@
             easing: 'ease-out-quart',
             once: true
         });
+        feather.replace();
         init();
     </script>
 </body>
