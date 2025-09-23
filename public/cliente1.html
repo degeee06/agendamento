@@ -297,13 +297,11 @@
         const pathParts = window.location.pathname.split('/');
         const cliente = pathParts[1] || '';
 
-async function initDatepicker(config) {
+// ---------------- Inicializar Flatpickr ----------------
+function initDatepicker(config) {
     if (!dataInput) return;
 
-    // Datas bloqueadas
     const blockedDates = config.datas_bloqueadas || [];
-
-    // Dias da semana disponíveis
     const diasDisponiveis = (config.dias_semana || [1,2,3,4,5]).map(Number); // 0=domingo
 
     flatpickr(dataInput, {
@@ -311,21 +309,17 @@ async function initDatepicker(config) {
         minDate: "today",
         disable: [
             function(date) {
-                // Bloquear datas específicas
                 const d = date.toISOString().split('T')[0];
                 if (blockedDates.includes(d)) return true;
-
-                // Bloquear dias da semana não permitidos
-                const dia = date.getDay(); // 0=domingo
+                const dia = date.getDay();
                 if (!diasDisponiveis.includes(dia)) return true;
-
                 return false;
             }
         ],
         locale: {
             firstDayOfWeek: 1
         },
-        onChange: function(selectedDates, dateStr, instance) {
+        onChange: function(selectedDates, dateStr) {
             validarDataSelecionada(dateStr, config);
         }
     });
@@ -372,42 +366,38 @@ async function init() {
     }
 }
 
-        // ---------------- TOASTS ----------------
-        let activeToasts = [];
-        function showToast(message, type = "success") {
-            const colors = {
-                success: "bg-gradient-to-r from-green-500 to-teal-400",
-                error: "bg-gradient-to-r from-red-500 to-pink-500",
-                info: "bg-gradient-to-r from-blue-500 to-cyan-400",
-                warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
-            };
-            
-            const container = document.getElementById("toast-container");
-            if (activeToasts.length >= 3) {
-                const oldest = activeToasts.shift();
-                oldest.remove();
-            }
-            
-            const toast = document.createElement("div");
-            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
-            toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
-            container.appendChild(toast);
-            activeToasts.push(toast);
-            feather.replace();
-            
-            requestAnimationFrame(()=>{
-                toast.classList.remove("opacity-0","translate-x-5"); 
-                toast.classList.add("opacity-100","translate-x-0");
-            });
-            
-            setTimeout(()=>{
-                toast.classList.add("opacity-0","translate-x-5"); 
-                setTimeout(()=>{
-                    toast.remove(); 
-                    activeToasts=activeToasts.filter(t=>t!==toast);
-                },300);
-            },3000);
-        }
+       // ---------------- Função de toast ----------------
+let activeToasts = [];
+function showToast(message, type = "success") {
+    const colors = {
+        success: "bg-gradient-to-r from-green-500 to-teal-400",
+        error: "bg-gradient-to-r from-red-500 to-pink-500",
+        info: "bg-gradient-to-r from-blue-500 to-cyan-400",
+        warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
+    };
+
+    const container = document.getElementById("toast-container");
+    if (activeToasts.length >= 3) {
+        const oldest = activeToasts.shift();
+        oldest.remove();
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
+    toast.innerHTML = `<span>${message}</span>`;
+    container.appendChild(toast);
+    activeToasts.push(toast);
+
+    requestAnimationFrame(()=>{
+        toast.classList.remove("opacity-0","translate-x-5"); 
+        toast.classList.add("opacity-100","translate-x-0");
+    });
+
+    setTimeout(()=>{
+        toast.classList.add("opacity-0","translate-x-5"); 
+        setTimeout(()=>{ toast.remove(); activeToasts = activeToasts.filter(t => t !== toast); },300);
+    },3000);
+}
 
         // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
         function formatTimeRemaining(seconds) {
@@ -715,21 +705,21 @@ dataInput.addEventListener('change', async () => {
 });
 
 
-// ---------------- VALIDAR DATA SELECIONADA ----------------
+// ---------------- Validar data selecionada ----------------
 function validarDataSelecionada(data, config) {
     const dataObj = new Date(data);
-    const diaSemana = dataObj.getDay(); // 0=Domingo, 1=Segunda, etc.
+    const diaSemana = dataObj.getDay();
 
-    // Datas bloqueadas
+    // Verifica datas bloqueadas
     if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
-        showToast('Esta data não está disponível', 'error');
+        showToast('Esta data não está disponível para agendamento', 'error');
         dataInput.value = '';
         return false;
     }
 
-    // Dias da semana permitidos
+    // Verifica dias da semana
     if (!config.dias_semana.includes(diaSemana)) {
-        showToast('Este dia da semana não está disponível', 'error');
+        showToast('Este dia da semana não está disponível para agendamento', 'error');
         dataInput.value = '';
         return false;
     }
@@ -737,37 +727,38 @@ function validarDataSelecionada(data, config) {
     return true;
 }
 
-// ---------------- CARREGAR HORÁRIOS DISPONÍVEIS ----------------
+// ---------------- Carregar horários disponíveis ----------------
 async function carregarHorariosDisponiveis(data, config) {
-    if (!data) return;
+    if (!data) {
+        showToast('Selecione uma data primeiro', 'warning');
+        horarioInput.value = '';
+        return;
+    }
 
     try {
         const response = await fetch(`/agendamentos/${cliente}?data=${data}`);
-        if (!response.ok) return;
+        if (!response.ok) throw new Error("Erro ao carregar agendamentos");
 
         const { agendamentos } = await response.json();
-        const agendamentosDoDia = agendamentos.filter(a => a.data === data);
-
-        // Filtrar horários disponíveis
         const horariosDisponiveis = config.horarios_disponiveis.filter(horario => {
-            return !agendamentosDoDia.some(a => a.horario === horario);
+            return !agendamentos.some(a => a.horario === horario);
         });
 
-        // Verificar limite de agendamentos do dia
-        if (agendamentosDoDia.length >= config.max_agendamentos_dia) {
-            showToast('Esta data já atingiu o limite máximo de agendamentos', 'error');
+        if (agendamentos.length >= config.max_agendamentos_dia) {
+            showToast('Limite de agendamentos atingido para o dia', 'error');
             dataInput.value = '';
             horarioInput.value = '';
             return;
         }
 
         atualizarCampoHorario(horariosDisponiveis);
+
     } catch (err) {
-        console.error('Erro ao carregar horários:', err);
+        console.error(err);
     }
 }
 
-// ---------------- ATUALIZAR CAMPO DE HORÁRIO ----------------
+// ---------------- Atualizar campo de horário ----------------
 function atualizarCampoHorario(horariosDisponiveis) {
     let datalist = document.getElementById('horariosDisponiveis');
     if (!datalist) {
