@@ -1009,46 +1009,24 @@
             }
             
             try{
-                // Simulação de dados para demonstração
-                agendamentosCache = [
-                    {
-                        id: 1,
-                        cliente: "cliente1",
-                        nome: "João Silva",
-                        email: "joao@email.com",
-                        telefone: "(11) 99999-9999",
-                        data: "2024-01-15",
-                        horario: "10:00",
-                        status: "pendente"
-                    },
-                    {
-                        id: 2,
-                        cliente: "cliente1",
-                        nome: "Maria Santos",
-                        email: "maria@email.com",
-                        telefone: "(11) 88888-8888",
-                        data: "2024-01-16",
-                        horario: "14:00",
-                        status: "confirmado"
-                    },
-                    {
-                        id: 3,
-                        cliente: "cliente1",
-                        nome: "Pedro Oliveira",
-                        email: "pedro@email.com",
-                        telefone: "(11) 77777-7777",
-                        data: "2024-01-17",
-                        horario: "11:00",
-                        status: "cancelado"
-                    }
-                ];
+                const res = await fetch(`/agendamentos/${cliente}`, {
+                    headers: { "Authorization": `Bearer ${userToken}` }
+                });
                 
-                document.getElementById('meusAgendamentos').style.display = 'block';
+                if (res.status === 401) {
+                    // Token expirado ou inválido
+                    showToast("Sessão expirada. Faça login novamente.", "error");
+                    logoutBtn.click(); // Força logout
+                    return;
+                }
+                
+                const { agendamentos } = await res.json();
+                agendamentosCache = agendamentos;
+                meusAgendamentos.style.display = 'block';
                 document.getElementById('filtersSection').style.display = 'block';
                 document.getElementById('diasTabs').style.display = 'flex';
                 initTabsDias();
-                renderAgendamentos();
-                carregarDashboard();
+                renderAgendamentos(); 
             } catch(e){
                 console.error("Erro ao listar agendamentos:", e);
                 showToast("Erro ao listar agendamentos","error");
@@ -1320,7 +1298,24 @@
                 showToast("Erro de conexão ao reagendar.", "error");
             }
         }
+// ---------------- ATUALIZAR CAMPO DE HORÁRIO ----------------
+function atualizarCampoHorario(horariosDisponiveis) {
+    let datalist = document.getElementById('horariosDisponiveis');
+    if (!datalist) {
+        datalist = document.createElement('datalist');
+        datalist.id = 'horariosDisponiveis';
+        document.body.appendChild(datalist);
+    }
 
+    datalist.innerHTML = '';
+    horariosDisponiveis.forEach(horario => {
+        const option = document.createElement('option');
+        option.value = horario;
+        datalist.appendChild(option);
+    });
+
+    horarioInput.setAttribute('list', 'horariosDisponiveis');
+}
         // ---------------- DASHBOARD ----------------
         async function carregarDashboard() {
             try {
@@ -1466,3 +1461,4 @@
     </script>
 </body>
 </html>
+
