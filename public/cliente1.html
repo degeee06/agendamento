@@ -271,6 +271,9 @@
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
+     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
     <script type="module">
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -294,7 +297,42 @@
         const pathParts = window.location.pathname.split('/');
         const cliente = pathParts[1] || '';
 
+async function initDatepicker(config) {
+    if (!dataInput) return;
 
+    // Datas bloqueadas
+    const blockedDates = config.datas_bloqueadas || [];
+
+    // Dias da semana disponíveis
+    const diasDisponiveis = (config.dias_semana || [1,2,3,4,5]).map(Number); // 0=domingo
+
+    flatpickr(dataInput, {
+        dateFormat: "Y-m-d",
+        minDate: "today",
+        disable: [
+            function(date) {
+                // Bloquear datas específicas
+                const d = date.toISOString().split('T')[0];
+                if (blockedDates.includes(d)) return true;
+
+                // Bloquear dias da semana não permitidos
+                const dia = date.getDay(); // 0=domingo
+                if (!diasDisponiveis.includes(dia)) return true;
+
+                return false;
+            }
+        ],
+        locale: {
+            firstDayOfWeek: 1
+        },
+        onChange: function(selectedDates, dateStr, instance) {
+            validarDataSelecionada(dateStr, config);
+        }
+    });
+}
+
+
+        
     // ---------------- INICIALIZAÇÃO ----------------
 async function init() {
     // Configurar máscara de telefone
