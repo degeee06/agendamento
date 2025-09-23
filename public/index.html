@@ -545,76 +545,78 @@ if (token) {
         }
 
         // ---------------- TOASTS ----------------
-        let activeToasts = [];
-        function showToast(message, type = "success") {
-            const colors = {
-                success: "bg-gradient-to-r from-green-500 to-teal-400",
-                error: "bg-gradient-to-r from-red-500 to-pink-500",
-                info: "bg-gradient-to-r from-blue-500 to-cyan-400",
-                warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
-            };
-            
-            const container = document.getElementById("toast-container");
-            if (activeToasts.length >= 3) {
-                const oldest = activeToasts.shift();
-                oldest.remove();
-            }
-            
-            const toast = document.createElement("div");
-            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
-            toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
-            container.appendChild(toast);
-            activeToasts.push(toast);
-            feather.replace();
-            
-            requestAnimationFrame(()=>{
-                toast.classList.remove("opacity-0","translate-x-5"); 
-                toast.classList.add("opacity-100","translate-x-0");
-            });
-            
-            setTimeout(()=>{
-                toast.classList.add("opacity-0","translate-x-5"); 
-                setTimeout(()=>{
-                    toast.remove(); 
-                    activeToasts=activeToasts.filter(t=>t!==toast);
-                },300);
-            },3000);
-        }
+let activeToasts = [];
+function showToast(message, type = "success") {
+    const colors = {
+        success: "bg-gradient-to-r from-green-500 to-teal-400",
+        error: "bg-gradient-to-r from-red-500 to-pink-500",
+        info: "bg-gradient-to-r from-blue-500 to-cyan-400",
+        warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
+    };
+
+    const container = document.getElementById("toast-container");
+    if (!container) return; // evita erro se não existir container
+
+    if (activeToasts.length >= 3) {
+        const oldest = activeToasts.shift();
+        oldest.remove();
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
+    toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
+    container.appendChild(toast);
+    activeToasts.push(toast);
+    feather.replace();
+
+    requestAnimationFrame(()=>{
+        toast.classList.remove("opacity-0","translate-x-5"); 
+        toast.classList.add("opacity-100","translate-x-0");
+    });
+
+    setTimeout(()=>{
+        toast.classList.add("opacity-0","translate-x-5"); 
+        setTimeout(()=>{ 
+            toast.remove(); 
+            activeToasts = activeToasts.filter(t => t !== toast);
+        },300);
+    },3000);
+}
 
         // ---------------- CONFIGURAÇÕES DE HORÁRIOS ----------------
 async function carregarConfiguracoes() {
+    if (!cliente) return;
     try {
-        // Busca no Supabase a configuração do cliente específico
         const { data, error } = await supabase
-            .from('configuracoes')   // nome da tabela de configs
+            .from('configuracoes')
             .select('*')
-            .eq('cliente', cliente)  // filtra pelo cliente atual
-            .single();               // retorna apenas 1 registro
+            .eq('cliente', cliente)
+            .single();
 
-        if (error) {
-            console.error('Erro ao carregar configurações:', error.message);
+        if (error && error.code !== 'PGRST116') {
+            console.error('Erro ao carregar configs:', error.message);
             return;
         }
 
-        configHorarios = data;
+        configHorarios = data || { dias_semana: [], horarios_disponiveis: [], datas_bloqueadas: [], intervalo_minutos: 30, max_agendamentos_dia: 5 };
         renderizarConfiguracoes();
-
     } catch (error) {
-        console.error('Erro:', error);
+        console.error('Erro ao carregar configs:', error);
     }
 }
 
 function renderizarConfiguracoes() {
     if (!configHorarios) return;
 
-    // Dias da semana
+    // dias da semana
     document.querySelectorAll('.dias-semana-btn').forEach(btn => {
         const dia = parseInt(btn.dataset.dia);
         btn.classList.toggle('active', configHorarios.dias_semana.includes(dia));
     });
 
-    // Horários
+    // horários
     const horariosContainer = document.getElementById('horariosConfig');
+    if (!horariosContainer) return;
     horariosContainer.innerHTML = '';
     configHorarios.horarios_disponiveis.forEach(horario => {
         const btn = document.createElement('button');
@@ -624,28 +626,29 @@ function renderizarConfiguracoes() {
         horariosContainer.appendChild(btn);
     });
 
-    // Configurações gerais
+    // configurações gerais
     document.getElementById('intervaloMinutos').value = configHorarios.intervalo_minutos;
     document.getElementById('maxAgendamentos').value = configHorarios.max_agendamentos_dia;
 
-    // Datas bloqueadas
+    // datas bloqueadas
     const datasBloqueadasList = document.getElementById('datasBloqueadasList');
-    datasBloqueadasList.innerHTML = '';
-    configHorarios.datas_bloqueadas.forEach(data => {
-        const div = document.createElement('div');
-        div.className = 'flex justify-between items-center p-2 bg-white/5 rounded';
-        div.innerHTML = `
-            <span>${formatData(data)}</span>
-            <button class="text-red-400 hover:text-red-300" onclick="removerDataBloqueada('${data}')">
-                <i data-feather="x" class="w-4 h-4"></i>
-            </button>
-        `;
-        datasBloqueadasList.appendChild(div);
-    });
+    if (datasBloqueadasList) {
+        datasBloqueadasList.innerHTML = '';
+        configHorarios.datas_bloqueadas.forEach(data => {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between items-center p-2 bg-white/5 rounded';
+            div.innerHTML = `
+                <span>${formatData(data)}</span>
+                <button class="text-red-400 hover:text-red-300" onclick="removerDataBloqueada('${data}')">
+                    <i data-feather="x" class="w-4 h-4"></i>
+                </button>
+            `;
+            datasBloqueadasList.appendChild(div);
+        });
+    }
 
     feather.replace();
 }
-
 
         async function salvarConfiguracoes() {
             try {
@@ -718,7 +721,33 @@ function renderizarConfiguracoes() {
             configHorarios.datas_bloqueadas = configHorarios.datas_bloqueadas.filter(d => d !== data);
             renderizarConfiguracoes();
         }
+// ---------------- FUNÇÕES GLOBAIS ----------------
+window.removerHorario = function(horario){
+    if(!configHorarios) return;
+    configHorarios.horarios_disponiveis = configHorarios.horarios_disponiveis.filter(h => h !== horario);
+    renderizarConfiguracoes();
+};
 
+window.removerDataBloqueada = function(data){
+    if(!configHorarios) return;
+    configHorarios.datas_bloqueadas = configHorarios.datas_bloqueadas.filter(d => d !== data);
+    renderizarConfiguracoes();
+};
+
+window.selecionarData = async function(data){
+    dataSelecionadaCalendario = data;
+    const input = document.getElementById('dataSelecionada');
+    if(input) input.value = data;
+};
+
+window.removerHorarioEspecifico = function(horario){
+    const divs = document.querySelectorAll('#horariosEspecificos div');
+    divs.forEach(div => {
+        if (div.querySelector('span')?.textContent === horario) {
+            div.remove();
+        }
+    });
+};
         // ---------------- CALENDÁRIO ----------------
         function gerarCalendario() {
             const calendar = document.getElementById('calendar');
@@ -1509,7 +1538,12 @@ function renderizarConfiguracoes() {
         });
         feather.replace();
         init();
-
+// ---------------- EVENTOS ----------------
+document.getElementById('salvarConfigBtn')?.addEventListener('click', salvarConfiguracoes);
+document.getElementById('addHorarioBtn')?.addEventListener('click', adicionarHorario);
+document.getElementById('addDataBloqueadaBtn')?.addEventListener('click', adicionarDataBloqueada);
+document.getElementById('salvarConfigDataBtn')?.addEventListener('click', salvarConfiguracaoData);
+document.getElementById('addHorarioEspecificoBtn')?.addEventListener('click', adicionarHorarioEspecifico);
         // Funções globais para uso nos event listeners
         window.removerHorario = removerHorario;
         window.removerDataBloqueada = removerDataBloqueada;
@@ -1525,5 +1559,6 @@ function renderizarConfiguracoes() {
     </script>
 </body>
 </html>
+
 
 
