@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Admin - Agendamento</title>
+    <title>Agendamento</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
@@ -132,33 +132,6 @@
             100% { opacity: 1; }
         }
         
-        .dias-semana-btn {
-            transition: all 0.3s ease;
-        }
-        
-        .dias-semana-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            transform: scale(1.05);
-        }
-        
-        .horario-btn {
-            transition: all 0.3s ease;
-        }
-        
-        .horario-btn.active {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            transform: scale(1.05);
-        }
-        
-        .calendar-day.blocked {
-            background: rgba(239, 68, 68, 0.3);
-            color: #9ca3af;
-        }
-        
-        .calendar-day.special {
-            background: rgba(34, 197, 94, 0.3);
-        }
-        
         @media (max-width: 640px) {
             .mobile-flex-col {
                 flex-direction: column;
@@ -208,275 +181,91 @@
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 text-white">
-    <div class="container mx-auto px-4 py-8 max-w-7xl">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
         <!-- Header with animated gradient -->
         <header class="text-center mb-12" data-aos="fade-down">
-            <div class="flex justify-between items-center mb-3">
-                <h1 class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
-                    Painel Admin
-                </h1>
-                <button id="logoutBtn" style="display:none;" class="text-sm bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg flex items-center gap-2">
-                    <i data-feather="log-out" class="w-4 h-4"></i>
-                    Sair
-                </button>
-            </div>
+            <h1 class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-300">
+                Agendamento
+            </h1>
             <p class="text-lg opacity-90 max-w-2xl mx-auto">
-                Gerencie agendamentos e configure horários disponíveis
+                Gerencie seus compromissos com uma interface intuitiva e elegante
             </p>
         </header>
 
-        <!-- Login Section -->
-        <div id="loginSection" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
+        <!-- Appointment Form -->
+        <form id="agendamentoForm" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
             <div class="flex items-center justify-center mb-6">
                 <div class="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg">
-                    <i data-feather="lock" class="w-6 h-6 text-white"></i>
+                    <i data-feather="calendar" class="w-6 h-6 text-white"></i>
                 </div>
             </div>
-            <h2 class="text-2xl font-semibold text-center mb-6">Acesso ao Sistema</h2>
-            <div class="space-y-5 max-w-md mx-auto">
-                <div>
-                    <label for="email" class="block mb-2 text-sm font-medium opacity-80">Email</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-feather="mail" class="w-5 h-5 text-gray-400"></i>
+            <h2 class="text-2xl font-semibold text-center mb-6">Novo Agendamento</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl mx-auto">
+                <div class="space-y-5">
+                    <div>
+                        <label for="Nome" class="block mb-2 text-sm font-medium opacity-80">Nome Completo</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-feather="user" class="w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input type="text" name="Nome" placeholder="Seu nome" required 
+                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                         </div>
-                        <input type="email" id="email" placeholder="seu@email.com" 
-                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                     </div>
-                </div>
-                <div>
-                    <label for="senha" class="block mb-2 text-sm font-medium opacity-80">Senha</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-feather="key" class="w-5 h-5 text-gray-400"></i>
-                        </div>
-                        <input type="password" id="senha" placeholder="••••••••" 
-                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                    </div>
-                </div>
-                <button id="loginBtn" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
-                    <i data-feather="log-in" class="w-5 h-5"></i>
-                    <span id="loginText">Entrar</span>
-                    <div id="loginSpinner" class="loading-spinner hidden"></div>
-                </button>
-            </div>
-        </div>
-
-        <!-- Dashboard de Estatísticas -->
-        <div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
-                    <div class="text-sm text-gray-300">Hoje</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
-                    <div class="text-sm text-gray-300">Esta Semana</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
-                    <div class="text-sm text-gray-300">Total</div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4 text-center">
-                    <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
-                    <div class="text-sm text-gray-300">Taxa de Confirmação</div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Gráfico de Status -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
-                    <div id="chartStatus" class="h-48"></div>
-                </div>
-
-                <!-- Top Clientes -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">👥 Top Clientes</h3>
-                    <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Configuração de Horários -->
-        <div id="configSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-semibold">⚙️ Configuração de Horários</h2>
-                <button id="salvarConfigBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition-all flex items-center gap-2">
-                    <i data-feather="save" class="w-4 h-4"></i>
-                    Salvar Configurações
-                </button>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Dias da Semana -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">📅 Dias da Semana Disponíveis</h3>
-                    <div class="grid grid-cols-3 gap-2" id="diasSemanaConfig">
-                        <button data-dia="0" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Domingo</button>
-                        <button data-dia="1" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Segunda</button>
-                        <button data-dia="2" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Terça</button>
-                        <button data-dia="3" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Quarta</button>
-                        <button data-dia="4" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Quinta</button>
-                        <button data-dia="5" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Sexta</button>
-                        <button data-dia="6" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Sábado</button>
-                    </div>
-                </div>
-
-                <!-- Horários Disponíveis -->
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">⏰ Horários Disponíveis</h3>
-                    <div class="grid grid-cols-3 gap-2" id="horariosConfig">
-                        <!-- Horários serão preenchidos via JavaScript -->
-                    </div>
-                    <div class="mt-4">
-                        <label class="block text-sm mb-2">Adicionar Horário:</label>
-                        <div class="flex gap-2">
-                            <input type="time" id="novoHorario" class="flex-1 p-2 rounded-lg bg-white/5 border border-white/10">
-                            <button id="addHorarioBtn" class="px-3 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">
-                                <i data-feather="plus" class="w-4 h-4"></i>
-                            </button>
+                    <div>
+                        <label for="Email" class="block mb-2 text-sm font-medium opacity-80">Email</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-feather="mail" class="w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input type="email" name="Email" placeholder="seu@email.com" required 
+                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                         </div>
                     </div>
                 </div>
-
-                <!-- Configurações Gerais -->
-                <div class="bg-white/10 rounded-xl p-4 lg:col-span-2">
-                    <h3 class="font-medium mb-3">🔧 Configurações Gerais</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="space-y-5">
+                    <div>
+                        <label for="Telefone" class="block mb-2 text-sm font-medium opacity-80">Telefone</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-feather="phone" class="w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input type="text" id="Telefone" name="Telefone" placeholder="(00) 00000-0000" required 
+                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm mb-2">Intervalo (minutos):</label>
-                            <input type="number" id="intervaloMinutos" class="w-full p-2 rounded-lg bg-white/5 border border-white/10" min="15" max="120" value="60">
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Máx. Agendamentos/Dia:</label>
-                            <input type="number" id="maxAgendamentos" class="w-full p-2 rounded-lg bg-white/5 border border-white/10" min="1" max="50" value="10">
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Datas Bloqueadas:</label>
-                            <input type="date" id="dataBloqueada" class="w-full p-2 rounded-lg bg-white/5 border border-white/10">
-                            <button id="addDataBloqueadaBtn" class="w-full mt-2 px-3 py-2 bg-red-600 rounded-lg hover:bg-red-700 text-sm">
-                                Bloquear Data
-                            </button>
-                        </div>
-                    </div>
-                    <div id="datasBloqueadasList" class="mt-3 space-y-1"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Calendário de Configurações -->
-        <div id="calendarSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <h2 class="text-xl font-semibold mb-4">📆 Configurações por Data</h2>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2">
-                    <div id="calendar" class="bg-white/5 rounded-xl p-4">
-                        <!-- Calendário será gerado via JavaScript -->
-                    </div>
-                </div>
-                <div class="bg-white/10 rounded-xl p-4">
-                    <h3 class="font-medium mb-3">Configuração da Data Selecionada</h3>
-                    <div id="dataConfigForm" class="space-y-4">
-                        <div>
-                            <label class="block text-sm mb-2">Data:</label>
-                            <input type="date" id="dataSelecionada" class="w-full p-2 rounded-lg bg-white/5 border border-white/10" readonly>
-                        </div>
-                        <div>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" id="dataBloqueadaCheck" class="rounded">
-                                <span class="text-sm">Data Bloqueada</span>
-                            </label>
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Horários Específicos:</label>
-                            <div id="horariosEspecificos" class="space-y-2 max-h-32 overflow-y-auto"></div>
-                            <div class="flex gap-2 mt-2">
-                                <input type="time" id="novoHorarioEspecifico" class="flex-1 p-2 rounded-lg bg-white/5 border border-white/10">
-                                <button id="addHorarioEspecificoBtn" class="px-3 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">
-                                    <i data-feather="plus" class="w-4 h-4"></i>
-                                </button>
+                            <label for="Data" class="block mb-2 text-sm font-medium opacity-80">Data</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
+                                </div>
+                                <input type="date" id="Data" name="Data" placeholder="Data do Agendamento" required 
+                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                             </div>
                         </div>
                         <div>
-                            <label class="block text-sm mb-2">Máx. Agendamentos:</label>
-                            <input type="number" id="maxAgendamentosData" class="w-full p-2 rounded-lg bg-white/5 border border-white/10" min="1" max="50">
+                            <label for="Horario" class="block mb-2 text-sm font-medium opacity-80">Horário</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i data-feather="clock" class="w-5 h-5 text-gray-400"></i>
+                                </div>
+                                <input type="time" id="Horario" name="Horario" placeholder="Horário" required 
+                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                            </div>
                         </div>
-                        <button id="salvarConfigDataBtn" class="w-full px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700">
-                            Salvar Configuração
-                        </button>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Filters Section -->
-        <div id="filtersSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-            <div class="flex flex-col md:flex-row gap-4 items-center">
-                <div class="flex-1 w-full">
-                    <label for="searchInput" class="sr-only">Pesquisar</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-feather="search" class="w-5 h-5 text-gray-400"></i>
-                        </div>
-                        <input type="text" id="searchInput" placeholder="Pesquisar por nome ou email" 
-                               class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                    </div>
-                </div>
-                <div class="w-full md:w-48 relative">
-                    <label for="statusFilter" class="sr-only">Status</label>
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i data-feather="filter" class="w-5 h-5 text-gray-400"></i>
-                    </div>
-                    <select id="statusFilter" 
-                        class="w-full appearance-none pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none input-field">
-                        <option value="" class="text-black">Todos os status</option>
-                        <option value="pendente" class="text-black">Pendente</option>
-                        <option value="confirmado" class="text-black">Confirmado</option>
-                        <option value="cancelado" class="text-black">Cancelado</option>
-                    </select>
-                </div>
-                <div class="flex gap-2 mobile-w-full mobile-flex-col md:flex-row">
-                    <button id="exportCSVBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2 mobile-w-full">
-                        <i data-feather="download" class="w-5 h-5"></i>
-                        <span class="hidden md:inline">CSV</span>
-                    </button>
-                    <button id="exportPDFBtn" class="px-4 py-3 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 transition-all flex items-center justify-center gap-2 mobile-w-full">
-                        <i data-feather="file-text" class="w-5 h-5"></i>
-                        <span class="hidden md:inline">PDF</span>
-                    </button>
-                </div>
+            <div class="max-w-md mx-auto mt-8">
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
+                    <i data-feather="plus" class="w-5 h-5"></i>
+                    <span id="agendarText">Agendar</span>
+                    <div id="agendarSpinner" class="loading-spinner hidden"></div>
+                </button>
             </div>
-        </div>
-
-        <!-- Tabs Dias da Semana -->
-        <div id="diasTabs" style="display:none;" class="dias-tabs-container flex flex-col md:flex-row gap-4 mb-6" data-aos="fade-up">
-            <div class="flex gap-2 overflow-x-auto pb-2">
-                <button data-dia="0" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Domingo</button>
-                <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-medium whitespace-nowrap">Segunda</button>
-                <button data-dia="2" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Terça</button>
-                <button data-dia="3" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quarta</button>
-                <button data-dia="4" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quinta</button>
-                <button data-dia="5" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sexta</button>
-                <button data-dia="6" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sábado</button>
-            </div>
-            <div class="flex gap-2 md:ml-4 md:pl-4 md:border-l border-white/20 overflow-x-auto pb-2">
-                <button data-semana="-1" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">Semana Passada</button>
-                <button data-semana="-2" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">2 Semanas</button>
-                <button data-semana="-4" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">1 Mês</button>
-            </div>
-        </div>
-
-        <!-- Appointments List -->
-        <div id="meusAgendamentos" class="glass-card rounded-2xl p-6 shadow-xl max-h-[500px] overflow-y-auto scrollbar-hide" style="display:none;" data-aos="fade-up">
-            <div class="text-center py-8">
-                <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                    <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                </div>
-                <p class="text-gray-300">Nenhum agendamento encontrado</p>
-            </div>
-        </div>
+        </form>
     </div>
 
     <!-- Toast Container -->
@@ -489,49 +278,61 @@
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        let userToken = null;
-        let agendamentosCache = [];
-        let diaSelecionado = 1;
-        let configHorarios = null;
-        let configDatasEspecificas = [];
-        let dataSelecionadaCalendario = null;
+        let telefoneMask = null;
+        let pagamentoPendente = false;
+        let paymentCheckInterval = null;
+        let currentPaymentId = null;
+        let paymentExpiresAt = null;
 
-        // cliente padrão (enquanto só existe 1)
-        let cliente = "cliente1";
+        const form = document.getElementById('agendamentoForm');
+        const agendarText = document.getElementById("agendarText");
+        const agendarSpinner = document.getElementById("agendarSpinner");
+        const telefoneInput = document.getElementById("Telefone");
+        const dataInput = document.getElementById("Data");
+        const horarioInput = document.getElementById("Horario");
 
-        // se tiver token no login, tenta extrair o cliente_id
-        const token = localStorage.getItem("userToken");
-        if (token) {
-            try {
-                const payload = JSON.parse(atob(token.split(".")[1]));
-                if (payload?.user_metadata?.cliente_id) {
-                    cliente = payload.user_metadata.cliente_id;
-                }
-            } catch (e) {
-                console.error("Erro ao decodificar token:", e);
+        const pathParts = window.location.pathname.split('/');
+        const cliente = pathParts[1] || '';
+
+
+    // ---------------- INICIALIZAÇÃO ----------------
+async function init() {
+    // Configurar máscara de telefone
+    if (telefoneInput) {
+        telefoneMask = IMask(telefoneInput, {
+            mask: '(00) 00000-0000'
+        });
+    }
+
+    // Permitir selecionar a partir de hoje
+    const hoje = new Date();
+    if (dataInput) {
+        dataInput.min = hoje.toISOString().split('T')[0];
+    }
+
+    // Carregar configurações do Supabase
+    const config = await carregarConfiguracoesCliente();
+    if (config) {
+        // Aplicar validação de datas
+        dataInput.addEventListener('change', async () => {
+            if (!validarDataSelecionada(dataInput.value, config)) {
+                horarioInput.value = '';
+                return;
             }
-        }
+            await carregarHorariosDisponiveis(dataInput.value, config);
+        });
 
-        function formatData(data){ 
-            const [y,m,d] = data.split("-"); 
-            return `${d}/${m}/${y}`; 
-        }
-
-        // ---------------- INICIALIZAÇÃO ----------------
-        function init() {
-            // Verificar se já está logado
-            const token = localStorage.getItem('userToken');
-            if (token) {
-                userToken = token;
-                document.getElementById('loginSection').style.display = 'none';
-                document.getElementById('logoutBtn').style.display = 'flex';
-                document.getElementById('configSection').style.display = 'block';
-                document.getElementById('calendarSection').style.display = 'block';
-                carregarConfiguracoes();
-                listarAgendamentos();
-                gerarCalendario();
+        // Atualizar horários ao focar no campo
+        horarioInput.addEventListener('focus', async () => {
+            if (!dataInput.value) {
+                showToast('Selecione uma data primeiro', 'warning');
+                horarioInput.value = '';
+                return;
             }
-        }
+            await carregarHorariosDisponiveis(dataInput.value, config);
+        });
+    }
+}
 
         // ---------------- TOASTS ----------------
         let activeToasts = [];
@@ -570,259 +371,369 @@
             },3000);
         }
 
-        // ---------------- CONFIGURAÇÕES DE HORÁRIOS ----------------
-        async function carregarConfiguracoes() {
-            try {
-                // Configuração padrão caso a API não esteja disponível
-                configHorarios = {
-                    dias_semana: [1, 2, 3, 4, 5],
-                    horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-                    intervalo_minutos: 60,
-                    max_agendamentos_dia: 10,
-                    datas_bloqueadas: []
-                };
+        // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
+        function formatTimeRemaining(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
+            if (paymentCheckInterval) {
+                clearInterval(paymentCheckInterval);
+            }
+            
+            const countdownElement = document.getElementById('countdownTimer');
+            
+            // Atualizar o contador a cada segundo
+            paymentCheckInterval = setInterval(async () => {
+                const now = new Date();
+                const expires = new Date(expiresAt);
+                const timeRemaining = Math.floor((expires - now) / 1000);
                 
-                renderizarConfiguracoes();
-            } catch (error) {
-                console.error('Erro:', error);
-                // Configuração padrão em caso de erro
-                configHorarios = {
-                    dias_semana: [1, 2, 3, 4, 5],
-                    horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-                    intervalo_minutos: 60,
-                    max_agendamentos_dia: 10,
-                    datas_bloqueadas: []
-                };
-                renderizarConfiguracoes();
+                if (timeRemaining <= 0) {
+                    clearInterval(paymentCheckInterval);
+                    countdownElement.innerHTML = 'Tempo esgotado!';
+                    countdownElement.classList.add('countdown-warning');
+                    
+                    // Limpar a área de pagamento
+                    const pixDiv = document.getElementById("pixArea");
+                    if (pixDiv) {
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                    Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                        
+                        feather.replace();
+                        
+                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                            form.dispatchEvent(new Event('submit'));
+                        });
+                    }
+                    
+                    return;
+                }
+                
+                // Atualizar o contador
+                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+                
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
+                if (timeRemaining < 60) {
+                    countdownElement.classList.add('countdown-warning');
+                } else {
+                    countdownElement.classList.remove('countdown-warning');
+                }
+            }, 1000);
+        }
+
+        async function checkPaymentStatus(paymentId) {
+            try {
+                const statusResponse = await fetch(`/check-payment/${paymentId}`);
+                if (!statusResponse.ok) {
+                    throw new Error('Erro ao verificar pagamento');
+                }
+                
+                const statusData = await statusResponse.json();
+                
+                if (statusData.status === 'approved') {
+                    // Pagamento aprovado, parar de verificar
+                    clearInterval(paymentCheckInterval);
+                    
+                    // Enviar agendamento
+                    const formData = new FormData(form);
+                    const dataToSend = {};
+                    formData.forEach((v,k) => dataToSend[k] = v);
+                    
+                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
+                    
+                    if (agendamentoResponse.ok) {
+                        showToast("Agendamento realizado com sucesso!", "success");
+                        form.reset();
+                        
+                        const pixDiv = document.getElementById("pixArea");
+                        if (pixDiv) {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                </div>
+                            `;
+                            feather.replace();
+                        }
+                    } else {
+                        const errorData = await agendamentoResponse.json();
+                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                    }
+                    
+                    return true;
+                } else if (statusData.status === 'expired') {
+                    // Pagamento expirado
+                    clearInterval(paymentCheckInterval);
+                    showToast("Tempo para pagamento expirado.", "error");
+                    return true;
+                }
+                
+                return false;
+            } catch (err) {
+                console.error("Erro ao verificar pagamento:", err);
+                return false;
             }
         }
 
-        function renderizarConfiguracoes() {
-            if (!configHorarios) return;
+        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+       // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const dataToSend = {};
+    formData.forEach((v, k) => dataToSend[k] = v);
 
-            // Atualizar dias da semana no painel
-            document.querySelectorAll('.dias-semana-btn').forEach(btn => {
-                const dia = parseInt(btn.dataset.dia);
-                if (configHorarios.dias_semana.includes(dia)) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
+    // ---------------- 1️⃣ Campos obrigatórios ----------------
+    if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+        showToast("Preencha todos os campos", "warning");
+        return;
+    }
 
-            // Atualizar horários no painel
-            const horariosContainer = document.getElementById('horariosConfig');
-            horariosContainer.innerHTML = '';
-            configHorarios.horarios_disponiveis.forEach(horario => {
-                const btn = document.createElement('button');
-                btn.className = 'horario-btn p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all';
-                btn.innerHTML = `${horario} <i data-feather="x" class="w-3 h-3 ml-1 inline"></i>`;
-                btn.addEventListener('click', () => removerHorario(horario));
-                horariosContainer.appendChild(btn);
-            });
+    // ---------------- 2️⃣ Carregar configuração ----------------
+    const config = await carregarConfiguracoesCliente();
+    if (!config) {
+        showToast("Erro ao carregar configuração", "error");
+        return;
+    }
 
-            // Atualizar configurações gerais no painel
-            document.getElementById('intervaloMinutos').value = configHorarios.intervalo_minutos;
-            document.getElementById('maxAgendamentos').value = configHorarios.max_agendamentos_dia;
+    // ---------------- 3️⃣ Validar data ----------------
+    if (!validarDataSelecionada(dataToSend.Data, config)) {
+        return;
+    }
 
-            // Atualizar datas bloqueadas no painel
-            const datasBloqueadasList = document.getElementById('datasBloqueadasList');
-            datasBloqueadasList.innerHTML = '';
-            configHorarios.datas_bloqueadas.forEach(data => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between items-center p-2 bg-white/5 rounded';
-                div.innerHTML = `
-                    <span>${formatData(data)}</span>
-                    <button class="text-red-400 hover:text-red-300" onclick="removerDataBloqueada('${data}')">
-                        <i data-feather="x" class="w-4 h-4"></i>
+    // ---------------- 4️⃣ Validar horário disponível ----------------
+    if (!config.horarios_disponiveis.includes(dataToSend.Horario)) {
+        showToast('Horário não disponível', 'error');
+        return;
+    }
+
+    // ---------------- 5️⃣ Verificar agendamentos existentes ----------------
+    try {
+        const response = await fetch(`/agendamentos/${cliente}?data=${dataToSend.Data}`);
+        if (!response.ok) throw new Error("Erro ao consultar agendamentos");
+
+        const { agendamentos } = await response.json();
+
+        // Verificar se o horário está ocupado
+        if (agendamentos.some(a => a.horario === dataToSend.Horario)) {
+            showToast("Horário já ocupado", "error");
+            return;
+        }
+
+        // Verificar limite diário
+        if (agendamentos.length >= config.max_agendamentos_dia) {
+            showToast("Limite de agendamentos para o dia atingido", "error");
+            return;
+        }
+    } catch (err) {
+        console.error(err);
+        showToast("Erro ao verificar horários disponíveis", "error");
+        return;
+    }
+
+    // ---------------- 6️⃣ Mostrar loading ----------------
+    agendarText.classList.add('hidden');
+    agendarSpinner.classList.remove('hidden');
+    form.querySelector('button[type="submit"]').disabled = true;
+
+    // ---------------- 7️⃣ Gerar PIX ----------------
+    try {
+        const valorEmReais = 0.01; // Ajuste conforme necessário
+        const pagamentoResponse = await fetch('/create-pix', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: valorEmReais,
+                description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                email: dataToSend.Email
+            })
+        });
+
+        if (!pagamentoResponse.ok) {
+            const errorData = await pagamentoResponse.json();
+            throw new Error(errorData.error || 'Erro ao criar pagamento');
+        }
+
+        const pagamentoData = await pagamentoResponse.json();
+        currentPaymentId = pagamentoData.payment_id;
+        paymentExpiresAt = pagamentoData.expires_at;
+
+        // Exibir QR Code e código PIX
+        let pixDiv = document.getElementById("pixArea");
+        if (!pixDiv) {
+            pixDiv = document.createElement("div");
+            pixDiv.id = "pixArea";
+            pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+            form.appendChild(pixDiv);
+        }
+
+        pixDiv.innerHTML = `
+            <h3 class="text-center mb-3">Pagamento via PIX</h3>
+            <div class="text-center mb-4">
+                <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+                <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+            </div>
+            <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+            <div class="mb-4">
+                <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                <div class="flex items-center gap-2">
+                    <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                    <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                        <i data-feather="copy" class="w-4 h-4"></i>
                     </button>
-                `;
-                datasBloqueadasList.appendChild(div);
-            });
-
-            // Atualizar também as tabs de dias da semana (importante!)
-            document.querySelectorAll('.tab-dia').forEach(tab => {
-                const diaTab = parseInt(tab.dataset.dia);
-                if (configHorarios.dias_semana.includes(diaTab)) {
-                    tab.style.display = 'block';
-                } else {
-                    tab.style.display = 'none';
-                }
-            });
-
-            feather.replace();
-        }
-
-        async function salvarConfiguracoes() {
-            try {
-                const diasSemana = Array.from(document.querySelectorAll('.dias-semana-btn.active'))
-                    .map(btn => parseInt(btn.dataset.dia));
-                
-                const horarios = Array.from(document.querySelectorAll('.horario-btn'))
-                    .map(btn => btn.textContent.trim().split(' ')[0]);
-
-                const config = {
-                    dias_semana: diasSemana,
-                    horarios_disponiveis: horarios,
-                    intervalo_minutos: parseInt(document.getElementById('intervaloMinutos').value),
-                    max_agendamentos_dia: parseInt(document.getElementById('maxAgendamentos').value),
-                    datas_bloqueadas: configHorarios.datas_bloqueadas
-                };
-
-                // ATUALIZA O CONFIGHORARIOS COM OS NOVOS DADOS
-                configHorarios = config;
-                
-                // ATUALIZA A INTERFACE DO PAINEL
-                renderizarConfiguracoes();
-                
-                showToast('Configurações salvas com sucesso!', 'success');
-            } catch (error) {
-                console.error('Erro:', error);
-                showToast('Erro ao salvar configurações', 'error');
-            }
-        }
-
-        function adicionarHorario() {
-            const novoHorario = document.getElementById('novoHorario').value;
-            if (!novoHorario) return;
-
-            const horarioFormatado = novoHorario.substring(0, 5);
-            if (!configHorarios.horarios_disponiveis.includes(horarioFormatado)) {
-                configHorarios.horarios_disponiveis.push(horarioFormatado);
-                configHorarios.horarios_disponiveis.sort();
-                renderizarConfiguracoes();
-                document.getElementById('novoHorario').value = '';
-            }
-        }
-
-        function removerHorario(horario) {
-            configHorarios.horarios_disponiveis = configHorarios.horarios_disponiveis.filter(h => h !== horario);
-            renderizarConfiguracoes();
-        }
-
-        function adicionarDataBloqueada() {
-            const data = document.getElementById('dataBloqueada').value;
-            if (!data) return;
-
-            if (!configHorarios.datas_bloqueadas.includes(data)) {
-                configHorarios.datas_bloqueadas.push(data);
-                configHorarios.datas_bloqueadas.sort();
-                renderizarConfiguracoes();
-                document.getElementById('dataBloqueada').value = '';
-            }
-        }
-
-        function removerDataBloqueada(data) {
-            configHorarios.datas_bloqueadas = configHorarios.datas_bloqueadas.filter(d => d !== data);
-            renderizarConfiguracoes();
-        }
-
-        // ---------------- CALENDÁRIO ----------------
-        function gerarCalendario() {
-            const calendar = document.getElementById('calendar');
-            const hoje = new Date();
-            const mes = hoje.getMonth();
-            const ano = hoje.getFullYear();
-
-            const primeiroDia = new Date(ano, mes, 1);
-            const ultimoDia = new Date(ano, mes + 1, 0);
-            
-            let html = `
-                <div class="flex justify-between items-center mb-4">
-                    <h4 class="font-semibold">${primeiroDia.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
                 </div>
-                <div class="grid grid-cols-7 gap-1 text-center">
-                    <div class="p-2 text-sm text-gray-400">Dom</div>
-                    <div class="p-2 text-sm text-gray-400">Seg</div>
-                    <div class="p-2 text-sm text-gray-400">Ter</div>
-                    <div class="p-2 text-sm text-gray-400">Qua</div>
-                    <div class="p-2 text-sm text-gray-400">Qui</div>
-                    <div class="p-2 text-sm text-gray-400">Sex</div>
-                    <div class="p-2 text-sm text-gray-400">Sáb</div>
-            `;
-
-            // Dias vazios no início
-            for (let i = 0; i < primeiroDia.getDay(); i++) {
-                html += '<div class="p-2"></div>';
-            }
-
-            // Dias do mês
-            for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
-                const dataCompleta = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-                const classeDia = `calendar-day p-2 rounded cursor-pointer hover:bg-white/10 `;
-                const isBloqueada = configHorarios?.datas_bloqueadas.includes(dataCompleta);
-                
-                html += `
-                    <div class="${classeDia} ${isBloqueada ? 'blocked' : ''}" 
-                         onclick="selecionarData('${dataCompleta}')">
-                        ${dia}
-                    </div>
-                `;
-            }
-
-            html += '</div>';
-            calendar.innerHTML = html;
-        }
-
-        async function selecionarData(data) {
-            dataSelecionadaCalendario = data;
-            document.getElementById('dataSelecionada').value = data;
-            
-            // Reset para valores padrão
-            document.getElementById('dataBloqueadaCheck').checked = false;
-            document.getElementById('maxAgendamentosData').value = '';
-            document.getElementById('horariosEspecificos').innerHTML = '';
-            
-            feather.replace();
-        }
-
-        async function salvarConfiguracaoData() {
-            if (!dataSelecionadaCalendario) return;
-
-            try {
-                const horariosEspecificos = Array.from(document.querySelectorAll('#horariosEspecificos span'))
-                    .map(span => span.textContent);
-
-                const config = {
-                    data: dataSelecionadaCalendario,
-                    bloqueada: document.getElementById('dataBloqueadaCheck').checked,
-                    max_agendamentos: document.getElementById('maxAgendamentosData').value || null,
-                    horarios_disponiveis: horariosEspecificos.length > 0 ? horariosEspecificos : null
-                };
-
-                showToast('Configuração da data salva com sucesso!', 'success');
-                gerarCalendario();
-            } catch (error) {
-                console.error('Erro:', error);
-                showToast('Erro ao salvar configuração da data', 'error');
-            }
-        }
-
-        function adicionarHorarioEspecifico() {
-            const horario = document.getElementById('novoHorarioEspecifico').value;
-            if (!horario) return;
-
-            const horarioFormatado = horario.substring(0, 5);
-            const horariosContainer = document.getElementById('horariosEspecificos');
-            
-            const div = document.createElement('div');
-            div.className = 'flex justify-between items-center p-1 bg-white/5 rounded';
-            div.innerHTML = `
-                <span>${horarioFormatado}</span>
-                <button class="text-red-400 hover:text-red-300" onclick="this.parentElement.remove()">
-                    <i data-feather="x" class="w-3 h-3"></i>
+            </div>
+            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+            <div class="text-center">
+                <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                    Já efetuei o pagamento
                 </button>
-            `;
-            
-            horariosContainer.appendChild(div);
-            document.getElementById('novoHorarioEspecifico').value = '';
-            feather.replace();
+            </div>
+        `;
+        feather.replace();
+
+        // Iniciar contador
+        startPaymentTimer(paymentExpiresAt);
+
+        // Configurar botão de copiar PIX
+        document.getElementById('copyPixBtn').addEventListener('click', () => {
+            const textarea = document.querySelector('#pixArea textarea');
+            textarea.select();
+            document.execCommand('copy');
+            showToast('Código PIX copiado!', 'success');
+        });
+
+        // Verificação automática do pagamento
+        const paymentStatusInterval = setInterval(async () => {
+            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+            if (paymentConfirmed) clearInterval(paymentStatusInterval);
+        }, 10000);
+
+        // Botão de confirmação manual
+        document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+            if (!paymentConfirmed) showToast("Pagamento ainda não confirmado. Aguarde.", "warning");
+        });
+
+        pagamentoPendente = true;
+    } catch (err) {
+        console.error(err);
+        showToast("Erro ao processar pagamento", "error");
+    } finally {
+        agendarText.classList.remove('hidden');
+        agendarSpinner.classList.add('hidden');
+        form.querySelector('button[type="submit"]').disabled = false;
+    }
+});
+
+
+// ---------------- CARREGAR CONFIGURAÇÕES DO SUPABASE ----------------
+async function carregarConfiguracoesCliente() {
+    try {
+        const { data, error } = await supabase
+            .from('config_horarios')
+            .select('*')
+            .eq('cliente_id', cliente)
+            .single();
+
+        if (error) {
+            console.error('Erro ao carregar configuração:', error);
+            return null;
+        }
+        return data;
+    } catch (err) {
+        console.error('Erro ao acessar Supabase:', err);
+        return null;
+    }
+}
+
+
+// ---------------- APLICAR CONFIGURAÇÕES NO FORMULÁRIO ----------------
+dataInput.addEventListener('change', async () => {
+    const config = await carregarConfiguracoesCliente();
+    if (!config) return;
+
+    if (validarDataSelecionada(dataInput.value, config)) {
+        carregarHorariosDisponiveis(dataInput.value, config);
+    } else {
+        horarioInput.value = '';
+    }
+});
+
+
+// ---------------- VALIDAR DATA SELECIONADA ----------------
+function validarDataSelecionada(data, config) {
+    const dataObj = new Date(data);
+    const diaSemana = dataObj.getDay(); // 0=Domingo, 1=Segunda, etc.
+
+    // Datas bloqueadas
+    if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
+        showToast('Esta data não está disponível', 'error');
+        dataInput.value = '';
+        return false;
+    }
+
+    // Dias da semana permitidos
+    if (!config.dias_semana.includes(diaSemana)) {
+        showToast('Este dia da semana não está disponível', 'error');
+        dataInput.value = '';
+        return false;
+    }
+
+    return true;
+}
+
+// ---------------- CARREGAR HORÁRIOS DISPONÍVEIS ----------------
+async function carregarHorariosDisponiveis(data, config) {
+    if (!data) return;
+
+    try {
+        const response = await fetch(`/agendamentos/${cliente}?data=${data}`);
+        if (!response.ok) return;
+
+        const { agendamentos } = await response.json();
+        const agendamentosDoDia = agendamentos.filter(a => a.data === data);
+
+        // Filtrar horários disponíveis
+        const horariosDisponiveis = config.horarios_disponiveis.filter(horario => {
+            return !agendamentosDoDia.some(a => a.horario === horario);
+        });
+
+        // Verificar limite de agendamentos do dia
+        if (agendamentosDoDia.length >= config.max_agendamentos_dia) {
+            showToast('Esta data já atingiu o limite máximo de agendamentos', 'error');
+            dataInput.value = '';
+            horarioInput.value = '';
+            return;
         }
 
-        // ---------------- RENDER AGENDAMENTOS ----------------
+        atualizarCampoHorario(horariosDisponiveis);
+    } catch (err) {
+        console.error('Erro ao carregar horários:', err);
+    }
+}
+
+// ---------------- RENDER AGENDAMENTOS ----------------
         function renderAgendamentos() {
-            const filtroNome = document.getElementById("searchInput").value.toLowerCase();
-            const filtroStatus = document.getElementById("statusFilter").value;
+            const filtroNome = searchInput.value.toLowerCase();
+            const filtroStatus = statusFilter.value;
 
             const filtrados = agendamentosCache
                 .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
@@ -848,7 +759,6 @@
                     return dateA - dateB;
                 });
 
-            const meusAgendamentos = document.getElementById("meusAgendamentos");
             if (filtrados.length === 0) {
                 meusAgendamentos.innerHTML = `
                     <div class='text-center py-8'>
@@ -931,373 +841,7 @@
 
             feather.replace();
         }
-
-        // ---------------- MODAL REAGENDAR ----------------
-        function abrirModalReagendar(agendamento) {
-            let modal = document.getElementById("modalReagendar");
-
-            if (!modal) {
-                modal = document.createElement("div");
-                modal.id = "modalReagendar";
-                modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden";
-                modal.innerHTML = `
-                    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md relative">
-                        <button id="fecharModal" class="absolute top-4 right-4 text-gray-400 hover:text-white">
-                            <i data-feather="x" class="w-5 h-5"></i>
-                        </button>
-                        <h2 class="text-lg font-medium mb-4 text-white">Reagendar Agendamento</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm text-gray-300 mb-1">Data</label>
-                                <input type="date" id="novaData" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                            </div>
-                            <div>
-                                <label class="block text-sm text-gray-300 mb-1">Horário</label>
-                                <input type="time" id="novoHorario" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                            </div>
-                        </div>
-                        <div class="flex justify-end gap-2 mt-6">
-                            <button id="cancelarReagendar" class="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-all">Cancelar</button>
-                            <button id="confirmarReagendar" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all">Confirmar</button>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-                feather.replace();
-
-                // Evento de fechar
-                modal.querySelector("#fecharModal").addEventListener("click", () => {
-                    modal.classList.add("hidden");
-                });
-                
-                modal.querySelector("#cancelarReagendar").addEventListener("click", () => {
-                    modal.classList.add("hidden");
-                });
-            }
-
-            // Preenche valores atuais e define data mínima como hoje
-            modal.querySelector("#novaData").value = agendamento.data;
-            modal.querySelector("#novoHorario").value = agendamento.horario;
-
-            // Remove qualquer evento antigo para evitar duplicação
-            const confirmarBtn = modal.querySelector("#confirmarReagendar");
-            const novoConfirmarBtn = confirmarBtn.cloneNode(true);
-            confirmarBtn.parentNode.replaceChild(novoConfirmarBtn, confirmarBtn);
-
-            novoConfirmarBtn.addEventListener("click", () => {
-                const novaData = modal.querySelector("#novaData").value;
-                const novoHorario = modal.querySelector("#novoHorario").value;
-
-                if (!novaData || !novoHorario) {
-                    showToast("Preencha data e horário corretamente!", "warning");
-                    return;
-                }
-
-                reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
-                modal.classList.add("hidden");
-            });
-
-            // Mostra modal
-            modal.classList.remove("hidden");
-        }
-
-        // ---------------- LISTAR AGENDAMENTOS ----------------
-        async function listarAgendamentos(){
-            if(!userToken) {
-                console.error("Token não disponível");
-                return;
-            }
-            
-            try{
-                const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: { "Authorization": `Bearer ${userToken}` }
-                });
-                
-                if (res.status === 401) {
-                    // Token expirado ou inválido
-                    showToast("Sessão expirada. Faça login novamente.", "error");
-                    logoutBtn.click(); // Força logout
-                    return;
-                }
-                
-                const { agendamentos } = await res.json();
-                agendamentosCache = agendamentos;
-                meusAgendamentos.style.display = 'block';
-                document.getElementById('filtersSection').style.display = 'block';
-                document.getElementById('diasTabs').style.display = 'flex';
-                initTabsDias();
-                renderAgendamentos(); 
-            } catch(e){
-                console.error("Erro ao listar agendamentos:", e);
-                showToast("Erro ao listar agendamentos","error");
-            }
-        }
-
-        // ---------------- LOGIN ----------------
-        document.getElementById('loginBtn').addEventListener('click', async () => {
-            const email = document.getElementById('email').value;
-            const senha = document.getElementById('senha').value;
-            if(!email || !senha) {
-                showToast("Preencha email e senha", "warning");
-                return;
-            }
-            
-            try {
-                document.getElementById('loginText').classList.add('hidden');
-                document.getElementById('loginSpinner').classList.remove('hidden');
-                document.getElementById('loginBtn').disabled = true;
-                
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
-                if(error){ 
-                    showToast(error.message,"error"); 
-                    document.getElementById('loginText').classList.remove('hidden');
-                    document.getElementById('loginSpinner').classList.add('hidden');
-                    document.getElementById('loginBtn').disabled = false;
-                    return; 
-                }
-
-                userToken = data.session.access_token;
-                localStorage.setItem('userToken', userToken);
-                localStorage.setItem('userEmail', email);
-
-                document.getElementById('loginSection').style.display = 'none';
-                document.getElementById('logoutBtn').style.display = 'flex';
-                document.getElementById('configSection').style.display = 'block';
-                document.getElementById('calendarSection').style.display = 'block';
-
-                await carregarConfiguracoes();
-                await listarAgendamentos();
-                gerarCalendario();
-                
-                showToast("Login realizado com sucesso!", "success");
-
-                document.getElementById('loginText').classList.remove('hidden');
-                document.getElementById('loginSpinner').classList.add('hidden');
-                document.getElementById('loginBtn').disabled = false;
-
-            } catch(e) {
-                console.error(e);
-                showToast("Erro ao fazer login", "error");
-                document.getElementById('loginText').classList.remove('hidden');
-                document.getElementById('loginSpinner').classList.add('hidden');
-                document.getElementById('loginBtn').disabled = false;
-            }
-        });
-
-        // ---------------- LOGOUT ----------------
-        document.getElementById('logoutBtn').addEventListener('click', async () => {
-            try {
-                await supabase.auth.signOut();
-                localStorage.removeItem('userToken');
-                localStorage.removeItem('userEmail');
-                userToken = null;
-
-                document.getElementById('loginSection').style.display = 'block';
-                document.getElementById('logoutBtn').style.display = 'none';
-                document.getElementById('configSection').style.display = 'none';
-                document.getElementById('calendarSection').style.display = 'none';
-                document.getElementById('meusAgendamentos').style.display = 'none';
-                document.getElementById('filtersSection').style.display = 'none';
-                document.getElementById('diasTabs').style.display = 'none';
-
-                showToast("Logout realizado com sucesso!", "success");
-            } catch (e) {
-                console.error(e);
-                showToast("Erro ao fazer logout", "error");
-            }
-        });
-
-        // ---------------- FILTROS ----------------
-        document.getElementById("searchInput").addEventListener("input", renderAgendamentos);
-        document.getElementById("statusFilter").addEventListener("change", renderAgendamentos);
-
-        // ---------------- TABS ----------------
-        function initTabsDias(){
-            const tabsDia=document.querySelectorAll(".tab-dia");
-            const tabsSemana=document.querySelectorAll(".tab-semana");
-            
-            tabsDia.forEach(btn=>{
-                btn.addEventListener("click",()=>{
-                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
-                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
-                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
-                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
-                    
-                    btn.classList.remove("bg-white/10", "hover:bg-white/20");
-                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-                    diaSelecionado=parseInt(btn.dataset.dia);
-                    renderAgendamentos();
-                });
-            });
-
-            tabsSemana.forEach(btn=>{
-                btn.addEventListener("click",()=>{
-                    tabsDia.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
-                    tabsDia.forEach(b=>b.classList.add("bg-white/10", "hover:bg-white/20"));
-                    tabsSemana.forEach(b=>b.classList.remove("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active"));
-                    tabsSemana.forEach(b=>b.classList.add("bg-white/5", "hover:bg-white/10"));
-                    
-                    btn.classList.remove("bg-white/5", "hover:bg-white/10");
-                    btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
-                    
-                    const semanas = parseInt(btn.dataset.semana);
-                    const dataLimite = new Date();
-                    dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                    diaSelecionado = semanas;
-                    renderAgendamentos();
-                });
-            });
-        }
-
-        // ---------------- EXPORT ----------------
-        document.getElementById("exportCSVBtn").addEventListener("click", ()=>{
-            const filtroStatus = document.getElementById("statusFilter").value;
-            const filtrados = agendamentosCache.filter(a=>filtroStatus?a.status===filtroStatus:true);
-            if(filtrados.length === 0) {
-                showToast("Nenhum agendamento para exportar", "warning");
-                return;
-            }
-            
-            let csv="Nome,Email,Telefone,Data,Horario,Status\n";
-            filtrados.forEach(a=>{csv+=`${a.nome},${a.email},${a.telefone},${a.data},${a.horario},${a.status}\n`;});
-            const blob=new Blob([csv],{type:"text/csv"});
-            const link=document.createElement("a");
-            link.href=URL.createObjectURL(blob);
-            link.download=`agendamentos_${cliente}.csv`;
-            link.click();
-            showToast("Exportado para CSV com sucesso", "success");
-        });
-
-        document.getElementById("exportPDFBtn").addEventListener("click", ()=>{
-            const { jsPDF }=window.jspdf;
-            const doc=new jsPDF();
-            
-            const filtroStatus = document.getElementById("statusFilter").value;
-            const filtrados = agendamentosCache.filter(a=>filtroStatus?a.status===filtroStatus:true);
-            if(filtrados.length === 0) {
-                showToast("Nenhum agendamento para exportar", "warning");
-                return;
-            }
-            
-            doc.setFontSize(18);
-            doc.setTextColor(40);
-            doc.text("Agendamentos", 105, 20, null, null, "center");
-            
-            doc.setFontSize(12);
-            doc.setTextColor(100);
-            doc.text(`Cliente: ${cliente}`, 105, 30, null, null, "center");
-            
-            const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
-            const today = new Date().toLocaleDateString('pt-BR', options);
-            doc.text(`Gerado em: ${today}`, 105, 35, null, null, "center");
-            
-            doc.setDrawColor(200);
-            doc.line(20, 40, 190, 40);
-            
-            doc.setFontSize(10);
-            doc.setTextColor(40);
-            let y = 50;
-            
-            doc.setFillColor(230);
-            doc.rect(20, y, 170, 10, 'F');
-            doc.text("Data", 25, y + 7);
-            doc.text("Horário", 50, y + 7);
-            doc.text("Nome", 80, y + 7);
-            doc.text("Status", 160, y + 7);
-            y += 10;
-            
-            filtrados.forEach(a => {
-                if(y > 270) {
-                    doc.addPage();
-                    y = 20;
-                }
-                
-                doc.text(formatData(a.data), 25, y + 7);
-                doc.text(a.horario, 50, y + 7);
-                doc.text(a.nome, 80, y + 7);
-                
-                if(a.status === 'confirmado') {
-                    doc.setTextColor(0, 150, 0);
-                } else if(a.status === 'pendente') {
-                    doc.setTextColor(200, 150, 0);
-                } else {
-                    doc.setTextColor(40);
-                }
-                doc.text(a.status, 160, y + 7);
-                doc.setTextColor(40);
-                
-                y += 10;
-            });
-            
-            doc.save(`agendamentos_${cliente}.pdf`);
-            showToast("Exportado para PDF com sucesso", "success");
-        });
-
-        async function confirmarAgendamento(cliente, id) {
-            if (!userToken) {
-                showToast("Faça login para confirmar um agendamento.", "warning");
-                return;
-            }
-
-            try {
-                showToast("Agendamento confirmado com sucesso!", "success");
-                // Atualiza o status localmente
-                const agendamento = agendamentosCache.find(a => a.id === id);
-                if (agendamento) {
-                    agendamento.status = "confirmado";
-                }
-                renderAgendamentos();
-                carregarDashboard();
-
-            } catch (e) {
-                console.error(e);
-                showToast("Erro de conexão ao confirmar.", "error");
-            }
-        }
-
-        async function cancelarAgendamento(cliente, id) {
-            if (!userToken) {
-                showToast("Faça login para cancelar um agendamento.", "warning");
-                return;
-            }
-
-            try {
-                showToast("Agendamento cancelado com sucesso!", "success");
-                // Atualiza o status localmente
-                const agendamento = agendamentosCache.find(a => a.id === id);
-                if (agendamento) {
-                    agendamento.status = "cancelado";
-                }
-                renderAgendamentos();
-                carregarDashboard();
-            } catch (e) {
-                console.error(e);
-                showToast("Erro de conexão ao cancelar.", "error");
-            }
-        }
-
-        async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-            if (!userToken) {
-                showToast("Faça login para reagendar um agendamento.", "warning");
-                return;
-            }
-
-            try {
-                showToast("Agendamento reagendado com sucesso!", "success");
-                // Atualiza localmente
-                const agendamento = agendamentosCache.find(a => a.id === id);
-                if (agendamento) {
-                    agendamento.data = novaData;
-                    agendamento.horario = novoHorario;
-                    agendamento.status = "pendente";
-                }
-                renderAgendamentos();
-
-            } catch (e) {
-                console.error(e);
-                showToast("Erro de conexão ao reagendar.", "error");
-            }
-        }
+        
 // ---------------- ATUALIZAR CAMPO DE HORÁRIO ----------------
 function atualizarCampoHorario(horariosDisponiveis) {
     let datalist = document.getElementById('horariosDisponiveis');
@@ -1316,127 +860,7 @@ function atualizarCampoHorario(horariosDisponiveis) {
 
     horarioInput.setAttribute('list', 'horariosDisponiveis');
 }
-        // ---------------- DASHBOARD ----------------
-        async function carregarDashboard() {
-            try {
-                const dashboardSection = document.getElementById('dashboardSection');
-                if (!dashboardSection) return;
-                
-                dashboardSection.style.display = 'block';
-                
-                const hoje = new Date().toISOString().split('T')[0];
-                const hojeObj = new Date();
-                const diaSemana = hojeObj.getDay();
-                const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-                const semanaInicio = new Date(hojeObj);
-                semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
-                const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
-                
-                const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
-                const semanaCount = agendamentosCache.filter(a => {
-                    const agendamentoDate = new Date(a.data);
-                    return agendamentoDate >= new Date(semanaInicioStr) && a.data <= hoje;
-                }).length;
-                
-                const totalCount = agendamentosCache.length;
-                const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
-                const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
-                
-                if (document.getElementById('statHoje')) {
-                    document.getElementById('statHoje').textContent = hojeCount;
-                }
-                if (document.getElementById('statSemana')) {
-                    document.getElementById('statSemana').textContent = semanaCount;
-                }
-                if (document.getElementById('statTotal')) {
-                    document.getElementById('statTotal').textContent = totalCount;
-                }
-                if (document.getElementById('statTaxa')) {
-                    document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
-                }
-                
-                const statusCount = {
-                    pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
-                    confirmado: confirmadosCount,
-                    cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
-                };
-                
-                const chartStatus = document.getElementById('chartStatus');
-                if (chartStatus) {
-                    chartStatus.innerHTML = `
-                        <div class="h-full flex flex-col justify-center">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm">Pendente: ${statusCount.pendente}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                const clientesCount = {};
-                agendamentosCache.forEach(a => {
-                    if (!clientesCount[a.nome]) {
-                        clientesCount[a.nome] = 0;
-                    }
-                    clientesCount[a.nome]++;
-                });
-                
-                const topClientes = Object.entries(clientesCount)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5);
-                
-                const topClientesDiv = document.getElementById('topClientes');
-                if (topClientesDiv) {
-                    topClientesDiv.innerHTML = '';
-                    
-                    if (topClientes.length === 0) {
-                        topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
-                    } else {
-                        topClientes.forEach(([nome, count]) => {
-                            const div = document.createElement('div');
-                            div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
-                            div.innerHTML = `
-                                <span class="text-sm truncate">${nome}</span>
-                                <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
-                            `;
-                            topClientesDiv.appendChild(div);
-                        });
-                    }
-                }
-                
-            } catch (e) {
-                console.error('Erro ao carregar dashboard:', e);
-            }
-        }
-
-        // ---------------- EVENT LISTENERS ----------------
-        document.getElementById('salvarConfigBtn').addEventListener('click', salvarConfiguracoes);
-        document.getElementById('addHorarioBtn').addEventListener('click', adicionarHorario);
-        document.getElementById('addDataBloqueadaBtn').addEventListener('click', adicionarDataBloqueada);
-        document.getElementById('salvarConfigDataBtn').addEventListener('click', salvarConfiguracaoData);
-        document.getElementById('addHorarioEspecificoBtn').addEventListener('click', adicionarHorarioEspecifico);
-
-        // Dias da semana
-        document.querySelectorAll('.dias-semana-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                this.classList.toggle('active');
-            });
-        });
-
+        
         // ---------------- INIT ----------------
         AOS.init({
             duration: 800,
@@ -1445,20 +869,6 @@ function atualizarCampoHorario(horariosDisponiveis) {
         });
         feather.replace();
         init();
-
-        // Funções globais para uso nos event listeners
-        window.removerHorario = removerHorario;
-        window.removerDataBloqueada = removerDataBloqueada;
-        window.selecionarData = selecionarData;
-        window.removerHorarioEspecifico = function(horario) {
-            const divs = document.querySelectorAll('#horariosEspecificos div');
-            divs.forEach(div => {
-                if (div.querySelector('span').textContent === horario) {
-                    div.remove();
-                }
-            });
-        };
     </script>
 </body>
 </html>
-
