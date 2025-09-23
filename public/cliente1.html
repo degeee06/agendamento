@@ -294,24 +294,31 @@
         const pathParts = window.location.pathname.split('/');
         const cliente = pathParts[1] || '';
 
+
         // ---------------- INICIALIZAÇÃO ----------------
-        function init() {
-            // Configurar máscara de telefone
-            if (telefoneInput) {
-                telefoneMask = IMask(telefoneInput, {
-                    mask: '(00) 00000-0000'
-                });
-            }
-            
-            // Permitir selecionar a partir de hoje (incluindo hoje)
-            const hoje = new Date();
-            const ontem = new Date(hoje);
-            ontem.setDate(ontem.getDate() - 1); // Data de ontem
-            
-            if (dataInput) {
-                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
-            }
-        }
+async function init() {
+    // Configurar máscara de telefone
+    if (telefoneInput) {
+        telefoneMask = IMask(telefoneInput, {
+            mask: '(00) 00000-0000'
+        });
+    }
+    
+    // Permitir selecionar a partir de hoje (incluindo hoje)
+    const hoje = new Date();
+    const ontem = new Date(hoje);
+    ontem.setDate(ontem.getDate() - 1); // Data de ontem
+    
+    if (dataInput) {
+        dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
+    }
+
+    // Carregar configurações do Supabase
+    const config = await carregarConfiguracoesCliente();
+    if (config) {
+        aplicarConfiguracoesNoFormulario(config);
+    }
+}
 
         // ---------------- TOASTS ----------------
         let activeToasts = [];
@@ -473,17 +480,31 @@
 
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
         form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+    e.preventDefault();
+    const formData=new FormData(form);
+    const dataToSend={};
+    formData.forEach((v,k)=>dataToSend[k]=v);
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
+    // Verifica campos obrigatórios
+    if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+        showToast("Preencha todos os campos", "warning");
+        return;
+    }
 
+    // Carregar configurações para validação final
+    const config = await carregarConfiguracoesCliente();
+    if (config) {
+        // Validar data e horário
+        if (!validarDataSelecionada(dataToSend.Data, config)) {
+            return;
+        }
+        
+        // Validar se o horário está disponível
+        if (!config.horarios_disponiveis.includes(dataToSend.Horario)) {
+            showToast('Horário não disponível', 'error');
+            return;
+        }
+    }
             // Mostrar loading
             agendarText.classList.add('hidden');
             agendarSpinner.classList.remove('hidden');
@@ -587,6 +608,117 @@
             }
         });
 
+// ---------------- CARREGAR CONFIGURAÇÕES DO SUPABASE ----------------
+async function carregarConfiguracoesCliente() {
+    try {
+        const response = await fetch(`/config/${cliente}`);
+        if (response.ok) {
+            const config = await response.json();
+            return config;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar configurações:', error);
+    }
+    return null;
+}
+
+// ---------------- APLICAR CONFIGURAÇÕES NO FORMULÁRIO ----------------
+function aplicarConfiguraçõeNoFormulario(config) {
+    // Configurar os dias da semana permitidos
+    dataInput.addEventListener('change', function() {
+        validarDataSelecionada(this.value, config);
+    });
+
+    // Configurar horários disponíveis
+    horarioInput.addEventListener('focus', function() {
+        carregarHorariosDisponiveis(dataInput.value, config);
+    });
+}
+
+// ---------------- VALIDAR DATA SELECIONADA ----------------
+function validarDataSelecionada(data, config) {
+    const dataObj = new Date(data);
+    const diaSemana = dataObj.getDay(); // 0=Domingo, 1=Segunda, etc.
+    
+    // Verificar se a data está bloqueada
+    if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
+        showToast('Esta data não está disponível para agendamento', 'error');
+        dataInput.value = '';
+        return false;
+    }
+    
+    // Verificar se o dia da semana está disponível
+    if (!config.dias_semana.includes(diaSemana)) {
+        showToast('Este dia da semana não está disponível para agendamento', 'error');
+        dataInput.value = '';
+        return false;
+    }
+    
+    return true;
+}
+
+// ---------------- CARREGAR HORÁRIOS DISPONÍVEIS ----------------
+async function carregarHorariosDisponiveis(data, config) {
+    if (!data) {
+        showToast('Selecione uma data primeiro', 'warning');
+        horarioInput.value = '';
+        return;
+    }
+
+    try {
+        // Verificar quantos agendamentos já existem para esta data
+        const response = await fetch(`/agendamentos/${cliente}?data=${data}`);
+        if (response.ok) {
+            const { agendamentos } = await response.json();
+            const agendamentosDoDia = agendamentos.filter(a => a.data === data);
+            
+            // Filtrar horários disponíveis
+            const horariosDisponiveis = config.horarios_disponiveis.filter(horario => {
+                const horarioOcupado = agendamentosDoDia.some(a => a.horario === horario);
+                return !horarioOcupado;
+            });
+
+            // Limitar pelo máximo de agendamentos por dia
+            if (agendamentosDoDia.length >= config.max_agendamentos_dia) {
+                showToast('Esta data já atingiu o limite máximo de agendamentos', 'error');
+                dataInput.value = '';
+                horarioInput.value = '';
+                return;
+            }
+
+            // Atualizar o campo de horário com os horários disponíveis
+            atualizarCampoHorario(horariosDisponiveis);
+        }
+    } catch (error) {
+        console.error('Erro ao carregar horários:', error);
+    }
+}
+
+// ---------------- ATUALIZAR CAMPO DE HORÁRIO ----------------
+function atualizarCampoHorario(horariosDisponiveis) {
+    // Criar datalist para sugestões de horários
+    let datalist = document.getElementById('horariosDisponiveis');
+    if (!datalist) {
+        datalist = document.createElement('datalist');
+        datalist.id = 'horariosDisponiveis';
+        document.body.appendChild(datalist);
+    }
+    
+    // Limpar opções anteriores
+    datalist.innerHTML = '';
+    
+    // Adicionar novas opções
+    horariosDisponiveis.forEach(horario => {
+        const option = document.createElement('option');
+        option.value = horario;
+        datalist.appendChild(option);
+    });
+    
+    // Vincular datalist ao campo de horário
+    horarioInput.setAttribute('list', 'horariosDisponiveis');
+}
+        
+        
         // ---------------- INIT ----------------
         AOS.init({
             duration: 800,
