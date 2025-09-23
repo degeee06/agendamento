@@ -490,6 +490,274 @@ app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------- PAINEL ADMIN - CONFIGURAÇÕES AVANÇADAS ----------------
+
+// Rota principal do painel admin
+app.get("/admin/:cliente", authMiddleware, (req, res) => {
+  const { cliente } = req.params;
+  if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+  
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+// Dashboard do admin
+app.get("/admin/:cliente/dashboard", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    // Estatísticas rápidas
+    const hoje = new Date().toISOString().split('T')[0];
+    
+    const [
+      { data: agendamentosHoje },
+      { data: agendamentosPendentes },
+      { data: configGeral }
+    ] = await Promise.all([
+      supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("cliente", cliente)
+        .eq("data", hoje)
+        .neq("status", "cancelado"),
+      
+      supabase
+        .from("agendamentos")
+        .select("id")
+        .eq("cliente", cliente)
+        .eq("status", "pendente"),
+      
+      getConfigHorarios(cliente)
+    ]);
+
+    res.json({
+      estatisticas: {
+        hoje: agendamentosHoje?.length || 0,
+        pendentes: agendamentosPendentes?.length || 0
+      },
+      config: configGeral
+    });
+  } catch (err) {
+    console.error("Erro no dashboard:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Configuração completa
+app.get("/admin/:cliente/config/completa", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const configGeral = await getConfigHorarios(cliente);
+    
+    // Próximos 60 dias para configuração
+    const inicio = new Date();
+    const fim = new Date();
+    fim.setDate(fim.getDate() + 60);
+    
+    const { data: configEspecificas } = await supabase
+      .from("config_datas_especificas")
+      .select("*")
+      .eq("cliente_id", cliente)
+      .gte("data", inicio.toISOString().split('T')[0])
+      .lte("data", fim.toISOString().split('T')[0])
+      .order("data", { ascending: true });
+
+    res.json({
+      config_geral: configGeral,
+      config_especificas: configEspecificas || [],
+      dias_semana: DIAS_SEMANA
+    });
+  } catch (err) {
+    console.error("Erro ao obter configuração completa:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Atualizar configuração geral
+app.put("/admin/:cliente/config/geral", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    const { dias_semana, horarios_disponiveis, intervalo_minutos, max_agendamentos_dia, datas_bloqueadas } = req.body;
+
+    const { data, error } = await supabase
+      .from("config_horarios")
+      .upsert({
+        cliente_id: cliente,
+        dias_semana: dias_semana || [1, 2, 3, 4, 5],
+        horarios_disponiveis: horarios_disponiveis || ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
+        intervalo_minutos: intervalo_minutos || 60,
+        max_agendamentos_dia: max_agendamentos_dia || 10,
+        datas_bloqueadas: datas_bloqueadas || [],
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    
+    data.dias_semana_info = DIAS_SEMANA.filter(dia => data.dias_semana.includes(dia.id));
+    
+    res.json({ msg: "Configuração geral atualizada", config: data });
+  } catch (err) {
+    console.error("Erro ao atualizar configuração geral:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Bloquear/Desbloquear data específica
+app.post("/admin/:cliente/data/bloquear", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    const { data, bloquear } = req.body;
+    
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!data) return res.status(400).json({ msg: "Data é obrigatória" });
+
+    const { data: configExistente } = await supabase
+      .from("config_datas_especificas")
+      .select("*")
+      .eq("cliente_id", cliente)
+      .eq("data", data)
+      .single();
+
+    let result;
+    if (configExistente) {
+      result = await supabase
+        .from("config_datas_especificas")
+        .update({ 
+          bloqueada: bloquear,
+          updated_at: new Date().toISOString()
+        })
+        .eq("cliente_id", cliente)
+        .eq("data", data)
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from("config_datas_especificas")
+        .insert({
+          cliente_id: cliente,
+          data: data,
+          bloqueada: bloquear,
+          horarios_bloqueados: [],
+          horarios_disponiveis: null,
+          max_agendamentos: null
+        })
+        .select()
+        .single();
+    }
+
+    if (result.error) throw result.error;
+    
+    res.json({ 
+      msg: bloquear ? "Data bloqueada com sucesso" : "Data desbloqueada com sucesso",
+      config: result.data 
+    });
+  } catch (err) {
+    console.error("Erro ao bloquear data:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Gerenciar horários de uma data específica
+app.post("/admin/:cliente/data/horarios", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    const { data, horarios_disponiveis, horarios_bloqueados, max_agendamentos } = req.body;
+    
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!data) return res.status(400).json({ msg: "Data é obrigatória" });
+
+    const { data: configExistente } = await supabase
+      .from("config_datas_especificas")
+      .select("*")
+      .eq("cliente_id", cliente)
+      .eq("data", data)
+      .single();
+
+    let result;
+    if (configExistente) {
+      result = await supabase
+        .from("config_datas_especificas")
+        .update({
+          horarios_disponiveis: horarios_disponiveis || null,
+          horarios_bloqueados: horarios_bloqueados || [],
+          max_agendamentos: max_agendamentos || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("cliente_id", cliente)
+        .eq("data", data)
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from("config_datas_especificas")
+        .insert({
+          cliente_id: cliente,
+          data: data,
+          bloqueada: false,
+          horarios_disponiveis: horarios_disponiveis || null,
+          horarios_bloqueados: horarios_bloqueados || [],
+          max_agendamentos: max_agendamentos || null
+        })
+        .select()
+        .single();
+    }
+
+    if (result.error) throw result.error;
+    
+    res.json({ 
+      msg: "Horários da data atualizados com sucesso",
+      config: result.data 
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar horários da data:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Verificar disponibilidade em tempo real
+app.get("/admin/:cliente/disponibilidade", authMiddleware, async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    const { data } = req.query;
+    
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!data) return res.status(400).json({ msg: "Data é obrigatória" });
+
+    const horariosDisponiveis = await getHorariosDisponiveis(cliente, data);
+    const configGeral = await getConfigHorarios(cliente);
+    const configData = await getConfigDataEspecifica(cliente, data);
+    
+    // Agendamentos existentes
+    const { data: agendamentos } = await supabase
+      .from("agendamentos")
+      .select("id, nome, horario, status")
+      .eq("cliente", cliente)
+      .eq("data", data)
+      .neq("status", "cancelado")
+      .order("horario", { ascending: true });
+
+    res.json({
+      data: data,
+      horarios_disponiveis: horariosDisponiveis,
+      agendamentos: agendamentos || [],
+      config_geral: configGeral,
+      config_data: configData,
+      total_agendamentos: agendamentos?.length || 0
+    });
+  } catch (err) {
+    console.error("Erro ao verificar disponibilidade:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+
+
 // ---------------- ROTAS PÚBLICAS PARA CLIENTES ----------------
 
 // Obter horários disponíveis para uma data (para cliente1.html)
@@ -1082,3 +1350,4 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
