@@ -684,6 +684,7 @@ async function carregarConfiguracoesCliente() {
             console.error('Erro ao carregar configuração:', error);
             return null;
         }
+
         return data;
     } catch (err) {
         console.error('Erro ao acessar Supabase:', err);
