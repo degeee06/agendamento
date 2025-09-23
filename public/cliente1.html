@@ -223,29 +223,32 @@
                         </div>
                     </div>
                 </div>
-                <div class="space-y-5">
-                    <div>
-                        <label for="Telefone" class="block mb-2 text-sm font-medium opacity-80">Telefone</label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <i data-feather="phone" class="w-5 h-5 text-gray-400"></i>
-                            </div>
-                            <input type="text" id="Telefone" name="Telefone" placeholder="(00) 00000-0000" required 
-                                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label for="Data" class="block mb-2 text-sm font-medium opacity-80">Data</label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
-                                </div>
-                                <input type="date" id="Data" name="Data" placeholder="Data do Agendamento" required 
-                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-                            </div>
-                        </div>
-                        <div>
+               <div class="space-y-5">
+    <!-- Telefone -->
+    <div>
+        <label for="Telefone" class="block mb-2 text-sm font-medium opacity-80">Telefone</label>
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i data-feather="phone" class="w-5 h-5 text-gray-400"></i>
+            </div>
+            <input type="text" id="Telefone" name="Telefone" placeholder="(00) 00000-0000" required 
+                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+        </div>
+    </div>
+
+    <!-- Data com Flatpickr -->
+    <div class="relative">
+        <label for="Data" class="block mb-2 text-sm font-medium opacity-80">Data</label>
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
+            </div>
+            <input type="text" id="Data" name="Data" placeholder="Selecione a data" required 
+                   class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+        </div>
+    </div>
+</div>
+
                             <label for="Horario" class="block mb-2 text-sm font-medium opacity-80">Horário</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -296,34 +299,6 @@
 
         const pathParts = window.location.pathname.split('/');
         const cliente = pathParts[1] || '';
-
-// ---------------- Inicializar Flatpickr ----------------
-function initDatepicker(config) {
-    if (!dataInput) return;
-
-    const blockedDates = config.datas_bloqueadas || [];
-    const diasDisponiveis = (config.dias_semana || [1,2,3,4,5]).map(Number); // 0=domingo
-
-    flatpickr(dataInput, {
-        dateFormat: "Y-m-d",
-        minDate: "today",
-        disable: [
-            function(date) {
-                const d = date.toISOString().split('T')[0];
-                if (blockedDates.includes(d)) return true;
-                const dia = date.getDay();
-                if (!diasDisponiveis.includes(dia)) return true;
-                return false;
-            }
-        ],
-        locale: {
-            firstDayOfWeek: 1
-        },
-        onChange: function(selectedDates, dateStr) {
-            validarDataSelecionada(dateStr, config);
-        }
-    });
-}
 
 
         
@@ -681,6 +656,10 @@ async function carregarConfiguracoesCliente() {
             .single();
 
         if (error) {
+            if (error.code === 'PGRST116') { // registro não encontrado
+                console.warn('Nenhuma configuração encontrada para este cliente');
+                return null;
+            }
             console.error('Erro ao carregar configuração:', error);
             return null;
         }
@@ -692,6 +671,33 @@ async function carregarConfiguracoesCliente() {
     }
 }
 
+
+async function initDatepicker() {
+    const config = await carregarConfiguracoesCliente();
+    if (!config) return;
+
+    const diasPermitidos = config.dias_semana.map(Number); // transforma em inteiros
+    const datasBloqueadas = config.datas_bloqueadas || [];
+
+    flatpickr("#Data", {
+        dateFormat: "Y-m-d",
+        minDate: "today",
+        disable: [
+            function(date) {
+                const day = date.getDay(); // 0=domingo, 1=segunda
+                const formatted = date.toISOString().split('T')[0];
+
+                // Bloquear dia da semana não permitido
+                if (!diasPermitidos.includes(day)) return true;
+
+                // Bloquear datas específicas
+                if (datasBloqueadas.includes(formatted)) return true;
+
+                return false; // data permitida
+            }
+        ]
+    });
+}
 
 // ---------------- APLICAR CONFIGURAÇÕES NO FORMULÁRIO ----------------
 dataInput.addEventListener('change', async () => {
