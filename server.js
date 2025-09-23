@@ -16,31 +16,53 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// Verifica variáveis de ambiente críticas
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("❌ Variáveis de ambiente do Supabase não configuradas");
+  process.exit(1);
+}
+
+if (!process.env.MP_ACCESS_TOKEN) {
+  console.error("❌ Token de acesso do Mercado Pago não configurado");
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Inicializa Mercado Pago
-const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
-const payment = new Payment(mpClient);
+// Inicializa Mercado Pago apenas se o token existir
+let mpClient, payment;
+if (process.env.MP_ACCESS_TOKEN) {
+  mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+  payment = new Payment(mpClient);
+} else {
+  console.warn("⚠️ Mercado Pago não inicializado - MP_ACCESS_TOKEN não encontrado");
+}
 
 let creds;
 try {
-  creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+  if (process.env.GOOGLE_SERVICE_ACCOUNT) {
+    creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+  }
 } catch (e) {
-  console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
-  process.exit(1);
+  console.error("❌ Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
 }
 
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet(clienteId) {
+  if (!creds) {
+    throw new Error("Credenciais do Google Sheets não configuradas");
+  }
+
   const { data, error } = await supabase
     .from("clientes")
     .select("spreadsheet_id")
     .eq("id", clienteId)
     .single();
+    
   if (error || !data) throw new Error(`Cliente ${clienteId} não encontrado`);
+  if (!data.spreadsheet_id) throw new Error(`Cliente ${clienteId} sem spreadsheet_id`);
 
   const doc = new GoogleSpreadsheet(data.spreadsheet_id);
   await doc.useServiceAccountAuth(creds);
@@ -49,9 +71,17 @@ async function accessSpreadsheet(clienteId) {
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
+  try {
+    await sheet.loadHeaderRow();
+  } catch (error) {
+    // Se não tem header, cria com as novas keys
+    await sheet.setHeaderRow(newKeys);
+    return;
+  }
+  
   const currentHeaders = sheet.headerValues || [];
   const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+  
   if (headersToAdd.length > 0) {
     await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
   }
@@ -61,14 +91,17 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   await sheet.loadHeaderRow();
   const rows = await sheet.getRows();
   const row = rows.find(r => r.id === rowId);
+  
   if (row) {
     Object.keys(updatedData).forEach(key => {
-      if (sheet.headerValues.includes(key)) row[key] = updatedData[key];
+      if (sheet.headerValues.includes(key)) {
+        row[key] = updatedData[key];
+      }
     });
     await row.save();
   } else {
     await ensureDynamicHeaders(sheet, Object.keys(updatedData));
-    await sheet.addRow(updatedData);
+    await sheet.addRow({ id: rowId, ...updatedData });
   }
 }
 
@@ -77,27 +110,48 @@ async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
 
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
-  req.user = data.user;
-  req.clienteId = data.user.user_metadata.cliente_id;
-  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
-  next();
+    req.user = data.user;
+    req.clienteId = data.user.user_metadata?.cliente_id;
+    
+    if (!req.clienteId) {
+      return res.status(403).json({ msg: "Usuário sem cliente_id" });
+    }
+    
+    next();
+  } catch (error) {
+    console.error("Erro no middleware de auth:", error);
+    res.status(500).json({ msg: "Erro interno no servidor" });
+  }
 }
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  let query = supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("cliente", cliente)
-    .eq("data", data)
-    .eq("horario", horario)
-    .neq("status", "cancelado");
+  try {
+    let query = supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .eq("data", data)
+      .eq("horario", horario)
+      .neq("status", "cancelado");
 
-  if (ignoreId) query = query.neq("id", ignoreId);
-  const { data: agendamentos } = await query;
-  return agendamentos.length === 0;
+    if (ignoreId) query = query.neq("id", ignoreId);
+    
+    const { data: agendamentos, error } = await query;
+    
+    if (error) {
+      console.error("Erro ao verificar horário disponível:", error);
+      return false;
+    }
+    
+    return agendamentos.length === 0;
+  } catch (error) {
+    console.error("Erro na função horarioDisponivel:", error);
+    return false;
+  }
 }
 
 // ==== FUNÇÃO PARA LIMPAR AGENDAMENTOS EXPIRADOS ====
@@ -153,132 +207,175 @@ async function limparAgendamentosExpirados() {
   }
 }
 
-// ---------------- NOVAS FUNÇÕES PARA CONFIGURAÇÃO ----------------
+// ---------------- CONFIGURAÇÃO DE DIAS DA SEMANA ----------------
+const DIAS_SEMANA = [
+  { id: 0, nome: "Domingo", abreviacao: "Dom" },
+  { id: 1, nome: "Segunda-feira", abreviacao: "Seg" },
+  { id: 2, nome: "Terça-feira", abreviacao: "Ter" },
+  { id: 3, nome: "Quarta-feira", abreviacao: "Qua" },
+  { id: 4, nome: "Quinta-feira", abreviacao: "Qui" },
+  { id: 5, nome: "Sexta-feira", abreviacao: "Sex" },
+  { id: 6, nome: "Sábado", abreviacao: "Sáb" }
+];
+
+// ---------------- FUNÇÕES PARA CONFIGURAÇÃO ----------------
 
 // Obter configurações de horários
 async function getConfigHorarios(clienteId) {
-  const { data, error } = await supabase
-    .from("config_horarios")
-    .select("*")
-    .eq("cliente_id", clienteId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("config_horarios")
+      .select("*")
+      .eq("cliente_id", clienteId)
+      .single();
 
-  if (error || !data) {
-    // Retorna configuração padrão se não existir
+    if (error || !data) {
+      // Retorna configuração padrão se não existir
+      return {
+        dias_semana: [1, 2, 3, 4, 5], // Segunda a Sexta
+        horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
+        intervalo_minutos: 60,
+        max_agendamentos_dia: 10,
+        datas_bloqueadas: [],
+        dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
+      };
+    }
+
+    // Adiciona informações dos dias da semana
+    data.dias_semana_info = DIAS_SEMANA.filter(dia => data.dias_semana.includes(dia.id));
+    return data;
+  } catch (error) {
+    console.error("Erro ao obter configurações de horários:", error);
     return {
       dias_semana: [1, 2, 3, 4, 5],
       horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
       intervalo_minutos: 60,
       max_agendamentos_dia: 10,
-      datas_bloqueadas: []
+      datas_bloqueadas: [],
+      dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
     };
   }
-
-  return data;
 }
 
 // Obter configurações específicas por data
 async function getConfigDataEspecifica(clienteId, data) {
-  const { data: configData, error } = await supabase
-    .from("config_datas_especificas")
-    .select("*")
-    .eq("cliente_id", clienteId)
-    .eq("data", data)
-    .single();
+  try {
+    const { data: configData, error } = await supabase
+      .from("config_datas_especificas")
+      .select("*")
+      .eq("cliente_id", clienteId)
+      .eq("data", data)
+      .single();
 
-  if (error) return null;
-  return configData;
+    if (error) return null;
+    return configData;
+  } catch (error) {
+    console.error("Erro ao obter configuração específica:", error);
+    return null;
+  }
 }
 
 // Verificar se horário está disponível considerando configurações
-async function verificarDisponibilidade(clienteId, data, horario) {
-  const config = await getConfigHorarios(clienteId);
-  const configData = await getConfigDataEspecifica(clienteId, data);
-  
-  // Verificar se a data está bloqueada
-  if (configData?.bloqueada) {
-    return false;
-  }
-
-  // Verificar se a data está na lista de datas bloqueadas
-  const dataObj = new Date(data);
-  if (config.datas_bloqueadas.includes(data)) {
-    return false;
-  }
-
-  // Verificar dia da semana
-  const diaSemana = dataObj.getDay(); // 0 = Domingo, 1 = Segunda, etc.
-  if (!config.dias_semana.includes(diaSemana)) {
-    return false;
-  }
-
-  // Verificar horários disponíveis
-  let horariosPermitidos = config.horarios_disponiveis;
-  
-  // Aplicar configurações específicas da data
-  if (configData) {
-    if (configData.horarios_disponiveis) {
-      horariosPermitidos = configData.horarios_disponiveis;
-    }
-    if (configData.horarios_bloqueados.includes(horario)) {
+async function verificarDisponibilidade(clienteId, data, horario, ignoreId = null) {
+  try {
+    const config = await getConfigHorarios(clienteId);
+    const configData = await getConfigDataEspecifica(clienteId, data);
+    
+    // Verificar se a data está bloqueada
+    if (configData?.bloqueada) {
       return false;
     }
-  }
 
-  if (!horariosPermitidos.includes(horario)) {
+    // Verificar se a data está na lista de datas bloqueadas
+    if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
+      return false;
+    }
+
+    // Verificar dia da semana
+    const dataObj = new Date(data);
+    const diaSemana = dataObj.getDay();
+    if (!config.dias_semana.includes(diaSemana)) {
+      return false;
+    }
+
+    // Verificar horários disponíveis
+    let horariosPermitidos = config.horarios_disponiveis || [];
+    
+    // Aplicar configurações específicas da data
+    if (configData) {
+      if (configData.horarios_disponiveis) {
+        horariosPermitidos = configData.horarios_disponiveis;
+      }
+      if (configData.horarios_bloqueados && configData.horarios_bloqueados.includes(horario)) {
+        return false;
+      }
+    }
+
+    if (!horariosPermitidos.includes(horario)) {
+      return false;
+    }
+
+    // Verificar limite de agendamentos do dia
+    const maxAgendamentos = configData?.max_agendamentos || config.max_agendamentos_dia;
+    const { data: agendamentosDia } = await supabase
+      .from("agendamentos")
+      .select("id")
+      .eq("cliente", clienteId)
+      .eq("data", data)
+      .neq("status", "cancelado");
+
+    if (agendamentosDia && agendamentosDia.length >= maxAgendamentos) {
+      return false;
+    }
+
+    return await horarioDisponivel(clienteId, data, horario, ignoreId);
+  } catch (error) {
+    console.error("Erro na verificação de disponibilidade:", error);
     return false;
   }
-
-  // Verificar limite de agendamentos do dia
-  const maxAgendamentos = configData?.max_agendamentos || config.max_agendamentos_dia;
-  const { data: agendamentosDia } = await supabase
-    .from("agendamentos")
-    .select("id")
-    .eq("cliente", clienteId)
-    .eq("data", data)
-    .neq("status", "cancelado");
-
-  if (agendamentosDia.length >= maxAgendamentos) {
-    return false;
-  }
-
-  return await horarioDisponivel(clienteId, data, horario);
 }
 
 // Obter horários disponíveis para uma data
 async function getHorariosDisponiveis(clienteId, data) {
-  const config = await getConfigHorarios(clienteId);
-  const configData = await getConfigDataEspecifica(clienteId, data);
-  
-  // Verificar se a data está bloqueada
-  if (configData?.bloqueada || config.datas_bloqueadas.includes(data)) {
+  try {
+    const config = await getConfigHorarios(clienteId);
+    const configData = await getConfigDataEspecifica(clienteId, data);
+    
+    // Verificar se a data está bloqueada
+    if (configData?.bloqueada || (config.datas_bloqueadas && config.datas_bloqueadas.includes(data))) {
+      return [];
+    }
+
+    let horariosPermitidos = config.horarios_disponiveis || [];
+    
+    // Aplicar configurações específicas da data
+    if (configData) {
+      if (configData.horarios_disponiveis) {
+        horariosPermitidos = configData.horarios_disponiveis;
+      }
+      // Remover horários bloqueados
+      if (configData.horarios_bloqueados) {
+        horariosPermitidos = horariosPermitidos.filter(horario => 
+          !configData.horarios_bloqueados.includes(horario)
+        );
+      }
+    }
+
+    // Verificar quais horários estão disponíveis
+    const horariosDisponiveis = [];
+    
+    for (const horario of horariosPermitidos) {
+      const disponivel = await horarioDisponivel(clienteId, data, horario);
+      if (disponivel) {
+        horariosDisponiveis.push(horario);
+      }
+    }
+
+    return horariosDisponiveis;
+  } catch (error) {
+    console.error("Erro ao obter horários disponíveis:", error);
     return [];
   }
-
-  let horariosPermitidos = config.horarios_disponiveis;
-  
-  // Aplicar configurações específicas da data
-  if (configData) {
-    if (configData.horarios_disponiveis) {
-      horariosPermitidos = configData.horarios_disponiveis;
-    }
-    // Remover horários bloqueados
-    horariosPermitidos = horariosPermitidos.filter(horario => 
-      !configData.horarios_bloqueados.includes(horario)
-    );
-  }
-
-  // Verificar quais horários estão disponíveis
-  const horariosDisponiveis = [];
-  
-  for (const horario of horariosPermitidos) {
-    const disponivel = await horarioDisponivel(clienteId, data, horario);
-    if (disponivel) {
-      horariosDisponiveis.push(horario);
-    }
-  }
-
-  return horariosDisponiveis;
 }
 
 // ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
@@ -297,6 +394,11 @@ app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// Obter lista de dias da semana
+app.get("/api/dias-semana", (req, res) => {
+  res.json(DIAS_SEMANA);
+});
+
 // Atualizar configurações
 app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -309,17 +411,21 @@ app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
       .from("config_horarios")
       .upsert({
         cliente_id: cliente,
-        dias_semana,
-        horarios_disponiveis,
-        intervalo_minutos,
-        max_agendamentos_dia,
-        datas_bloqueadas,
+        dias_semana: dias_semana || [1, 2, 3, 4, 5],
+        horarios_disponiveis: horarios_disponiveis || ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
+        intervalo_minutos: intervalo_minutos || 60,
+        max_agendamentos_dia: max_agendamentos_dia || 10,
+        datas_bloqueadas: datas_bloqueadas || [],
         updated_at: new Date().toISOString()
       })
       .select()
       .single();
 
     if (error) throw error;
+    
+    // Adiciona informações dos dias da semana na resposta
+    data.dias_semana_info = DIAS_SEMANA.filter(dia => data.dias_semana.includes(dia.id));
+    
     res.json({ msg: "Configurações atualizadas com sucesso", config: data });
   } catch (err) {
     console.error("Erro ao atualizar configurações:", err);
@@ -331,7 +437,7 @@ app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
 app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    const { data: startDate, endDate } = req.query;
+    const { startDate, endDate } = req.query;
     
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
@@ -347,7 +453,7 @@ app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
     const { data, error } = await query.order("data", { ascending: true });
 
     if (error) throw error;
-    res.json({ configs: data });
+    res.json({ configs: data || [] });
   } catch (err) {
     console.error("Erro ao obter configurações de datas:", err);
     res.status(500).json({ msg: "Erro interno" });
@@ -367,10 +473,10 @@ app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
       .upsert({
         cliente_id: cliente,
         data: dataConfig,
-        horarios_disponiveis,
-        horarios_bloqueados,
-        max_agendamentos,
-        bloqueada,
+        horarios_disponiveis: horarios_disponiveis || null,
+        horarios_bloqueados: horarios_bloqueados || [],
+        max_agendamentos: max_agendamentos || null,
+        bloqueada: bloqueada || false,
         updated_at: new Date().toISOString()
       })
       .select()
@@ -400,6 +506,22 @@ app.get("/api/horarios-disponiveis/:cliente", async (req, res) => {
     res.json({ horarios_disponiveis: horarios });
   } catch (err) {
     console.error("Erro ao obter horários disponíveis:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Obter dias da semana disponíveis para um cliente
+app.get("/api/dias-disponiveis/:cliente", async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    const config = await getConfigHorarios(cliente);
+    
+    res.json({ 
+      dias_semana: config.dias_semana,
+      dias_semana_info: config.dias_semana_info 
+    });
+  } catch (err) {
+    console.error("Erro ao obter dias disponíveis:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
@@ -437,7 +559,7 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .order("horario", { ascending: true });
 
     if (error) throw error;
-    res.json({ agendamentos: data });
+    res.json({ agendamentos: data || [] });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
@@ -446,6 +568,11 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
+  // Verifica se Mercado Pago está configurado
+  if (!payment) {
+    return res.status(500).json({ error: "Mercado Pago não configurado" });
+  }
+
   const { amount, description, email } = req.body;
   if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
 
@@ -502,8 +629,8 @@ app.post("/create-pix", async (req, res) => {
     res.json({
       payment_id: result.id,
       status: result.status,
-      qr_code: result.point_of_interaction.transaction_data.qr_code,
-      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+      qr_code: result.point_of_interaction?.transaction_data?.qr_code,
+      qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
       expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
     });
   } catch (err) {
@@ -522,15 +649,15 @@ app.get("/check-payment/:paymentId", async (req, res) => {
       .from("pagamentos")
       .select("*")
       .eq("id", paymentId)
-      .maybeSingle();  // Usa maybeSingle para evitar erro quando não encontra
+      .maybeSingle();
 
     if (dbError && dbError.code !== 'PGRST116') {
       console.error("Erro ao buscar pagamento no banco:", dbError);
       return res.status(500).json({ error: "Erro ao verificar pagamento" });
     }
 
-    // Se não encontrou no banco, verifica no Mercado Pago
-    if (!paymentData) {
+    // Se não encontrou no banco e Mercado Pago está configurado, verifica no MP
+    if (!paymentData && payment) {
       console.log("Pagamento não encontrado no banco, verificando no Mercado Pago...");
       try {
         const paymentDetails = await payment.get({ id: paymentId });
@@ -541,8 +668,13 @@ app.get("/check-payment/:paymentId", async (req, res) => {
       }
     }
 
+    // Se Mercado Pago não está configurado, retorna status do banco
+    if (!payment) {
+      return res.json({ status: paymentData?.status || 'pending', payment: paymentData });
+    }
+
     // Se já está aprovado no banco, retorna
-    if (paymentData.status === "approved") {
+    if (paymentData?.status === "approved") {
       return res.json({ status: "approved", payment: paymentData });
     }
 
@@ -551,8 +683,8 @@ app.get("/check-payment/:paymentId", async (req, res) => {
       const paymentDetails = await payment.get({ id: paymentId });
       
       // Atualiza status no banco se mudou
-      if (paymentDetails.status !== paymentData.status) {
-        let valid_until = paymentData.valid_until;
+      if (paymentDetails.status !== paymentData?.status) {
+        let valid_until = paymentData?.valid_until;
         
         if (["approved", "paid"].includes(paymentDetails.status.toLowerCase())) {
           const vipExpires = new Date();
@@ -562,12 +694,14 @@ app.get("/check-payment/:paymentId", async (req, res) => {
 
         await supabase
           .from("pagamentos")
-          .update({ 
+          .upsert({ 
+            id: paymentId,
+            email: paymentData?.email || '',
+            amount: paymentData?.amount || 0,
             status: paymentDetails.status, 
             valid_until,
             updated_at: new Date().toISOString()
-          })
-          .eq("id", paymentId);
+          });
       }
 
       res.json({ status: paymentDetails.status, payment: paymentDetails });
@@ -575,7 +709,7 @@ app.get("/check-payment/:paymentId", async (req, res) => {
     } catch (mpError) {
       console.error("Erro ao verificar pagamento no Mercado Pago:", mpError);
       // Se não conseguir verificar no MP, retorna o status do banco
-      res.json({ status: paymentData.status, payment: paymentData });
+      res.json({ status: paymentData?.status || 'pending', payment: paymentData });
     }
 
   } catch (err) {
@@ -593,7 +727,7 @@ app.get("/check-vip/:email", async (req, res) => {
   const { data, error } = await supabase
     .from("pagamentos")
     .select("valid_until")
-    .eq("email", email)
+    .eq("email", email.toLowerCase().trim())
     .eq("status", "approved")
     .gt("valid_until", now.toISOString())
     .order("valid_until", { ascending: false })
@@ -615,6 +749,12 @@ app.post("/webhook", async (req, res) => {
   try {
     const paymentId = req.body?.data?.id || req.query["data.id"];
     if (!paymentId) return res.sendStatus(400);
+
+    // Verifica se Mercado Pago está configurado
+    if (!payment) {
+      console.error("Mercado Pago não configurado para webhook");
+      return res.sendStatus(500);
+    }
 
     const paymentDetails = await payment.get({ id: paymentId });
 
@@ -687,10 +827,12 @@ app.post("/agendar/:cliente", async (req, res) => {
 
     // Atualiza Google Sheet
     try {
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-      await sheet.addRow(novoAgendamento);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
       // Não falha a requisição por erro no sheet
@@ -718,8 +860,10 @@ app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)
     
     // Atualiza Google Sheet
     try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -744,8 +888,10 @@ app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=
     
     // Atualiza Google Sheet
     try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -771,8 +917,8 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
       .update({
         data: novaData, 
         horario: novoHorario,
-        status: "pendente",        // SEMPRE volta para pendente
-        confirmado: false          // SEMPRE volta para não confirmado
+        status: "pendente",
+        confirmado: false
       })
       .eq("id", id)
       .eq("cliente", cliente)
@@ -783,8 +929,10 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
     
     // Atualiza Google Sheet
     try {
-      const doc = await accessSpreadsheet(cliente);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      if (creds) {
+        const doc = await accessSpreadsheet(cliente);
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -836,9 +984,9 @@ app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
     if (errorSemana) throw errorSemana;
 
     // Estatísticas por status
-    const confirmados = todosAgendamentos.filter(a => a.status === 'confirmado').length;
-    const pendentes = todosAgendamentos.filter(a => a.status === 'pendente').length;
-    const cancelados = todosAgendamentos.filter(a => a.status === 'cancelado').length;
+    const confirmados = (todosAgendamentos || []).filter(a => a.status === 'confirmado').length;
+    const pendentes = (todosAgendamentos || []).filter(a => a.status === 'pendente').length;
+    const cancelados = (todosAgendamentos || []).filter(a => a.status === 'cancelado').length;
 
     const estatisticas = {
       hoje: agendamentosHoje?.length || 0,
@@ -849,7 +997,7 @@ app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
         pendente: pendentes,
         cancelado: cancelados
       },
-      taxaConfirmacao: todosAgendamentos.length > 0 ? Math.round((confirmados / todosAgendamentos.length) * 100) : 0
+      taxaConfirmacao: todosAgendamentos?.length > 0 ? Math.round((confirmados / todosAgendamentos.length) * 100) : 0
     };
 
     res.json(estatisticas);
@@ -910,9 +1058,27 @@ setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
 // Executar imediatamente ao iniciar o servidor
 setTimeout(limparAgendamentosExpirados, 2000);
 
+// ---------------- Health Check ----------------
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "OK", 
+    timestamp: new Date().toISOString(),
+    port: PORT 
+  });
+});
+
 // ---------------- Servidor ----------------
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
   console.log("🔧 Sistema de configuração de horários ativo");
+  console.log("📅 Dias da semana configurados:", DIAS_SEMANA.map(d => d.abreviacao).join(", "));
+  
+  // Verifica configurações
+  if (!process.env.MP_ACCESS_TOKEN) {
+    console.warn("⚠️ Mercado Pago não está configurado");
+  }
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT) {
+    console.warn("⚠️ Google Sheets não está configurado");
+  }
 });
