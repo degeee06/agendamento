@@ -241,8 +241,9 @@
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
                                 </div>
-                                <input type="date" id="Data" name="Data" placeholder="Data do Agendamento" required 
-                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+                               <input type="text" id="Data" name="Data" placeholder="Data do Agendamento" required 
+       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
+
                             </div>
                         </div>
                         <div>
@@ -270,7 +271,19 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
-
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <!-- Inicialização do Flatpickr -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    flatpickr("#Data", {
+        altInput: true,
+        altFormat: "d/m/Y",
+        dateFormat: "Y-m-d",
+        minDate: "today"
+    });
+});
+</script>
+    
     <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -645,7 +658,8 @@ async function init() {
         });
     }
 }
-  
+
+
         // ---------------- INIT ----------------
         AOS.init({
             duration: 800,
