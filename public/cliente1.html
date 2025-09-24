@@ -8,7 +8,6 @@
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script src="https://unpkg.com/feather-icons"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/imask/6.4.2/imask.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -25,76 +24,12 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
         
-        .scrollbar-hide::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-        }
-        
-        .scrollbar-hide::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .animate-fade-in {
-            animation: fadeIn 0.3s ease-out forwards;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
         .input-field {
             transition: all 0.3s ease;
         }
         
         .input-field:focus {
             box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
-        }
-        
-        .status-pendente {
-            color: #fbbf24;
-            background-color: rgba(251, 191, 36, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-
-        .status-confirmado {
-            color: #34d399;
-            background-color: rgba(52, 211, 153, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-
-        .status-cancelado {
-            color: #f87171;
-            background-color: rgba(248, 113, 113, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-        
-        .tab-dia.active {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        
-        .agendamento-card {
-            transition: all 0.3s ease;
-        }
-        
-        .agendamento-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
         
         .loading-spinner {
@@ -132,51 +67,22 @@
             100% { opacity: 1; }
         }
         
-        @media (max-width: 640px) {
-            .mobile-flex-col {
-                flex-direction: column;
-            }
-            
-            .mobile-w-full {
-                width: 100%;
-            }
-            
-            .mobile-text-center {
-                text-align: center;
-            }
-            
-            .dias-tabs-container {
-                overflow-x: auto;
-                padding-bottom: 8px;
-            }
-            
-            .dias-tabs-container::-webkit-scrollbar {
-                height: 4px;
-            }
-            
-            .dias-tabs-container::-webkit-scrollbar-thumb {
-                background: rgba(255, 255, 255, 0.2);
-                border-radius: 4px;
-            }
-            
-            .dashboard-card {
-                transition: all 0.3s ease;
-            }
-            
-            .dashboard-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            }
-            
-            .stat-number {
-                font-size: 1.875rem;
-                font-weight: 700;
-            }
-            
-            .stat-label {
-                font-size: 0.875rem;
-                color: #D1D5DB;
-            }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
         }
     </style>
 </head>
@@ -188,7 +94,7 @@
                 Agendamento
             </h1>
             <p class="text-lg opacity-90 max-w-2xl mx-auto">
-                Gerencie seus compromissos com uma interface intuitiva e elegante
+                Faça seu agendamento de forma rápida e segura
             </p>
         </header>
 
@@ -208,7 +114,7 @@
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <i data-feather="user" class="w-5 h-5 text-gray-400"></i>
                             </div>
-                            <input type="text" name="Nome" placeholder="Seu nome" required 
+                            <input type="text" id="Nome" name="Nome" placeholder="Seu nome" required 
                                    class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                         </div>
                     </div>
@@ -218,7 +124,7 @@
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <i data-feather="mail" class="w-5 h-5 text-gray-400"></i>
                             </div>
-                            <input type="email" name="Email" placeholder="seu@email.com" required 
+                            <input type="email" id="Email" name="Email" placeholder="seu@email.com" required 
                                    class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                         </div>
                     </div>
@@ -260,8 +166,8 @@
             </div>
             <div class="max-w-md mx-auto mt-8">
                 <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-3 px-6 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-lg">
-                    <i data-feather="plus" class="w-5 h-5"></i>
-                    <span id="agendarText">Agendar</span>
+                    <i data-feather="credit-card" class="w-5 h-5"></i>
+                    <span id="agendarText">Agendar e Pagar</span>
                     <div id="agendarSpinner" class="loading-spinner hidden"></div>
                 </button>
             </div>
@@ -271,28 +177,21 @@
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
-    <script type="module">
-        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-
-        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+    <script>
+        // Variáveis globais
         let telefoneMask = null;
         let pagamentoPendente = false;
         let paymentCheckInterval = null;
         let currentPaymentId = null;
         let paymentExpiresAt = null;
 
+        // Elementos DOM
         const form = document.getElementById('agendamentoForm');
-        const agendarText = document.getElementById("agendarText");
-        const agendarSpinner = document.getElementById("agendarSpinner");
+        const agendarText = document.getElementById('agendarText');
+        const agendarSpinner = document.getElementById('agendarSpinner');
         const telefoneInput = document.getElementById("Telefone");
         const dataInput = document.getElementById("Data");
         const horarioInput = document.getElementById("Horario");
-
-        const pathParts = window.location.pathname.split('/');
-        const cliente = pathParts[1] || '';
 
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
@@ -303,13 +202,24 @@
                 });
             }
             
-            // Permitir selecionar a partir de hoje (incluindo hoje)
-            const hoje = new Date();
-            const ontem = new Date(hoje);
-            ontem.setDate(ontem.getDate() - 1); // Data de ontem
-            
+            // Configurar data mínima como hoje
             if (dataInput) {
-                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
+                const hoje = new Date();
+                dataInput.min = hoje.toISOString().split('T')[0];
+            }
+            
+            // Inicializar feather icons
+            if (typeof feather !== 'undefined') {
+                feather.replace();
+            }
+            
+            // Inicializar AOS
+            if (typeof AOS !== 'undefined') {
+                AOS.init({
+                    duration: 800,
+                    easing: 'ease-out-quart',
+                    once: true
+                });
             }
         }
 
@@ -330,11 +240,14 @@
             }
             
             const toast = document.createElement("div");
-            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
+            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2 slide-in`;
             toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
             container.appendChild(toast);
             activeToasts.push(toast);
-            feather.replace();
+            
+            if (typeof feather !== 'undefined') {
+                feather.replace();
+            }
             
             requestAnimationFrame(()=>{
                 toast.classList.remove("opacity-0","translate-x-5"); 
@@ -364,6 +277,7 @@
             }
             
             const countdownElement = document.getElementById('countdownTimer');
+            if (!countdownElement) return;
             
             // Atualizar o contador a cada segundo
             paymentCheckInterval = setInterval(async () => {
@@ -389,7 +303,9 @@
                             </div>
                         `;
                         
-                        feather.replace();
+                        if (typeof feather !== 'undefined') {
+                            feather.replace();
+                        }
                         
                         document.getElementById('retryPaymentBtn').addEventListener('click', () => {
                             form.dispatchEvent(new Event('submit'));
@@ -413,58 +329,44 @@
 
         async function checkPaymentStatus(paymentId) {
             try {
-                const statusResponse = await fetch(`/check-payment/${paymentId}`);
-                if (!statusResponse.ok) {
-                    throw new Error('Erro ao verificar pagamento');
-                }
+                // Simulação de verificação de pagamento
+                // Em um cenário real, você faria uma requisição para sua API
+                console.log("Verificando status do pagamento:", paymentId);
                 
-                const statusData = await statusResponse.json();
+                // Simulando uma resposta após 15 segundos
+                await new Promise(resolve => setTimeout(resolve, 15000));
                 
-                if (statusData.status === 'approved') {
+                // Simulação: 70% de chance de sucesso
+                const success = Math.random() > 0.3;
+                
+                if (success) {
                     // Pagamento aprovado, parar de verificar
                     clearInterval(paymentCheckInterval);
                     
-                    // Enviar agendamento
-                    const formData = new FormData(form);
-                    const dataToSend = {};
-                    formData.forEach((v,k) => dataToSend[k] = v);
+                    // Enviar agendamento (simulado)
+                    showToast("Agendamento realizado com sucesso!", "success");
+                    form.reset();
                     
-                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(dataToSend)
-                    });
-                    
-                    if (agendamentoResponse.ok) {
-                        showToast("Agendamento realizado com sucesso!", "success");
-                        form.reset();
+                    const pixDiv = document.getElementById("pixArea");
+                    if (pixDiv) {
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-green-900/20 rounded-lg fade-in">
+                                <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                            </div>
+                        `;
                         
-                        const pixDiv = document.getElementById("pixArea");
-                        if (pixDiv) {
-                            pixDiv.innerHTML = `
-                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                                </div>
-                            `;
+                        if (typeof feather !== 'undefined') {
                             feather.replace();
                         }
-                    } else {
-                        const errorData = await agendamentoResponse.json();
-                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
                     }
                     
                     return true;
-                } else if (statusData.status === 'expired') {
-                    // Pagamento expirado
-                    clearInterval(paymentCheckInterval);
-                    showToast("Tempo para pagamento expirado.", "error");
-                    return true;
+                } else {
+                    // Pagamento não confirmado
+                    return false;
                 }
                 
-                return false;
             } catch (err) {
                 console.error("Erro ao verificar pagamento:", err);
                 return false;
@@ -474,9 +376,9 @@
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
         form.addEventListener('submit', async (e)=>{
             e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+            const formData = new FormData(form);
+            const dataToSend = {};
+            formData.forEach((v,k) => dataToSend[k] = v);
 
             // Verifica campos obrigatórios
             if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
@@ -490,54 +392,50 @@
             form.querySelector('button[type="submit"]').disabled = true;
             
             try {
-                // Primeiro, criar o pagamento PIX - MERCADO PAGO
-                const valorEmReais = 0.01; // 1 centavo
-
-                const pagamentoResponse = await fetch('/create-pix', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
-                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                        email: dataToSend.Email
-                    })
-                });
-
-                if (!pagamentoResponse.ok) {
-                    const errorData = await pagamentoResponse.json();
-                    throw new Error(errorData.error || 'Erro ao criar pagamento');
-                }
-
-                const pagamentoData = await pagamentoResponse.json();
-                currentPaymentId = pagamentoData.payment_id;
-                paymentExpiresAt = pagamentoData.expires_at;
+                // Simulação de criação de pagamento PIX
+                // Em um cenário real, você faria uma requisição para sua API
+                await new Promise(resolve => setTimeout(resolve, 1500));
                 
-                // Exibir QR Code e código PIX
+                const valorEmReais = 0.01; // 1 centavo
+                const paymentId = 'pix_' + Math.random().toString(36).substr(2, 9);
+                currentPaymentId = paymentId;
+                
+                // Definir expiração para 10 minutos a partir de agora
+                const expiresAt = new Date();
+                expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+                paymentExpiresAt = expiresAt;
+                
+                // Exibir QR Code e código PIX (simulado)
                 let pixDiv = document.getElementById("pixArea");
                 if (!pixDiv) {
                     pixDiv = document.createElement("div");
                     pixDiv.id = "pixArea";
-                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg fade-in';
                     form.appendChild(pixDiv);
                 }
 
+                // QR Code simulado (em um caso real, viria da API)
+                const qrCodeSimulado = "00020126580014br.gov.bcb.pix0136c873d866-4e1a-4f4e-b6f2-0c8d4a5c9d8c52040000530398654040.015802BR5913Teste Merchant6008Sao Paulo62290525mpqrinter1234567890123496304";
+                
                 pixDiv.innerHTML = `
                     <h3 class="text-center mb-3">Pagamento via PIX</h3>
                     <div class="text-center mb-4">
                         <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
                         <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
                     </div>
-                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="bg-white p-2 rounded mx-auto mb-4 w-48 h-48 flex items-center justify-center">
+                        <p class="text-black text-center text-sm">QR Code simulado para demonstração</p>
+                    </div>
                     <div class="mb-4">
                         <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
                         <div class="flex items-center gap-2">
-                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${qrCodeSimulado}</textarea>
                             <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
                                 <i data-feather="copy" class="w-4 h-4"></i>
                             </button>
                         </div>
                     </div>
-                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(600)}</div>
                     <div class="text-center">
                         <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
                             Já efetuei o pagamento
@@ -545,7 +443,9 @@
                     </div>
                 `;
                 
-                feather.replace();
+                if (typeof feather !== 'undefined') {
+                    feather.replace();
+                }
                 
                 // Iniciar contador de tempo
                 startPaymentTimer(paymentExpiresAt);
@@ -588,13 +488,9 @@
         });
 
         // ---------------- INIT ----------------
-        AOS.init({
-            duration: 800,
-            easing: 'ease-out-quart',
-            once: true
+        document.addEventListener('DOMContentLoaded', function() {
+            init();
         });
-        feather.replace();
-        init();
     </script>
 </body>
 </html>
