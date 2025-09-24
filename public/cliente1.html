@@ -376,6 +376,125 @@
                 },300);
             },3000);
         }
+
+
+
+// ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
+
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
+
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
+            
+            try {
+    // Primeiro, criar o pagamento PIX - MERCADO PAGO
+    const valorEmReais = 0.01; // 1 centavo
+
+    const pagamentoResponse = await fetch('/create-pix', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+            email: dataToSend.Email
+        })
+    });
+
+    if (!pagamentoResponse.ok) {
+        const errorData = await pagamentoResponse.json();
+        throw new Error(errorData.error || 'Erro ao criar pagamento');
+    }
+
+    const pagamentoData = await pagamentoResponse.json();
+    currentPaymentId = pagamentoData.payment_id;
+    paymentExpiresAt = pagamentoData.expires_at;
+    
+    // Exibir QR Code e código PIX
+    let pixDiv = document.getElementById("pixArea");
+    if (!pixDiv) {
+        pixDiv = document.createElement("div");
+        pixDiv.id = "pixArea";
+        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+        form.appendChild(pixDiv);
+    }
+
+    pixDiv.innerHTML = `
+        <h3 class="text-center mb-3">Pagamento via PIX</h3>
+        <div class="text-center mb-4">
+            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+        </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div class="text-center">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                            Já efetuei o pagamento
+                        </button>
+                    </div>
+                `;
+                
+                feather.replace();
+                
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
+                });
+                
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
+                
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    }
+                });
+                
+                pagamentoPendente = true;
+                
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar pagamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
+            }
+        });
+
         
         // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
         function formatTimeRemaining(seconds) {
@@ -492,156 +611,7 @@
             }
         }
         
-       // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const dataToSend = {};
-    formData.forEach((v, k) => dataToSend[k] = v);
-
-    // ---------------- 1️⃣ Campos obrigatórios ----------------
-    if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast("Preencha todos os campos", "warning");
-        return;
-    }
-
-    // ---------------- 2️⃣ Carregar configuração ----------------
-    const config = await carregarConfiguracoesCliente();
-    if (!config) {
-        showToast("Erro ao carregar configuração", "error");
-        return;
-    }
-
-    // ---------------- 3️⃣ Validar data ----------------
-    if (!validarDataSelecionada(dataToSend.Data, config)) {
-        return;
-    }
-
-    // ---------------- 4️⃣ Validar horário disponível ----------------
-    if (!config.horarios_disponiveis.includes(dataToSend.Horario)) {
-        showToast('Horário não disponível', 'error');
-        return;
-    }
-
-    // ---------------- 5️⃣ Verificar agendamentos existentes ----------------
-    try {
-        const response = await fetch(`/agendamentos/${cliente}?data=${dataToSend.Data}`);
-        if (!response.ok) throw new Error("Erro ao consultar agendamentos");
-
-        const { agendamentos } = await response.json();
-
-        // Verificar se o horário está ocupado
-        if (agendamentos.some(a => a.horario === dataToSend.Horario)) {
-            showToast("Horário já ocupado", "error");
-            return;
-        }
-
-        // Verificar limite diário
-        if (agendamentos.length >= config.max_agendamentos_dia) {
-            showToast("Limite de agendamentos para o dia atingido", "error");
-            return;
-        }
-    } catch (err) {
-        console.error(err);
-        showToast("Erro ao verificar horários disponíveis", "error");
-        return;
-    }
-
-    // ---------------- 6️⃣ Mostrar loading ----------------
-    agendarText.classList.add('hidden');
-    agendarSpinner.classList.remove('hidden');
-    form.querySelector('button[type="submit"]').disabled = true;
-
-    // ---------------- 7️⃣ Gerar PIX ----------------
-    try {
-        const valorEmReais = 0.01; // Ajuste conforme necessário
-        const pagamentoResponse = await fetch('/create-pix', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: valorEmReais,
-                description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                email: dataToSend.Email
-            })
-        });
-
-        if (!pagamentoResponse.ok) {
-            const errorData = await pagamentoResponse.json();
-            throw new Error(errorData.error || 'Erro ao criar pagamento');
-        }
-
-        const pagamentoData = await pagamentoResponse.json();
-        currentPaymentId = pagamentoData.payment_id;
-        paymentExpiresAt = pagamentoData.expires_at;
-
-        // Exibir QR Code e código PIX
-        let pixDiv = document.getElementById("pixArea");
-        if (!pixDiv) {
-            pixDiv = document.createElement("div");
-            pixDiv.id = "pixArea";
-            pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-            form.appendChild(pixDiv);
-        }
-
-        pixDiv.innerHTML = `
-            <h3 class="text-center mb-3">Pagamento via PIX</h3>
-            <div class="text-center mb-4">
-                <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-                <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-            </div>
-            <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
-            <div class="mb-4">
-                <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                <div class="flex items-center gap-2">
-                    <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
-                    <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                        <i data-feather="copy" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
-            <div class="text-center">
-                <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
-                    Já efetuei o pagamento
-                </button>
-            </div>
-        `;
-        feather.replace();
-
-        // Iniciar contador
-        startPaymentTimer(paymentExpiresAt);
-
-        // Configurar botão de copiar PIX
-        document.getElementById('copyPixBtn').addEventListener('click', () => {
-            const textarea = document.querySelector('#pixArea textarea');
-            textarea.select();
-            document.execCommand('copy');
-            showToast('Código PIX copiado!', 'success');
-        });
-
-        // Verificação automática do pagamento
-        const paymentStatusInterval = setInterval(async () => {
-            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-            if (paymentConfirmed) clearInterval(paymentStatusInterval);
-        }, 10000);
-
-        // Botão de confirmação manual
-        document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-            const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-            if (!paymentConfirmed) showToast("Pagamento ainda não confirmado. Aguarde.", "warning");
-        });
-
-        pagamentoPendente = true;
-    } catch (err) {
-        console.error(err);
-        showToast("Erro ao processar pagamento", "error");
-    } finally {
-        agendarText.classList.remove('hidden');
-        agendarSpinner.classList.add('hidden');
-        form.querySelector('button[type="submit"]').disabled = false;
-    }
-});
-
+      
         
         // ---------------- CARREGAR CONFIGURAÇÕES DO SUPABASE ----------------
         async function carregarConfiguracoesCliente() {
