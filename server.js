@@ -129,29 +129,17 @@ async function authMiddleware(req, res, next) {
 }
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  try {
-    let query = supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", data)
-      .eq("horario", horario)
-      .neq("status", "cancelado");
+  let query = supabase
+    .from("agendamentos")
+    .select("*")
+    .eq("cliente", cliente)
+    .eq("data", data)
+    .eq("horario", horario)
+    .neq("status", "cancelado");
 
-    if (ignoreId) query = query.neq("id", ignoreId);
-    
-    const { data: agendamentos, error } = await query;
-    
-    if (error) {
-      console.error("Erro ao verificar horário disponível:", error);
-      return false;
-    }
-    
-    return agendamentos.length === 0;
-  } catch (error) {
-    console.error("Erro na função horarioDisponivel:", error);
-    return false;
-  }
+  if (ignoreId) query = query.neq("id", ignoreId);
+  const { data: agendamentos } = await query;
+  return agendamentos.length === 0;
 }
 
 // ==== FUNÇÃO PARA LIMPAR AGENDAMENTOS EXPIRADOS ====
@@ -559,7 +547,7 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .order("horario", { ascending: true });
 
     if (error) throw error;
-    res.json({ agendamentos: data || [] });
+    res.json({ agendamentos: data });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
@@ -969,5 +957,6 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
