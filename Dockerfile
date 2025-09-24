@@ -1,20 +1,24 @@
-# Use Node 20 com Alpine (mais leve e recomendado)
-FROM node:20-alpine
+# ----------------------------
+# Dockerfile pronto para Render
+# ----------------------------
 
-# Diretório de trabalho no container
+# 1️⃣ Usa Node 20 oficial (mais confiável que Alpine no Render)
+FROM node:20
+
+# 2️⃣ Define diretório de trabalho no container
 WORKDIR /app
 
-# Copia package.json e package-lock.json
+# 3️⃣ Copia apenas package.json e package-lock.json para instalar dependências primeiro (cache otimizado)
 COPY package*.json ./
 
-# Instala dependências
-RUN npm install
+# 4️⃣ Instala dependências
+RUN npm install --production
 
-# Copia todo o restante da aplicação
+# 5️⃣ Copia todo o restante da aplicação
 COPY . .
 
-# O Render ignora EXPOSE, mas mantemos por boas práticas
+# 6️⃣ Expor porta (Render usa variável PORT)
 EXPOSE 10000
 
-# Usa a porta do Render via variável de ambiente
+# 7️⃣ Define comando de inicialização usando a porta do Render
 CMD ["node", "server.js"]
