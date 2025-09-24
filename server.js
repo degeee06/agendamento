@@ -372,7 +372,6 @@ async function getHorariosDisponiveis(clienteId, data) {
 app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const config = await getConfigHorarios(cliente);
     res.json(config);
@@ -957,6 +956,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
