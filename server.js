@@ -568,28 +568,32 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
-  const { amount, description, email } = req.body;
-  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
+  const { amount, description, email, nome, telefone, data, horario, cliente } = req.body;
+
+  // 🔎 Valida dados obrigatórios
+  if (!amount || !email || !nome || !telefone || !data || !horario || !cliente) {
+    return res.status(400).json({ error: "Faltando dados" });
+  }
 
   try {
     // ⏰ Calcula data de expiração (15 minutos)
     const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    
+
+    // 1️⃣ Cria o pagamento PIX no Mercado Pago
     const result = await payment.create({
       body: {
         transaction_amount: Number(amount),
         description: description || "Pagamento de Agendamento",
         payment_method_id: "pix",
         payer: { email },
-        // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
         date_of_expiration: dateOfExpiration
       },
     });
 
     console.log("💰 Pagamento criado no Mercado Pago:", result.id, result.status, "Expira:", dateOfExpiration);
 
-    // INSERÇÃO NO BANCO
-    const { error: insertError } = await supabase
+    // 2️⃣ Salva em pagamentos
+    const { error: insertPaymentError } = await supabase
       .from("pagamentos")
       .insert([{ 
         id: result.id, 
@@ -600,33 +604,40 @@ app.post("/create-pix", async (req, res) => {
         description: description || "Pagamento de Agendamento"
       }]);
 
-    if (insertError) {
-      console.error("Erro ao inserir pagamento no Supabase:", insertError);
-      
-      // Tenta atualizar se já existir
-      const { error: updateError } = await supabase
-        .from("pagamentos")
-        .update({ 
-          status: result.status || 'pending',
-          amount: Number(amount),
-          description: description || "Pagamento de Agendamento"
-        })
-        .eq("id", result.id);
-        
-      if (updateError) {
-        console.error("Erro ao atualizar pagamento no Supabase:", updateError);
-        return res.status(500).json({ error: "Erro ao salvar pagamento" });
-      }
+    if (insertPaymentError) {
+      console.error("Erro ao inserir pagamento no Supabase:", insertPaymentError);
+      return res.status(500).json({ error: "Erro ao salvar pagamento" });
     }
 
-    console.log("💾 Pagamento salvo no Supabase:", result.id);
+    // 3️⃣ Salva em agendamentos (pendente até aprovação do PIX)
+    const { error: insertAgendamentoError } = await supabase
+      .from("agendamentos")
+      .insert([{ 
+        cliente,
+        nome,
+        email: email.toLowerCase().trim(),
+        telefone,
+        data,
+        horario,
+        status: "pendente",
+        confirmado: false,
+        payment_id: result.id
+      }]);
 
+    if (insertAgendamentoError) {
+      console.error("Erro ao criar agendamento no Supabase:", insertAgendamentoError);
+      return res.status(500).json({ error: "Erro ao salvar agendamento" });
+    }
+
+    console.log("💾 Pagamento e agendamento salvos no Supabase:", result.id);
+
+    // 4️⃣ Retorna dados pro frontend
     res.json({
       payment_id: result.id,
       status: result.status,
       qr_code: result.point_of_interaction.transaction_data.qr_code,
       qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
-      expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
+      expires_at: dateOfExpiration
     });
   } catch (err) {
     console.error("Erro ao criar PIX:", err);
@@ -1063,5 +1074,6 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
