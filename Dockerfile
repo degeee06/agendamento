@@ -1,4 +1,4 @@
-# Use Node 20 Alpine (mais leve)
+# Use Node 20 com Alpine (mais leve e recomendado)
 FROM node:20-alpine
 
 # Diretório de trabalho no container
@@ -13,8 +13,8 @@ RUN npm install
 # Copia todo o restante da aplicação
 COPY . .
 
-# Expõe a porta que seu server.js usa
+# O Render ignora EXPOSE, mas mantemos por boas práticas
 EXPOSE 10000
 
-# Comando para iniciar o server
+# Usa a porta do Render via variável de ambiente
 CMD ["node", "server.js"]
