@@ -852,16 +852,15 @@ app.post("/create-pix", async (req, res) => {
     // ⏰ Calcula data de expiração (15 minutos)
     const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     
-    const result = await payment.create({
-      body: {
-        transaction_amount: Number(amount),
-        description: description || "Pagamento de Agendamento",
-        payment_method_id: "pix",
-        payer: { email },
-        // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
-        date_of_expiration: dateOfExpiration
-      },
-    });
+   const result = await payment.create({
+  body: {
+    transaction_amount: Number(amount),
+    description: description || "Pagamento de Agendamento",
+    payment_method_id: "pix",
+    payer: { email }
+  },
+});
+
 
     console.log("💰 Pagamento criado no Mercado Pago:", result.id, result.status, "Expira:", dateOfExpiration);
 
@@ -1354,5 +1353,6 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
