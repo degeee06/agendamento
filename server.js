@@ -548,11 +548,8 @@ app.get("/:cliente", (req, res) => {
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-
-    // Verifica se o cliente logado tem permissão
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
-    // Busca agendamentos, ordenando corretamente por data e horário
     const { data, error } = await supabase
       .from("agendamentos")
       .select("*")
@@ -562,14 +559,14 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
-    // Normaliza status para evitar null
+    // Normaliza status para evitar NULL
     const agendamentosNormalizados = (data || []).map(a => ({
       ...a,
       status: a.status || 'pendente'
     }));
 
-    // Retorna diretamente o array
     res.json(agendamentosNormalizados);
+
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
@@ -1064,6 +1061,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
