@@ -1382,7 +1382,9 @@ async function carregarDashboard() {
         const res = await fetch(`/agendamentos/${clienteId}`);
         if (!res.ok) throw new Error('Erro ao carregar agendamentos');
 
-        const agendamentosCache = await res.json();
+        const json = await res.json();
+        const agendamentosCache = json.agendamentos || [];
+
         if (!Array.isArray(agendamentosCache)) throw new Error('Dados de agendamentos inválidos');
 
         // Normaliza status
@@ -1517,6 +1519,7 @@ document.querySelectorAll('.dias-semana-btn').forEach(btn => {
     </script>
 </body>
 </html>
+
 
 
 
