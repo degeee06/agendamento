@@ -1383,125 +1383,96 @@ if (token) {
         }
 
         // ---------------- DASHBOARD ----------------
-        async function carregarDashboard() {
-            try {
-                const dashboardSection = document.getElementById('dashboardSection');
-                if (!dashboardSection) return;
-                
-                dashboardSection.style.display = 'block';
-                
-                const hoje = new Date().toISOString().split('T')[0];
-                const hojeObj = new Date();
-                const diaSemana = hojeObj.getDay();
-                const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-                const semanaInicio = new Date(hojeObj);
-                semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
-                const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
-                
-                const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
-                const semanaCount = agendamentosCache.filter(a => {
-                    const agendamentoDate = new Date(a.data);
-                    return agendamentoDate >= new Date(semanaInicioStr) && a.data <= hoje;
-                }).length;
-                
-                const totalCount = agendamentosCache.length;
-                const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
-                const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
-                
-                if (document.getElementById('statHoje')) {
-                    document.getElementById('statHoje').textContent = hojeCount;
-                }
-                if (document.getElementById('statSemana')) {
-                    document.getElementById('statSemana').textContent = semanaCount;
-                }
-                if (document.getElementById('statTotal')) {
-                    document.getElementById('statTotal').textContent = totalCount;
-                }
-                if (document.getElementById('statTaxa')) {
-                    document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
-                }
-                
-                const statusCount = {
-                    pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
-                    confirmado: confirmadosCount,
-                    cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
-                };
-                
-                const chartStatus = document.getElementById('chartStatus');
-                if (chartStatus) {
-                    chartStatus.innerHTML = `
-                        <div class="h-full flex flex-col justify-center">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm">Pendente: ${statusCount.pendente}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
-                                </div>
-                            </div>
+async function carregarDashboard() {
+    try {
+        const dashboardSection = document.getElementById('dashboardSection');
+        if (!dashboardSection) return;
+        dashboardSection.style.display = 'block';
+
+        // Atualizar estatísticas
+        const response = await fetch(`/estatisticas/${clienteId}`);
+        const stats = await response.json();
+
+        if (document.getElementById('statHoje')) {
+            document.getElementById('statHoje').textContent = stats.hoje;
+        }
+        if (document.getElementById('statSemana')) {
+            document.getElementById('statSemana').textContent = stats.semana;
+        }
+        if (document.getElementById('statTotal')) {
+            document.getElementById('statTotal').textContent = stats.total;
+        }
+        if (document.getElementById('statTaxa')) {
+            document.getElementById('statTaxa').textContent = `${stats.taxaConfirmacao}%`;
+        }
+
+        const chartStatus = document.getElementById('chartStatus');
+        if (chartStatus) {
+            const total = stats.total || 1; // evita divisão por zero
+            chartStatus.innerHTML = `
+                <div class="h-full flex flex-col justify-center">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm">Pendente: ${stats.status.pendente}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(stats.status.pendente/total)*100}%"></div>
                         </div>
+                    </div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm">Confirmado: ${stats.status.confirmado}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-green-400 h-2 rounded-full" style="width: ${(stats.status.confirmado/total)*100}%"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm">Cancelado: ${stats.status.cancelado}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-red-400 h-2 rounded-full" style="width: ${(stats.status.cancelado/total)*100}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Top clientes
+        const respTop = await fetch(`/top-clientes/${clienteId}`);
+        const topClientes = await respTop.json();
+        const topClientesDiv = document.getElementById('topClientes');
+        if (topClientesDiv) {
+            topClientesDiv.innerHTML = '';
+            if (topClientes.length === 0) {
+                topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
+            } else {
+                topClientes.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
+                    div.innerHTML = `
+                        <span class="text-sm truncate">${c.nome}</span>
+                        <span class="bg-white/10 px-2 py-1 rounded text-xs">${c.agendamentos}</span>
                     `;
-                }
-                
-                const clientesCount = {};
-                agendamentosCache.forEach(a => {
-                    if (!clientesCount[a.nome]) {
-                        clientesCount[a.nome] = 0;
-                    }
-                    clientesCount[a.nome]++;
+                    topClientesDiv.appendChild(div);
                 });
-                
-                const topClientes = Object.entries(clientesCount)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5);
-                
-                const topClientesDiv = document.getElementById('topClientes');
-                if (topClientesDiv) {
-                    topClientesDiv.innerHTML = '';
-                    
-                    if (topClientes.length === 0) {
-                        topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
-                    } else {
-                        topClientes.forEach(([nome, count]) => {
-                            const div = document.createElement('div');
-                            div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
-                            div.innerHTML = `
-                                <span class="text-sm truncate">${nome}</span>
-                                <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
-                            `;
-                            topClientesDiv.appendChild(div);
-                        });
-                    }
-                }
-                
-            } catch (e) {
-                console.error('Erro ao carregar dashboard:', e);
             }
         }
 
-        // ---------------- EVENT LISTENERS ----------------
-        document.getElementById('salvarConfigBtn').addEventListener('click', salvarConfiguracoes);
-        document.getElementById('addHorarioBtn').addEventListener('click', adicionarHorario);
-        document.getElementById('addDataBloqueadaBtn').addEventListener('click', adicionarDataBloqueada);
-        document.getElementById('salvarConfigDataBtn').addEventListener('click', salvarConfiguracaoData);
-        document.getElementById('addHorarioEspecificoBtn').addEventListener('click', adicionarHorarioEspecifico);
+    } catch (e) {
+        console.error('Erro ao carregar dashboard:', e);
+    }
+}
 
-        // Dias da semana
-        document.querySelectorAll('.dias-semana-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                this.classList.toggle('active');
-            });
-        });
+// ---------------- EVENT LISTENERS ----------------
+document.getElementById('salvarConfigBtn')?.addEventListener('click', salvarConfiguracoes);
+document.getElementById('addHorarioBtn')?.addEventListener('click', adicionarHorario);
+document.getElementById('addDataBloqueadaBtn')?.addEventListener('click', adicionarDataBloqueada);
+document.getElementById('salvarConfigDataBtn')?.addEventListener('click', salvarConfiguracaoData);
+document.getElementById('addHorarioEspecificoBtn')?.addEventListener('click', adicionarHorarioEspecifico);
+
+// Dias da semana
+document.querySelectorAll('.dias-semana-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        this.classList.toggle('active');
+    });
+});
+
 
         // ---------------- INIT ----------------
         AOS.init({
@@ -1527,4 +1498,5 @@ if (token) {
     </script>
 </body>
 </html>
+
 
