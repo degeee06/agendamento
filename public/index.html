@@ -633,39 +633,7 @@
 
             feather.replace();
         }
-// ---------------- AGENDAR ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
-
-     
-            try{
-                const response=await fetch(`/agendar/${cliente}`,{
-                    method:'POST',
-                    headers:{'Content-Type':'application/json',"Authorization":`Bearer ${userToken}`},
-                    body:JSON.stringify(dataToSend)
-                });
-                if(response.ok){ 
-                    showToast("Agendado com sucesso!","success"); 
-                    form.reset(); 
-                    listarAgendamentos(); 
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                }
-            } catch(err){ 
-                console.error(err); 
-                showToast("Erro ao enviar agendamento","error"); 
-            }
-        });
         // ---------------- MODAL REAGENDAR ----------------
         function abrirModalReagendar(agendamento) {
             let modal = document.getElementById("modalReagendar");
@@ -849,7 +817,129 @@
             }
         });
 
-      
+        // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
+        function formatTimeRemaining(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
+            if (paymentCheckInterval) {
+                clearInterval(paymentCheckInterval);
+            }
+            
+            const countdownElement = document.getElementById('countdownTimer');
+            
+            // Atualizar o contador a cada segundo
+            paymentCheckInterval = setInterval(async () => {
+                const now = new Date();
+                const expires = new Date(expiresAt);
+                const timeRemaining = Math.floor((expires - now) / 1000);
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(paymentCheckInterval);
+                    countdownElement.innerHTML = 'Tempo esgotado!';
+                    countdownElement.classList.add('countdown-warning');
+                    
+                    // Limpar a área de pagamento
+                    const pixDiv = document.getElementById("pixArea");
+                    if (pixDiv) {
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                    Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                        
+                        feather.replace();
+                        
+                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                            form.dispatchEvent(new Event('submit'));
+                        });
+                    }
+                    
+                    return;
+                }
+                
+                // Atualizar o contador
+                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+                
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
+                if (timeRemaining < 60) {
+                    countdownElement.classList.add('countdown-warning');
+                } else {
+                    countdownElement.classList.remove('countdown-warning');
+                }
+            }, 1000);
+        }
+
+        async function checkPaymentStatus(paymentId) {
+            try {
+                const statusResponse = await fetch(`/check-payment/${paymentId}`);
+                if (!statusResponse.ok) {
+                    throw new Error('Erro ao verificar pagamento');
+                }
+                
+                const statusData = await statusResponse.json();
+                
+                if (statusData.status === 'approved') {
+                    // Pagamento aprovado, parar de verificar
+                    clearInterval(paymentCheckInterval);
+                    
+                    // Enviar agendamento
+                    const formData = new FormData(form);
+                    const dataToSend = {};
+                    formData.forEach((v,k) => dataToSend[k] = v);
+                    
+                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            "Authorization": `Bearer ${userToken}`
+                        },
+                        body: JSON.stringify(dataToSend)
+                    });
+                    
+                    if (agendamentoResponse.ok) {
+                        showToast("Agendamento realizado com sucesso!", "success");
+                        form.reset();
+                        
+                        const pixDiv = document.getElementById("pixArea");
+                        if (pixDiv) {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                </div>
+                            `;
+                            feather.replace();
+                        }
+                        
+                        listarAgendamentos();
+                    } else {
+                        const errorData = await agendamentoResponse.json();
+                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                    }
+                    
+                    return true;
+                } else if (statusData.status === 'expired') {
+                    // Pagamento expirado
+                    clearInterval(paymentCheckInterval);
+                    showToast("Tempo para pagamento expirado.", "error");
+                    return true;
+                }
+                
+                return false;
+            } catch (err) {
+                console.error("Erro ao verificar pagamento:", err);
+                return false;
+            }
+        }
 
         // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
         form.addEventListener('submit', async (e)=>{
@@ -1198,7 +1288,7 @@
         showToast("Erro de conexão ao reagendar.", "error");
     }
 }
-
+       // ---------------- DASHBOARD ----------------
 // ---------------- DASHBOARD ----------------
 async function carregarDashboard() {
     try {
@@ -1339,5 +1429,4 @@ async function carregarDashboard() {
     </script>
 </body>
 </html>
-
 
