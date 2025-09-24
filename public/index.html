@@ -1379,9 +1379,9 @@ async function carregarDashboard() {
         dashboardSection.style.display = 'block';
 
         // Busca os agendamentos do backend
-       const res = await fetch(`/agendamentos/${clienteId}`);
-const json = await res.json();
-const agendamentosCache = json.agendamentos || [];
+      const res = await fetch(`/agendamentos/${clienteId}`);
+        if (!res.ok) throw new Error('Erro ao carregar agendamentos');
+        const agendamentosCache = await res.json(); // agora é um array diretamente
 
 
         // Normaliza status
@@ -1514,5 +1514,6 @@ document.querySelectorAll('.dias-semana-btn').forEach(btn => {
     </script>
 </body>
 </html>
+
 
 
