@@ -548,23 +548,34 @@ app.get("/:cliente", (req, res) => {
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
+
+    // Verifica se o cliente logado tem permissão
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
+    // Busca agendamentos, ordenando corretamente por data e horário
     const { data, error } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("cliente", cliente)
       .neq("status", "cancelado")
-      .order("data", { ascending: true })
-      .order("horario", { ascending: true });
+      .order([{ column: 'data', ascending: true }, { column: 'horario', ascending: true }]);
 
     if (error) throw error;
-    res.json({ agendamentos: data || [] });
+
+    // Normaliza status para evitar null
+    const agendamentosNormalizados = (data || []).map(a => ({
+      ...a,
+      status: a.status || 'pendente'
+    }));
+
+    // Retorna diretamente o array
+    res.json(agendamentosNormalizados);
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
@@ -1053,6 +1064,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
