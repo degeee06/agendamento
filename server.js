@@ -555,23 +555,19 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .select("*")
       .eq("cliente", cliente)
       .neq("status", "cancelado")
-      .order([{ column: 'data', ascending: true }, { column: 'horario', ascending: true }]);
+      .order("data", { ascending: true })
+      .order("horario", { ascending: true });
 
     if (error) throw error;
 
-    // Normaliza status para evitar NULL
-    const agendamentosNormalizados = (data || []).map(a => ({
-      ...a,
-      status: a.status || 'pendente'
-    }));
-
-    res.json(agendamentosNormalizados);
-
+    // envia apenas o array
+    res.json(data || []);
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
@@ -1061,6 +1057,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
