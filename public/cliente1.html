@@ -271,7 +271,9 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
     <!-- Inicialização do Flatpickr -->
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -283,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 </script>
+
     
     <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
