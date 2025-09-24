@@ -555,62 +555,46 @@
             }, 1000);
         }
         
-        async function checkPaymentStatus(paymentId) {
-            try {
-                const statusResponse = await fetch(`/check-payment/${paymentId}`);
-                if (!statusResponse.ok) {
-                    throw new Error('Erro ao verificar pagamento');
-                }
-                
-                const statusData = await statusResponse.json();
-                
-                if (statusData.status === 'approved') {
-                    // Pagamento aprovado, parar de verificar
-                    clearInterval(paymentCheckInterval);
-                    
-                    // Enviar agendamento
-                    const formData = new FormData(form);
-                    const dataToSend = {};
-                    formData.forEach((v,k) => dataToSend[k] = v);
-                    
-                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(dataToSend)
-                    });
-                    
-                    if (agendamentoResponse.ok) {
-                        showToast("Agendamento realizado com sucesso!", "success");
-                        form.reset();
-                        
-                        const pixDiv = document.getElementById("pixArea");
-                        if (pixDiv) {
-                            pixDiv.innerHTML = `
-                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                                </div>
-                            `;
-                            feather.replace();
-                        }
-                    } else {
-                        const errorData = await agendamentoResponse.json();
-                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                    }
-                    return true;
-                } else if (statusData.status === 'expired') {
-                    // Pagamento expirado
-                    clearInterval(paymentCheckInterval);
-                    showToast("Tempo para pagamento expirado.", "error");
-                    return true;
-                }
-                return false;
-            } catch (err) {
-                console.error("Erro ao verificar pagamento:", err);
-                return false;
-            }
+       async function checkPaymentStatus(paymentId) {
+    try {
+        const statusResponse = await fetch(`/check-payment/${paymentId}`);
+        if (!statusResponse.ok) {
+            throw new Error('Erro ao verificar pagamento');
         }
-        
+
+        const statusData = await statusResponse.json();
+
+        if (statusData.status === 'approved') {
+            // Pagamento aprovado, parar de verificar
+            clearInterval(paymentCheckInterval);
+
+            showToast("Pagamento confirmado! Agendamento realizado com sucesso.", "success");
+            form.reset();
+
+            const pixDiv = document.getElementById("pixArea");
+            if (pixDiv) {
+                pixDiv.innerHTML = `
+                    <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                        <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                        <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                    </div>
+                `;
+                feather.replace();
+            }
+            return true;
+        } else if (statusData.status === 'expired') {
+            // Pagamento expirado
+            clearInterval(paymentCheckInterval);
+            showToast("Tempo para pagamento expirado.", "error");
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.error("Erro ao verificar pagamento:", err);
+        return false;
+    }
+}
+
       
         
         // ---------------- CARREGAR CONFIGURAÇÕES DO SUPABASE ----------------
