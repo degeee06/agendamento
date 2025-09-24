@@ -312,22 +312,59 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Tabs Dias da Semana -->
-<div id="diasTabs" style="display:none;" class="dias-tabs-container flex flex-col md:flex-row gap-4 mb-6" data-aos="fade-up">
+<div id="diasTabs" style="display:none;" 
+     class="dias-tabs-container flex flex-col md:flex-row gap-4 mb-6" 
+     data-aos="fade-up">
+
+    <!-- Dias da semana -->
     <div class="flex gap-2 overflow-x-auto pb-2">
-        <button data-dia="0" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Domingo</button>
-        <button data-dia="1" class="tab-dia active px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-medium whitespace-nowrap">Segunda</button>
-        <button data-dia="2" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Terça</button>
-        <button data-dia="3" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quarta</button>
-        <button data-dia="4" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Quinta</button>
-        <button data-dia="5" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sexta</button>
-        <button data-dia="6" class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">Sábado</button>
+        <button data-dia="0" 
+            class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">
+            Domingo
+        </button>
+        <button data-dia="1" 
+            class="tab-dia active px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-medium whitespace-nowrap">
+            Segunda
+        </button>
+        <button data-dia="2" 
+            class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">
+            Terça
+        </button>
+        <button data-dia="3" 
+            class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">
+            Quarta
+        </button>
+        <button data-dia="4" 
+            class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">
+            Quinta
+        </button>
+        <button data-dia="5" 
+            class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">
+            Sexta
+        </button>
+        <button data-dia="6" 
+            class="tab-dia px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all font-medium whitespace-nowrap">
+            Sábado
+        </button>
     </div>
+
+    <!-- Filtros de semanas passadas -->
     <div class="flex gap-2 md:ml-4 md:pl-4 md:border-l border-white/20 overflow-x-auto pb-2">
-        <button data-semana="-1" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">Semana Passada</button>
-        <button data-semana="-2" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">2 Semanas</button>
-        <button data-semana="-4" class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">1 Mês</button>
+        <button data-semana="-1" 
+            class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">
+            Semana Passada
+        </button>
+        <button data-semana="-2" 
+            class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">
+            2 Semanas
+        </button>
+        <button data-semana="-4" 
+            class="tab-semana px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all font-medium whitespace-nowrap">
+            1 Mês
+        </button>
     </div>
 </div>
+
                 <!-- Horários Disponíveis -->
                 <div class="bg-white/10 rounded-xl p-4">
                     <h3 class="font-medium mb-3">⏰ Horários Disponíveis</h3>
@@ -907,52 +944,35 @@ function init() {
             feather.replace();
         }
 
-        // ---------------- RENDER AGENDAMENTOS (COM DOMINGO) ----------------
+        // ---------------- RENDER AGENDAMENTOS ----------------
 function renderAgendamentos() {
-    console.log('Renderizando agendamentos... Dia selecionado:', diaSelecionado);
     const filtroNome = searchInput.value.toLowerCase();
     const filtroStatus = statusFilter.value;
+
+    const hoje = new Date();
+    const hojeZero = new Date(hoje); 
+    hojeZero.setHours(0,0,0,0);
 
     const filtrados = agendamentosCache
         .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
                     (filtroStatus ? a.status === filtroStatus : true))
         .filter(a => {
-            const dataAgendamento = new Date(a.data);
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0); // Reset para início do dia
-            
-            // CORREÇÃO: Agora 0=domingo, 1=segunda, 2=terça, ..., 6=sábado
-            if(diaSelecionado >= 0 && diaSelecionado <= 6) {
-                // Filtro por dia da semana (0=domingo, 1=segunda, etc.)
-                const diaSemanaAgendamento = dataAgendamento.getDay();
-                console.log(`Data: ${a.data}, Dia da semana: ${diaSemanaAgendamento}, Dia selecionado: ${diaSelecionado}`);
-                return diaSemanaAgendamento === diaSelecionado && 
-                       dataAgendamento >= hoje;
+            const dataAgendamento = new Date(`${a.data}T${a.horario}`);
+
+            if (diaSelecionado >= 0 && diaSelecionado <= 6) {
+                // filtro por dia da semana (0 = domingo ... 6 = sábado)
+                return dataAgendamento.getDay() === diaSelecionado &&
+                       dataAgendamento >= hojeZero;
             } else {
-                // Filtro por período (semanas anteriores)
+                // filtro por semanas passadas
+                const semanas = -diaSelecionado;
                 const dataLimite = new Date();
-                
-                if (diaSelecionado === -1) {
-                    // Semana passada
-                    dataLimite.setDate(dataLimite.getDate() - 7);
-                    dataLimite.setHours(0, 0, 0, 0);
-                    return dataAgendamento >= dataLimite && 
-                           dataAgendamento < hoje;
-                } else if (diaSelecionado === -2) {
-                    // Últimas 2 semanas
-                    dataLimite.setDate(dataLimite.getDate() - 14);
-                    dataLimite.setHours(0, 0, 0, 0);
-                    return dataAgendamento >= dataLimite && 
-                           dataAgendamento < hoje;
-                } else if (diaSelecionado === -4) {
-                    // Último mês
-                    dataLimite.setMonth(dataLimite.getMonth() - 1);
-                    dataLimite.setHours(0, 0, 0, 0);
-                    return dataAgendamento >= dataLimite && 
-                           dataAgendamento < hoje;
-                }
+                dataLimite.setDate(dataLimite.getDate() + semanas * 7);
+                dataLimite.setHours(0,0,0,0);
+
+                return dataAgendamento >= dataLimite &&
+                       dataAgendamento < hojeZero;
             }
-            return true;
         })
         .sort((a,b) => {
             const dateA = new Date(`${a.data}T${a.horario}`);
@@ -960,15 +980,13 @@ function renderAgendamentos() {
             return dateA - dateB;
         });
 
-    console.log(`Filtrados: ${filtrados.length} de ${agendamentosCache.length} agendamentos`);
-
     if (filtrados.length === 0) {
         meusAgendamentos.innerHTML = `
             <div class='text-center py-8'>
                 <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
                     <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
                 </div>
-                <p class="text-gray-300">Nenhum agendamento encontrado para este período</p>
+                <p class="text-gray-300">Nenhum agendamento encontrado</p>
             </div>
         `;
         feather.replace();
@@ -981,26 +999,15 @@ function renderAgendamentos() {
         const div = document.createElement("div");
         div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
         
-        // Determinar o dia da semana para exibição
-        const dataObj = new Date(a.data);
-        const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-        const diaSemana = diasSemana[dataObj.getDay()];
-        
         div.innerHTML = `
             <div class="flex justify-between items-start mb-2">
                 <div class="flex items-center gap-2">
-                    <i data-feather="calendar" class="w-4 h-4 text-gray-300"></i>
-                    <span class="font-medium">${diaSemana} - ${formatData(a.data)}</span>
+                    <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
+                    <span class="font-medium">${a.horario}</span>
                 </div>
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-1">
-                        <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-                        <span class="font-medium">${a.horario}</span>
-                    </div>
-                    <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
-                        ${a.status}
-                    </span>
-                </div>
+                <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
+                    ${a.status}
+                </span>
             </div>
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
@@ -1008,12 +1015,18 @@ function renderAgendamentos() {
                 </div>
                 <div>
                     <h3 class="font-medium">${a.nome}</h3>
-                    <p class="text-sm text-gray-300">${a.email}</p>
+                    <p class="text-sm text-gray-300">${formatData(a.data)}</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2 text-sm">
-                <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                <span>${a.telefone}</span>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="flex items-center gap-2">
+                    <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
+                    <span class="truncate">${a.email}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
+                    <span>${a.telefone}</span>
+                </div>
             </div>
         `;
 
@@ -1474,6 +1487,7 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
 
