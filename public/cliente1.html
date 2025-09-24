@@ -474,9 +474,7 @@ function startPaymentTimer(expiresAt) {
 
 async function checkPaymentStatus(paymentId) {
     try {
-        const res = await fetch(`/check-payment/${paymentId}`, {
-            headers: { "Authorization": `Bearer ${localStorage.getItem("supabase_token")}` }
-        });
+       fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`);
         if (!res.ok) throw new Error('Erro ao verificar pagamento');
         const statusData = await res.json();
 
@@ -541,9 +539,7 @@ form.addEventListener('submit', async (e) => {
     if (!(config.horarios_disponiveis || []).includes(dataToSend.Horario)) { showToast('Horário não disponível', 'error'); return; }
 
     try {
-        const res = await fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataToSend.Data)}`, {
-            headers: { "Authorization": `Bearer ${localStorage.getItem("supabase_token")}` }
-        });
+       fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`);
         if (!res.ok) throw new Error('Erro ao consultar agendamentos');
         const parsed = await res.json();
         const agendamentos = parsed.agendamentos || parsed || [];
