@@ -567,77 +567,73 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
+// ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
-  // Verifica se Mercado Pago está configurado
-  if (!payment) {
-    return res.status(500).json({ error: "Mercado Pago não configurado" });
+  if (!payment) return res.status(500).json({ error: "Mercado Pago não configurado" });
+
+  const { amount, description, email, nome, telefone, data, horario, cliente } = req.body;
+  if (!amount || !email || !data || !horario || !nome) {
+    return res.status(400).json({ error: "Faltando dados para criar agendamento" });
   }
 
-  const { amount, description, email } = req.body;
-  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
-
   try {
-    // ⏰ Calcula data de expiração (15 minutos)
     const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    
+
     const result = await payment.create({
       body: {
         transaction_amount: Number(amount),
         description: description || "Pagamento de Agendamento",
         payment_method_id: "pix",
         payer: { email },
-        // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
         date_of_expiration: dateOfExpiration
       },
     });
 
-    console.log("💰 Pagamento criado no Mercado Pago:", result.id, result.status, "Expira:", dateOfExpiration);
+    console.log("💰 PIX criado:", result.id, result.status, "Expira:", dateOfExpiration);
 
-    // INSERÇÃO NO BANCO
-    const { error: insertError } = await supabase
-      .from("pagamentos")
-      .insert([{ 
-        id: result.id, 
-        email: email.toLowerCase().trim(), 
-        amount: Number(amount), 
-        status: result.status || 'pending', 
-        valid_until: null,
-        description: description || "Pagamento de Agendamento"
+    // 1️⃣ Inserir pagamento
+    await supabase.from("pagamentos").upsert([{
+      id: result.id,
+      email: email.toLowerCase().trim(),
+      amount: Number(amount),
+      status: result.status || "pending",
+      valid_until: null,
+      description: description || "Pagamento de Agendamento"
+    }]);
+
+    // 2️⃣ Inserir agendamento "pendente"
+    const { error: agendamentoError } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente,
+        nome,
+        email: email.toLowerCase().trim(),
+        telefone,
+        data,
+        horario,
+        status: "pending",
+        payment_id: result.id
       }]);
 
-    if (insertError) {
-      console.error("Erro ao inserir pagamento no Supabase:", insertError);
-      
-      // Tenta atualizar se já existir
-      const { error: updateError } = await supabase
-        .from("pagamentos")
-        .update({ 
-          status: result.status || 'pending',
-          amount: Number(amount),
-          description: description || "Pagamento de Agendamento"
-        })
-        .eq("id", result.id);
-        
-      if (updateError) {
-        console.error("Erro ao atualizar pagamento no Supabase:", updateError);
-        return res.status(500).json({ error: "Erro ao salvar pagamento" });
-      }
+    if (agendamentoError) {
+      console.error("Erro ao inserir agendamento:", agendamentoError);
+      return res.status(400).json({ error: "Horário já ocupado!" });
     }
-
-    console.log("💾 Pagamento salvo no Supabase:", result.id);
 
     res.json({
       payment_id: result.id,
       status: result.status,
       qr_code: result.point_of_interaction?.transaction_data?.qr_code,
       qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
-      expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
+      expires_at: dateOfExpiration
     });
+
   } catch (err) {
     console.error("Erro ao criar PIX:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Verifica status do pagamento
 app.get("/check-payment/:paymentId", async (req, res) => {
@@ -750,41 +746,41 @@ app.post("/webhook", async (req, res) => {
     const paymentId = req.body?.data?.id || req.query["data.id"];
     if (!paymentId) return res.sendStatus(400);
 
-    // Verifica se Mercado Pago está configurado
-    if (!payment) {
-      console.error("Mercado Pago não configurado para webhook");
-      return res.sendStatus(500);
-    }
-
     const paymentDetails = await payment.get({ id: paymentId });
-
-    // Atualiza status no Supabase
     const status = paymentDetails.status;
-    let valid_until = null;
 
+    let valid_until = null;
     if (["approved", "paid"].includes(status.toLowerCase())) {
       const vipExpires = new Date();
-      vipExpires.setDate(vipExpires.getDate() + 30); // 30 dias
+      vipExpires.setDate(vipExpires.getDate() + 30);
       valid_until = vipExpires.toISOString();
     }
 
-    const { error: updateError } = await supabase
-      .from("pagamentos")
+    // Atualiza pagamentos
+    await supabase.from("pagamentos")
       .update({ status, valid_until })
       .eq("id", paymentId);
 
-    if (updateError) {
-      console.error("Erro ao atualizar Supabase:", updateError.message);
-    } else {
-      console.log(`✅ Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
+    // Atualiza agendamentos vinculados
+    if (status === "approved") {
+      await supabase.from("agendamentos")
+        .update({ status: "confirmado" })
+        .eq("payment_id", paymentId);
+    } else if (status === "expired") {
+      await supabase.from("agendamentos")
+        .update({ status: "cancelado" })
+        .eq("payment_id", paymentId);
     }
 
+    console.log(`✅ Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
     res.sendStatus(200);
+
   } catch (err) {
     console.error("Erro no webhook:", err.message);
     res.sendStatus(500);
   }
 });
+
 
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", async (req, res) => {
@@ -1082,3 +1078,4 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
