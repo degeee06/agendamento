@@ -939,90 +939,6 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   }
 });
 
-// ---------------- ESTATÍSTICAS ----------------
-app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const hoje = new Date();
-    hoje.setHours(0,0,0,0);
-    const umaSemanaAtras = new Date(hoje);
-    umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7);
-
-    const { data: agendamentos, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente);
-
-    if (error) throw error;
-
-    const agendamentosHoje = agendamentos.filter(a => new Date(a.data).toDateString() === hoje.toDateString());
-    const agendamentosSemana = agendamentos.filter(a => {
-      const d = new Date(a.data);
-      return d >= umaSemanaAtras && d <= hoje;
-    });
-
-    const totalCount = agendamentos.length;
-    const confirmados = agendamentos.filter(a => a.status === 'confirmado').length;
-    const pendentes = agendamentos.filter(a => a.status === 'pendente').length;
-    const cancelados = agendamentos.filter(a => a.status === 'cancelado').length;
-
-    const estatisticas = {
-      hoje: agendamentosHoje.length,
-      semana: agendamentosSemana.length,
-      total: totalCount,
-      status: { confirmado: confirmados, pendente: pendentes, cancelado },
-      taxaConfirmacao: totalCount > 0 ? Math.round((confirmados / totalCount) * 100) : 0
-    };
-
-    res.json(estatisticas);
-  } catch (error) {
-    console.error("Erro ao buscar estatísticas:", error);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// ---------------- TOP CLIENTES ----------------
-app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
-    const { data: agendamentos, error } = await supabase
-      .from("agendamentos")
-      .select("nome,email,telefone")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado");
-
-    if (error) throw error;
-    if (!agendamentos) return res.json([]);
-
-    const clientesCount = {};
-    const clientesData = {};
-
-    agendamentos.forEach(a => {
-      const key = a.email;
-      clientesCount[key] = (clientesCount[key] || 0) + 1;
-      if (!clientesData[key]) clientesData[key] = { nome: a.nome, telefone: a.telefone };
-    });
-
-    const topClientes = Object.entries(clientesCount)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 10)
-      .map(([email, count]) => ({
-        nome: clientesData[email]?.nome || 'Não informado',
-        email,
-        telefone: clientesData[email]?.telefone || 'Não informado',
-        agendamentos: count
-      }));
-
-    res.json(topClientes);
-  } catch (error) {
-    console.error("Erro ao buscar top clientes:", error);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
 
 
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
@@ -1056,6 +972,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
