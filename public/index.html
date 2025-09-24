@@ -1370,6 +1370,7 @@ if (token) {
         }
 
        // ---------------- DASHBOARD ----------------
+// ---------------- DASHBOARD ----------------
 async function carregarDashboard() {
     try {
         const dashboardSection = document.getElementById('dashboardSection');
@@ -1377,39 +1378,36 @@ async function carregarDashboard() {
 
         dashboardSection.style.display = 'block';
 
-        const hojeObj = new Date();
-        const hojeStr = hojeObj.toISOString().split('T')[0];
+        // Busca os agendamentos do backend
+        const res = await fetch(`/agendamentos/${clienteId}`);
+        if (!res.ok) throw new Error('Erro ao carregar agendamentos');
+        const agendamentosCache = await res.json(); // agora é um array diretamente
 
-        // Segunda-feira da semana atual
-        const diaSemana = hojeObj.getDay(); // 0 = domingo
+        // Normaliza status
+        agendamentosCache.forEach(a => {
+            if (!a.status) a.status = 'pendente';
+        });
+
+        const hoje = new Date().toISOString().split('T')[0];
+        const hojeObj = new Date();
+        const diaSemana = hojeObj.getDay();
         const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
         const semanaInicio = new Date(hojeObj);
         semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
-        semanaInicio.setHours(0,0,0,0); // normalize hora
 
-        // Contagem
-        const hojeCount = agendamentosCache.filter(a => a.data === hojeStr).length;
-        const semanaCount = agendamentosCache.filter(a => {
-            const agendamentoDate = new Date(a.data);
-            agendamentoDate.setHours(0,0,0,0);
-            return agendamentoDate >= semanaInicio && agendamentoDate <= hojeObj;
-        }).length;
-
+        const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
+        const semanaCount = agendamentosCache.filter(a => new Date(a.data) >= semanaInicio && new Date(a.data) <= hojeObj).length;
         const totalCount = agendamentosCache.length;
         const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
         const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
 
-        // Atualiza elementos
-        const setText = (id, value) => { 
-            const el = document.getElementById(id);
-            if(el) el.textContent = value; 
-        };
-        setText('statHoje', hojeCount);
-        setText('statSemana', semanaCount);
-        setText('statTotal', totalCount);
-        setText('statTaxa', `${taxaConfirmacao}%`);
+        // Atualiza contadores
+        if (document.getElementById('statHoje')) document.getElementById('statHoje').textContent = hojeCount;
+        if (document.getElementById('statSemana')) document.getElementById('statSemana').textContent = semanaCount;
+        if (document.getElementById('statTotal')) document.getElementById('statTotal').textContent = totalCount;
+        if (document.getElementById('statTaxa')) document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
 
-        // Status
+        // Status para gráficos
         const statusCount = {
             pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
             confirmado: confirmadosCount,
@@ -1417,22 +1415,27 @@ async function carregarDashboard() {
         };
 
         const chartStatus = document.getElementById('chartStatus');
-        if(chartStatus){
+        if (chartStatus) {
             chartStatus.innerHTML = `
                 <div class="h-full flex flex-col justify-center">
-                    ${['pendente','confirmado','cancelado'].map(status => {
-                        const count = statusCount[status];
-                        const color = status==='pendente'?'yellow-400':status==='confirmado'?'green-400':'red-400';
-                        const width = totalCount > 0 ? (count/totalCount)*100 : 0;
-                        return `
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm capitalize">${status}: ${count}</span>
-                                <div class="w-24 bg-gray-600 rounded-full h-2">
-                                    <div class="bg-${color} h-2 rounded-full" style="width: ${width}%"></div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm">Pendente: ${statusCount.pendente}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
+                        <div class="w-24 bg-gray-600 rounded-full h-2">
+                            <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -1440,26 +1443,33 @@ async function carregarDashboard() {
         // Top clientes
         const clientesCount = {};
         agendamentosCache.forEach(a => {
-            if(a.nome) clientesCount[a.nome] = (clientesCount[a.nome] || 0) + 1;
+            const key = a.email || a.nome;
+            clientesCount[key] = (clientesCount[key] || 0) + 1;
         });
 
         const topClientes = Object.entries(clientesCount)
-            .sort((a,b)=>b[1]-a[1])
-            .slice(0,5);
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
 
         const topClientesDiv = document.getElementById('topClientes');
-        if(topClientesDiv){
-            topClientesDiv.innerHTML = topClientes.length === 0 
-                ? '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>'
-                : topClientes.map(([nome,count]) => `
-                    <div class="flex justify-between items-center py-2 border-b border-white/10 last:border-b-0">
+        if (topClientesDiv) {
+            topClientesDiv.innerHTML = '';
+            if (topClientes.length === 0) {
+                topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
+            } else {
+                topClientes.forEach(([nome, count]) => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
+                    div.innerHTML = `
                         <span class="text-sm truncate">${nome}</span>
                         <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
-                    </div>
-                `).join('');
+                    `;
+                    topClientesDiv.appendChild(div);
+                });
+            }
         }
 
-    } catch(e){
+    } catch (e) {
         console.error('Erro ao carregar dashboard:', e);
     }
 }
@@ -1503,3 +1513,4 @@ document.querySelectorAll('.dias-semana-btn').forEach(btn => {
     </script>
 </body>
 </html>
+
