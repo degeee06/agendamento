@@ -797,59 +797,46 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 });
 
 // ---------------- ESTATÍSTICAS ----------------
+// ---------------- ESTATÍSTICAS ----------------
 app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const hoje = new Date().toISOString().split('T')[0];
-    const umaSemanaAtras = new Date();
-    umaSemanaAtras.setDate(umaSemanaAtras.getDate() - 7);
+    const seteDiasAtras = new Date();
+    seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+    const seteDiasAtrasStr = seteDiasAtras.toISOString().split('T')[0];
 
-    // Agendamentos de hoje
-    const { data: agendamentosHoje, error: errorHoje } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", hoje)
-      .neq("status", "cancelado");
-
-    if (errorHoje) throw errorHoje;
-
-    // Total de agendamentos
+    // Todos os agendamentos do cliente (incluindo cancelados)
     const { data: todosAgendamentos, error: errorTotal } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado");
+      .eq("cliente", cliente);
 
     if (errorTotal) throw errorTotal;
 
-    // Agendamentos da semana
-    const { data: agendamentosSemana, error: errorSemana } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .gte("data", umaSemanaAtras.toISOString().split('T')[0])
-      .neq("status", "cancelado");
-
-    if (errorSemana) throw errorSemana;
+    // Filtrar agendamentos
+    const agendamentosHoje = todosAgendamentos.filter(a => a.data === hoje && a.status !== "cancelado");
+    const agendamentosSemana = todosAgendamentos.filter(a => a.data >= seteDiasAtrasStr && a.status !== "cancelado");
 
     // Estatísticas por status
     const confirmados = todosAgendamentos.filter(a => a.status === 'confirmado').length;
     const pendentes = todosAgendamentos.filter(a => a.status === 'pendente').length;
     const cancelados = todosAgendamentos.filter(a => a.status === 'cancelado').length;
 
+    const totalAtivos = todosAgendamentos.filter(a => a.status !== "cancelado").length;
+
     const estatisticas = {
-      hoje: agendamentosHoje?.length || 0,
-      total: todosAgendamentos?.length || 0,
-      semana: agendamentosSemana?.length || 0,
+      hoje: agendamentosHoje.length,
+      total: totalAtivos,
+      semana: agendamentosSemana.length,
       status: {
         confirmado: confirmados,
         pendente: pendentes,
         cancelado: cancelados
       },
-      taxaConfirmacao: todosAgendamentos.length > 0 ? Math.round((confirmados / todosAgendamentos.length) * 100) : 0
+      taxaConfirmacao: totalAtivos > 0 ? Math.round((confirmados / totalAtivos) * 100) : 0
     };
 
     res.json(estatisticas);
@@ -867,30 +854,27 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
 
     const { data: agendamentos } = await supabase
       .from("agendamentos")
-      .select("nome, email, telefone")
-      .eq("cliente", cliente)
-      .neq("status", "cancelado");
+      .select("nome, email, telefone, status")
+      .eq("cliente", cliente);
 
-    if (!agendamentos) {
-      return res.json([]);
-    }
+    if (!agendamentos) return res.json([]);
 
-    // Contagem por cliente
-    const clientesCount = agendamentos.reduce((acc, agendamento) => {
-      const key = agendamento.email;
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
+    // Contagem por cliente (por email)
+    const clientesCount = {};
+    agendamentos.forEach(a => {
+      if (a.status === "cancelado") return; // ignora cancelados
+      const key = a.email || a.nome || `cliente-${Math.random()}`; // fallback se sem email/nome
+      clientesCount[key] = (clientesCount[key] || 0) + 1;
+    });
 
-    // Ordenar por quantidade
     const topClientes = Object.entries(clientesCount)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 10)
-      .map(([email, count]) => {
-        const agendamento = agendamentos.find(a => a.email === email);
+      .map(([key, count]) => {
+        const agendamento = agendamentos.find(a => (a.email || a.nome) === key);
         return {
           nome: agendamento?.nome || 'Não informado',
-          email: email,
+          email: agendamento?.email || 'Não informado',
           telefone: agendamento?.telefone || 'Não informado',
           agendamentos: count
         };
@@ -916,5 +900,6 @@ app.listen(PORT, () => {
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
   console.log("🔧 Sistema de configuração de horários ativo");
 });
+
 
 
