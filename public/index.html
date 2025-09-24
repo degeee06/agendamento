@@ -1042,35 +1042,23 @@ if (token) {
 
         // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
-            if(!userToken) {
-                console.error("Token não disponível");
-                return;
-            }
-            
-            try{
-                const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: { "Authorization": `Bearer ${userToken}` }
-                });
-                
-                if (res.status === 401) {
-                    showToast("Sessão expirada. Faça login novamente.", "error");
-                    logoutBtn.click();
-                    return;
-                }
-                
-                const { agendamentos } = await res.json();
-                agendamentosCache = agendamentos;
-                meusAgendamentos.style.display = 'block';
-                document.getElementById('filtersSection').style.display = 'block';
-                document.getElementById('diasTabs').style.display = 'flex';
-                initTabsDias();
-                renderAgendamentos();
-                carregarDashboard();
-            } catch(e){
-                console.error("Erro ao listar agendamentos:", e);
-                showToast("Erro ao listar agendamentos","error");
-            }
-        }
+    if(!userToken) return;
+    try{
+        const res = await fetch(`/meus-agendamentos/${cliente}`, {
+            headers: { "Authorization": `Bearer ${userToken}` }
+        });
+        const { agendamentos } = await res.json();
+        agendamentosCache = agendamentos;
+        meusAgendamentos.style.display = 'block';
+        document.getElementById('filtersSection').style.display = 'block';
+        document.getElementById('diasTabs').style.display = 'flex';
+        initTabsDias();
+        renderAgendamentos(); // só atualiza a lista, sem alterar o dia
+    } catch(e){
+        console.error(e);
+        showToast("Erro ao listar agendamentos","error");
+    }
+}
 
         // ---------------- LOGIN ----------------
         loginBtn.addEventListener('click', async () => {
@@ -1370,131 +1358,6 @@ if (token) {
         }
 
 
-// ---------------- DASHBOARD ----------------
-async function carregarDashboard() {
-    try {
-        const dashboardSection = document.getElementById('dashboardSection');
-        if (!dashboardSection) return;
-
-        dashboardSection.style.display = 'block';
-
-        // Busca os agendamentos do backend
-        const res = await fetch(`/agendamentos/${clienteId}`);
-        if (!res.ok) throw new Error('Erro ao carregar agendamentos');
-
-        const json = await res.json();
-        const agendamentosCache = json.agendamentos || [];
-
-        if (!Array.isArray(agendamentosCache)) throw new Error('Dados de agendamentos inválidos');
-
-        // Normaliza status
-        agendamentosCache.forEach(a => {
-            if (!a.status) a.status = 'pendente';
-        });
-
-        const hoje = new Date().toISOString().split('T')[0];
-        const hojeObj = new Date();
-        const diaSemana = hojeObj.getDay();
-        const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-        const semanaInicio = new Date(hojeObj);
-        semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
-
-        // Contadores
-        const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
-        const semanaCount = agendamentosCache.filter(a => new Date(a.data) >= semanaInicio && new Date(a.data) <= hojeObj).length;
-        const totalCount = agendamentosCache.length;
-        const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
-        const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
-
-        // Atualiza contadores
-        const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-        setText('statHoje', hojeCount);
-        setText('statSemana', semanaCount);
-        setText('statTotal', totalCount);
-        setText('statTaxa', `${taxaConfirmacao}%`);
-
-        // Status para gráficos
-        const statusCount = {
-            pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
-            confirmado: confirmadosCount,
-            cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
-        };
-
-        const chartStatus = document.getElementById('chartStatus');
-        if (chartStatus) {
-            chartStatus.innerHTML = `
-                <div class="h-full flex flex-col justify-center">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Pendente: ${statusCount.pendente}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Top clientes
-        const clientesCount = {};
-        agendamentosCache.forEach(a => {
-            const key = a.email || a.nome;
-            clientesCount[key] = (clientesCount[key] || 0) + 1;
-        });
-
-        const topClientes = Object.entries(clientesCount)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5);
-
-        const topClientesDiv = document.getElementById('topClientes');
-        if (topClientesDiv) {
-            topClientesDiv.innerHTML = '';
-            if (topClientes.length === 0) {
-                topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
-            } else {
-                topClientes.forEach(([nome, count]) => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
-                    div.innerHTML = `
-                        <span class="text-sm truncate">${nome}</span>
-                        <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
-                    `;
-                    topClientesDiv.appendChild(div);
-                });
-            }
-        }
-
-    } catch (e) {
-        console.error('Erro ao carregar dashboard:', e);
-    }
-}
-
-// ---------------- EVENT LISTENERS ----------------
-const addListenerSafe = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('click', fn); };
-addListenerSafe('salvarConfigBtn', salvarConfiguracoes);
-addListenerSafe('addHorarioBtn', adicionarHorario);
-addListenerSafe('addDataBloqueadaBtn', adicionarDataBloqueada);
-addListenerSafe('salvarConfigDataBtn', salvarConfiguracaoData);
-addListenerSafe('addHorarioEspecificoBtn', adicionarHorarioEspecifico);
-
-// Dias da semana
-document.querySelectorAll('.dias-semana-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        this.classList.toggle('active');
-    });
-});
-
 
         // ---------------- INIT ----------------
         AOS.init({
@@ -1519,6 +1382,7 @@ document.querySelectorAll('.dias-semana-btn').forEach(btn => {
     </script>
 </body>
 </html>
+
 
 
 
