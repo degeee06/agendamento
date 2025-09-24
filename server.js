@@ -559,15 +559,12 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .order("horario", { ascending: true });
 
     if (error) throw error;
-    res.json(data || []); // retorna direto como array
+    res.json({ agendamentos: data || [] });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
-
-
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
@@ -972,12 +969,5 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
-
-
-
-
-
-
-
 
 
