@@ -166,7 +166,7 @@ async function getConfigHorarios(clienteId) {
   if (error || !data) {
     // Retorna configuração padrão se não existir
     return {
-      dias_semana: [0, 1, 2, 3, 4, 5],
+      dias_semana: [0, 1, 2, 3, 4, 5, 6],
       horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
       intervalo_minutos: 60,
       max_agendamentos_dia: 10,
@@ -916,4 +916,5 @@ app.listen(PORT, () => {
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
   console.log("🔧 Sistema de configuração de horários ativo");
 });
+
 
