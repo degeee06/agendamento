@@ -1002,74 +1002,145 @@ app.get("/check-payment/:paymentId", async (req, res) => {
   }
 });
 
-// Checa VIP pelo email (aprovado e dentro do prazo)
-app.get("/check-vip/:email", async (req, res) => {
-  const email = req.params.email;
-  if (!email) return res.status(400).json({ error: "Faltando email" });
+// ==== ROTA /create-pix COM EXPIRAÇÃO ====
+app.post("/create-pix", async (req, res) => {
+  const { amount, description, email } = req.body;
+  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
 
-  const now = new Date();
-  const { data, error } = await supabase
-    .from("pagamentos")
-    .select("valid_until")
-    .eq("email", email.toLowerCase().trim())
-    .eq("status", "approved")
-    .gt("valid_until", now.toISOString())
-    .order("valid_until", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error && error.code !== "PGRST116") {
-    return res.status(500).json({ error: error.message });
-  }
-
-  res.json({
-    vip: !!data,
-    valid_until: data?.valid_until || null
-  });
-});
-
-// Webhook Mercado Pago
-app.post("/webhook", async (req, res) => {
   try {
-    const paymentId = req.body?.data?.id || req.query["data.id"];
-    if (!paymentId) return res.sendStatus(400);
+    // ⏰ Calcula data de expiração (15 minutos)
+    const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    
+    const result = await payment.create({
+      body: {
+        transaction_amount: Number(amount),
+        description: description || "Pagamento de Agendamento",
+        payment_method_id: "pix",
+        payer: { email },
+        // ⏰ ADD EXPIRAÇÃO DE 15 MINUTOS
+        date_of_expiration: dateOfExpiration
+      },
+    });
 
-    // Verifica se Mercado Pago está configurado
-    if (!payment) {
-      console.error("Mercado Pago não configurado para webhook");
-      return res.sendStatus(500);
-    }
+    console.log("💰 Pagamento criado no Mercado Pago:", result.id, result.status, "Expira:", dateOfExpiration);
 
-    const paymentDetails = await payment.get({ id: paymentId });
-
-    // Atualiza status no Supabase
-    const status = paymentDetails.status;
-    let valid_until = null;
-
-    if (["approved", "paid"].includes(status.toLowerCase())) {
-      const vipExpires = new Date();
-      vipExpires.setDate(vipExpires.getDate() + 30); // 30 dias
-      valid_until = vipExpires.toISOString();
-    }
-
-    const { error: updateError } = await supabase
+    // INSERÇÃO NO BANCO
+    const { error: insertError } = await supabase
       .from("pagamentos")
-      .update({ status, valid_until })
-      .eq("id", paymentId);
+      .insert([{ 
+        id: result.id, 
+        email: email.toLowerCase().trim(), 
+        amount: Number(amount), 
+        status: result.status || 'pending', 
+        valid_until: null,
+        description: description || "Pagamento de Agendamento"
+      }]);
 
-    if (updateError) {
-      console.error("Erro ao atualizar Supabase:", updateError.message);
-    } else {
-      console.log(`✅ Pagamento ${paymentId} atualizado: status=${status}, valid_until=${valid_until}`);
+    if (insertError) {
+      console.error("Erro ao inserir pagamento no Supabase:", insertError);
+      
+      // Tenta atualizar se já existir
+      const { error: updateError } = await supabase
+        .from("pagamentos")
+        .update({ 
+          status: result.status || 'pending',
+          amount: Number(amount),
+          description: description || "Pagamento de Agendamento"
+        })
+        .eq("id", result.id);
+        
+      if (updateError) {
+        console.error("Erro ao atualizar pagamento no Supabase:", updateError);
+        return res.status(500).json({ error: "Erro ao salvar pagamento" });
+      }
     }
 
-    res.sendStatus(200);
+    console.log("💾 Pagamento salvo no Supabase:", result.id);
+
+    res.json({
+      payment_id: result.id,
+      status: result.status,
+      qr_code: result.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64,
+      expires_at: dateOfExpiration // ⏰ Envia data de expiração para frontend
+    });
   } catch (err) {
-    console.error("Erro no webhook:", err.message);
-    res.sendStatus(500);
+    console.error("Erro ao criar PIX:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
+// Verifica status do pagamento
+app.get("/check-payment/:paymentId", async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    
+    // Primeiro verifica no banco de dados
+    const { data: paymentData, error: dbError } = await supabase
+      .from("pagamentos")
+      .select("*")
+      .eq("id", paymentId)
+      .maybeSingle();  // Usa maybeSingle para evitar erro quando não encontra
+
+    if (dbError && dbError.code !== 'PGRST116') {
+      console.error("Erro ao buscar pagamento no banco:", dbError);
+      return res.status(500).json({ error: "Erro ao verificar pagamento" });
+    }
+
+    // Se não encontrou no banco, verifica no Mercado Pago
+    if (!paymentData) {
+      console.log("Pagamento não encontrado no banco, verificando no Mercado Pago...");
+      try {
+        const paymentDetails = await payment.get({ id: paymentId });
+        return res.json({ status: paymentDetails.status, payment: paymentDetails });
+      } catch (mpError) {
+        console.error("Erro ao verificar pagamento no Mercado Pago:", mpError);
+        return res.status(404).json({ error: "Pagamento não encontrado" });
+      }
+    }
+
+    // Se já está aprovado no banco, retorna
+    if (paymentData.status === "approved") {
+      return res.json({ status: "approved", payment: paymentData });
+    }
+
+    // Se não está aprovado, verifica no Mercado Pago
+    try {
+      const paymentDetails = await payment.get({ id: paymentId });
+      
+      // Atualiza status no banco se mudou
+      if (paymentDetails.status !== paymentData.status) {
+        let valid_until = paymentData.valid_until;
+        
+        if (["approved", "paid"].includes(paymentDetails.status.toLowerCase())) {
+          const vipExpires = new Date();
+          vipExpires.setDate(vipExpires.getDate() + 30);
+          valid_until = vipExpires.toISOString();
+        }
+
+        await supabase
+          .from("pagamentos")
+          .update({ 
+            status: paymentDetails.status, 
+            valid_until,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", paymentId);
+      }
+
+      res.json({ status: paymentDetails.status, payment: paymentDetails });
+
+    } catch (mpError) {
+      console.error("Erro ao verificar pagamento no Mercado Pago:", mpError);
+      // Se não conseguir verificar no MP, retorna o status do banco
+      res.json({ status: paymentData.status, payment: paymentData });
+    }
+
+  } catch (err) {
+    console.error("Erro em /check-payment:", err);
+    res.status(500).json({ error: "Erro interno ao verificar pagamento" });
+  }
+});
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", async (req, res) => {
   try {
@@ -1366,6 +1437,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
