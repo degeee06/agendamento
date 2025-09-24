@@ -796,7 +796,8 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   }
 });
 
-// ---------------- ESTATÍSTICAS ----------------
+
+
 // ---------------- ESTATÍSTICAS ----------------
 app.get("/estatisticas/:cliente", authMiddleware, async (req, res) => {
   try {
@@ -887,6 +888,71 @@ app.get("/top-clientes/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------- SUPABASE: carregar horários disponíveis ----------------
+async function carregarHorariosDisponiveis(cliente, data) {
+    try {
+        // Pega o token do usuário logado no Supabase
+        const token = supabase.auth.session()?.access_token;
+        if (!token) throw new Error('Usuário não está logado');
+
+        // Faz requisição para sua rota protegida no backend
+        const res = await fetch(`/agendamentos/${cliente}?data=${data}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!res.ok) {
+            throw new Error(`Erro ao consultar agendamentos: ${res.status}`);
+        }
+
+        const agendamentos = await res.json();
+        return agendamentos;
+
+    } catch (err) {
+        console.error(err);
+        return [];
+    }
+}
+
+// ---------------- SUPABASE: carregar configuração do cliente ----------------
+async function carregarConfiguracoesCliente(cliente) {
+    try {
+        const token = supabase.auth.session()?.access_token;
+        if (!token) throw new Error('Usuário não está logado');
+
+        // Se a query pode retornar várias linhas, não use .single()
+        const { data, error } = await supabase
+            .from('config_horarios')
+            .select('*')
+            .eq('cliente_id', cliente);
+
+        if (error) {
+            console.error('Erro ao carregar configuração:', error);
+            return null;
+        }
+
+        // Pega só a primeira configuração encontrada
+        const config = data[0] || null;
+
+        // Normalizar tipos (dias_semana como números)
+        if (config && config.dias_semana) {
+            config.dias_semana = config.dias_semana.map(Number);
+        }
+
+        return config;
+
+    } catch (err) {
+        console.error('Erro ao acessar Supabase:', err);
+        return null;
+    }
+}
+
+
+
+
+
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
 setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
@@ -900,6 +966,7 @@ app.listen(PORT, () => {
   console.log("⏰ Sistema de limpeza de agendamentos expirados ativo");
   console.log("🔧 Sistema de configuração de horários ativo");
 });
+
 
 
 
