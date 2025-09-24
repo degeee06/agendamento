@@ -49,6 +49,41 @@ try {
   console.error("❌ Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
 }
 
+// ---------------- ROTAS DE CONFIGURAÇÃO ----------------
+
+// Obter configurações do cliente (admin)
+app.get("/admin/config/:cliente", authMiddleware, async (req, res) => { /*...*/ });
+
+// Atualizar configurações do cliente (admin)
+app.put("/admin/config/:cliente", authMiddleware, async (req, res) => { /*...*/ });
+
+// Configurações específicas por data
+app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => { /*...*/ });
+app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => { /*...*/ });
+
+// ---------------- ROTAS PÚBLICAS PARA CLIENTES ----------------
+
+// Horários disponíveis
+app.get("/api/horarios-disponiveis/:cliente", async (req,res) => { /*...*/ });
+
+// Dias da semana disponíveis
+app.get("/api/dias-disponiveis/:cliente", async (req,res) => { /*...*/ });
+
+// Agendamentos
+app.get("/agendamentos/:cliente", authMiddleware, async (req,res) => { /*...*/ });
+app.post("/agendar/:cliente", authMiddleware, async (req,res) => { /*...*/ });
+app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res) => { /*...*/ });
+app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res) => { /*...*/ });
+app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res) => { /*...*/ });
+
+// Pagamentos PIX
+app.post("/create-pix", async (req,res) => { /*...*/ });
+app.get("/check-payment/:paymentId", async (req,res) => { /*...*/ });
+app.get("/check-vip/:email", async (req,res) => { /*...*/ });
+app.post("/webhook", async (req,res) => { /*...*/ });
+
+
+
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet(clienteId) {
   if (!creds) {
@@ -956,6 +991,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
