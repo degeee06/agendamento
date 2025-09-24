@@ -312,18 +312,18 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Dias da Semana -->
-<div class="bg-white/10 rounded-xl p-4">
-  <h3 class="font-medium mb-3">📅 Dias da Semana Disponíveis</h3>
-  <div class="grid grid-cols-3 gap-2" id="diasSemanaConfig">
-    <button data-dia="0" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Domingo</button>
-    <button data-dia="1" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Segunda</button>
-    <button data-dia="2" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Terça</button>
-    <button data-dia="3" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Quarta</button>
-    <button data-dia="4" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Quinta</button>
-    <button data-dia="5" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Sexta</button>
-    <button data-dia="6" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Sábado</button>
-  </div>
-</div>
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="font-medium mb-3">📅 Dias da Semana Disponíveis</h3>
+                    <div class="grid grid-cols-3 gap-2" id="diasSemanaConfig">
+                        <button data-dia="1" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Segunda</button>
+                        <button data-dia="2" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Terça</button>
+                        <button data-dia="3" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Quarta</button>
+                        <button data-dia="4" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Quinta</button>
+                        <button data-dia="5" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Sexta</button>
+                        <button data-dia="6" class="dias-semana-btn p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all">Sábado</button>
+                    </div>
+                </div>
+
                 <!-- Horários Disponíveis -->
                 <div class="bg-white/10 rounded-xl p-4">
                     <h3 class="font-medium mb-3">⏰ Horários Disponíveis</h3>
@@ -508,9 +508,8 @@
         const configSection = document.getElementById("configSection");
         const calendarSection = document.getElementById("calendarSection");
 
-       
-
-// cliente padrão (enquanto só existe 1)
+        const pathParts = window.location.pathname.split('/');
+       // cliente padrão (enquanto só existe 1)
 let cliente = "cliente1";
 
 // se tiver token no login, tenta extrair o cliente_id
@@ -525,7 +524,6 @@ if (token) {
         console.error("Erro ao decodificar token:", e);
     }
 }
-
 
 
 
@@ -951,8 +949,10 @@ if (token) {
                     </div>
                 `;
 
-                const btnContainer = document.createElement("div");
-                btnContainer.className = "flex gap-2 mt-4 flex-wrap";
+               const btnContainer = document.createElement("div");
+               btnContainer.className = "flex gap-2 mt-4 flex-wrap";
+               btnContainer.innerHTML = ""; // limpa antes de adicionar
+ 
 
                 // Confirmar
                 if (a.status !== "confirmado") {
@@ -985,73 +985,60 @@ if (token) {
         }
 
         // ---------------- MODAL REAGENDAR ----------------
-        function abrirModalReagendar(agendamento) {
-            let modal = document.getElementById("modalReagendar");
+       function abrirModalReagendar(agendamento) {
+    let modal = document.getElementById("modalReagendar");
 
-            if (!modal) {
-                modal = document.createElement("div");
-                modal.id = "modalReagendar";
-                modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden";
-                modal.innerHTML = `
-                    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md relative">
-                        <button id="fecharModal" class="absolute top-4 right-4 text-gray-400 hover:text-white">
-                            <i data-feather="x" class="w-5 h-5"></i>
-                        </button>
-                        <h2 class="text-lg font-medium mb-4 text-white">Reagendar Agendamento</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm text-gray-300 mb-1">Data</label>
-                                <input type="date" id="novaData" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                            </div>
-                            <div>
-                                <label class="block text-sm text-gray-300 mb-1">Horário</label>
-                                <input type="time" id="novoHorario" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                            </div>
-                        </div>
-                        <div class="flex justify-end gap-2 mt-6">
-                            <button id="cancelarReagendar" class="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-all">Cancelar</button>
-                            <button id="confirmarReagendar" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all">Confirmar</button>
-                        </div>
+    if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "modalReagendar";
+        modal.className = "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden";
+        modal.innerHTML = `
+            <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md relative">
+                <button id="fecharModal" class="absolute top-4 right-4 text-gray-400 hover:text-white">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                </button>
+                <h2 class="text-lg font-medium mb-4 text-white">Reagendar Agendamento</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Data</label>
+                        <input type="date" id="novaData" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white"/>
                     </div>
-                `;
-                document.body.appendChild(modal);
-                feather.replace();
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Horário</label>
+                        <input type="time" id="novoHorario" class="w-full p-3 rounded-md bg-white/5 border border-white/10 text-white"/>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button id="cancelarReagendar" class="px-4 py-2 rounded-lg bg-gray-700 text-white">Cancelar</button>
+                    <button id="confirmarReagendar" class="px-4 py-2 rounded-lg bg-indigo-600 text-white">Confirmar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        feather.replace();
 
-                // Evento de fechar
-                modal.querySelector("#fecharModal").addEventListener("click", () => {
-                    modal.classList.add("hidden");
-                });
-                
-                modal.querySelector("#cancelarReagendar").addEventListener("click", () => {
-                    modal.classList.add("hidden");
-                });
-            }
+        modal.querySelector("#fecharModal").addEventListener("click", () => modal.classList.add("hidden"));
+        modal.querySelector("#cancelarReagendar").addEventListener("click", () => modal.classList.add("hidden"));
+    }
 
-            // Preenche valores atuais e define data mínima como hoje
-            modal.querySelector("#novaData").value = agendamento.data;
-            modal.querySelector("#novoHorario").value = agendamento.horario;
+    modal.querySelector("#novaData").value = agendamento.data;
+    modal.querySelector("#novoHorario").value = agendamento.horario;
 
-            // Remove qualquer evento antigo para evitar duplicação
-            const confirmarBtn = modal.querySelector("#confirmarReagendar");
-            const novoConfirmarBtn = confirmarBtn.cloneNode(true);
-            confirmarBtn.parentNode.replaceChild(novoConfirmarBtn, confirmarBtn);
+    const confirmarBtn = modal.querySelector("#confirmarReagendar");
+    const novoConfirmarBtn = confirmarBtn.cloneNode(true);
+    confirmarBtn.replaceWith(novoConfirmarBtn);
 
-            novoConfirmarBtn.addEventListener("click", () => {
-                const novaData = modal.querySelector("#novaData").value;
-                const novoHorario = modal.querySelector("#novoHorario").value;
+    novoConfirmarBtn.addEventListener("click", () => {
+        const novaData = modal.querySelector("#novaData").value;
+        const novoHorario = modal.querySelector("#novoHorario").value;
+        if (!novaData || !novoHorario) return showToast("Preencha data e horário corretamente!", "warning");
+        reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
+        modal.classList.add("hidden");
+    });
 
-                if (!novaData || !novoHorario) {
-                    showToast("Preencha data e horário corretamente!", "warning");
-                    return;
-                }
+    modal.classList.remove("hidden");
+}
 
-                reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
-                modal.classList.add("hidden");
-            });
-
-            // Mostra modal
-            modal.classList.remove("hidden");
-        }
 
         // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
@@ -1382,89 +1369,108 @@ if (token) {
             }
         }
 
-        // ---------------- DASHBOARD ----------------
+       // ---------------- DASHBOARD ----------------
 async function carregarDashboard() {
     try {
         const dashboardSection = document.getElementById('dashboardSection');
         if (!dashboardSection) return;
+
         dashboardSection.style.display = 'block';
 
-        // Atualizar estatísticas
-        const response = await fetch(`/estatisticas/${clienteId}`);
-        const stats = await response.json();
+        const hojeObj = new Date();
+        const hojeStr = hojeObj.toISOString().split('T')[0];
 
-        if (document.getElementById('statHoje')) {
-            document.getElementById('statHoje').textContent = stats.hoje;
-        }
-        if (document.getElementById('statSemana')) {
-            document.getElementById('statSemana').textContent = stats.semana;
-        }
-        if (document.getElementById('statTotal')) {
-            document.getElementById('statTotal').textContent = stats.total;
-        }
-        if (document.getElementById('statTaxa')) {
-            document.getElementById('statTaxa').textContent = `${stats.taxaConfirmacao}%`;
-        }
+        // Segunda-feira da semana atual
+        const diaSemana = hojeObj.getDay(); // 0 = domingo
+        const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+        const semanaInicio = new Date(hojeObj);
+        semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
+        semanaInicio.setHours(0,0,0,0); // normalize hora
+
+        // Contagem
+        const hojeCount = agendamentosCache.filter(a => a.data === hojeStr).length;
+        const semanaCount = agendamentosCache.filter(a => {
+            const agendamentoDate = new Date(a.data);
+            agendamentoDate.setHours(0,0,0,0);
+            return agendamentoDate >= semanaInicio && agendamentoDate <= hojeObj;
+        }).length;
+
+        const totalCount = agendamentosCache.length;
+        const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
+        const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
+
+        // Atualiza elementos
+        const setText = (id, value) => { 
+            const el = document.getElementById(id);
+            if(el) el.textContent = value; 
+        };
+        setText('statHoje', hojeCount);
+        setText('statSemana', semanaCount);
+        setText('statTotal', totalCount);
+        setText('statTaxa', `${taxaConfirmacao}%`);
+
+        // Status
+        const statusCount = {
+            pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
+            confirmado: confirmadosCount,
+            cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
+        };
 
         const chartStatus = document.getElementById('chartStatus');
-        if (chartStatus) {
-            const total = stats.total || 1; // evita divisão por zero
+        if(chartStatus){
             chartStatus.innerHTML = `
                 <div class="h-full flex flex-col justify-center">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Pendente: ${stats.status.pendente}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(stats.status.pendente/total)*100}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Confirmado: ${stats.status.confirmado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-green-400 h-2 rounded-full" style="width: ${(stats.status.confirmado/total)*100}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">Cancelado: ${stats.status.cancelado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-red-400 h-2 rounded-full" style="width: ${(stats.status.cancelado/total)*100}%"></div>
-                        </div>
-                    </div>
+                    ${['pendente','confirmado','cancelado'].map(status => {
+                        const count = statusCount[status];
+                        const color = status==='pendente'?'yellow-400':status==='confirmado'?'green-400':'red-400';
+                        const width = totalCount > 0 ? (count/totalCount)*100 : 0;
+                        return `
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm capitalize">${status}: ${count}</span>
+                                <div class="w-24 bg-gray-600 rounded-full h-2">
+                                    <div class="bg-${color} h-2 rounded-full" style="width: ${width}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             `;
         }
 
         // Top clientes
-        const respTop = await fetch(`/top-clientes/${clienteId}`);
-        const topClientes = await respTop.json();
+        const clientesCount = {};
+        agendamentosCache.forEach(a => {
+            if(a.nome) clientesCount[a.nome] = (clientesCount[a.nome] || 0) + 1;
+        });
+
+        const topClientes = Object.entries(clientesCount)
+            .sort((a,b)=>b[1]-a[1])
+            .slice(0,5);
+
         const topClientesDiv = document.getElementById('topClientes');
-        if (topClientesDiv) {
-            topClientesDiv.innerHTML = '';
-            if (topClientes.length === 0) {
-                topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
-            } else {
-                topClientes.forEach(c => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
-                    div.innerHTML = `
-                        <span class="text-sm truncate">${c.nome}</span>
-                        <span class="bg-white/10 px-2 py-1 rounded text-xs">${c.agendamentos}</span>
-                    `;
-                    topClientesDiv.appendChild(div);
-                });
-            }
+        if(topClientesDiv){
+            topClientesDiv.innerHTML = topClientes.length === 0 
+                ? '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>'
+                : topClientes.map(([nome,count]) => `
+                    <div class="flex justify-between items-center py-2 border-b border-white/10 last:border-b-0">
+                        <span class="text-sm truncate">${nome}</span>
+                        <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
+                    </div>
+                `).join('');
         }
 
-    } catch (e) {
+    } catch(e){
         console.error('Erro ao carregar dashboard:', e);
     }
 }
 
 // ---------------- EVENT LISTENERS ----------------
-document.getElementById('salvarConfigBtn')?.addEventListener('click', salvarConfiguracoes);
-document.getElementById('addHorarioBtn')?.addEventListener('click', adicionarHorario);
-document.getElementById('addDataBloqueadaBtn')?.addEventListener('click', adicionarDataBloqueada);
-document.getElementById('salvarConfigDataBtn')?.addEventListener('click', salvarConfiguracaoData);
-document.getElementById('addHorarioEspecificoBtn')?.addEventListener('click', adicionarHorarioEspecifico);
+const addListenerSafe = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('click', fn); };
+addListenerSafe('salvarConfigBtn', salvarConfiguracoes);
+addListenerSafe('addHorarioBtn', adicionarHorario);
+addListenerSafe('addDataBloqueadaBtn', adicionarDataBloqueada);
+addListenerSafe('salvarConfigDataBtn', salvarConfiguracaoData);
+addListenerSafe('addHorarioEspecificoBtn', adicionarHorarioEspecifico);
 
 // Dias da semana
 document.querySelectorAll('.dias-semana-btn').forEach(btn => {
@@ -1488,15 +1494,12 @@ document.querySelectorAll('.dias-semana-btn').forEach(btn => {
         window.removerDataBloqueada = removerDataBloqueada;
         window.selecionarData = selecionarData;
         window.removerHorarioEspecifico = function(horario) {
-            const divs = document.querySelectorAll('#horariosEspecificos div');
-            divs.forEach(div => {
-                if (div.querySelector('span').textContent === horario) {
-                    div.remove();
-                }
-            });
-        };
+    document.querySelectorAll('#horariosEspecificos div').forEach(div => {
+        const span = div.querySelector('span');
+        if(span && span.textContent === horario) div.remove();
+    });
+};
+
     </script>
 </body>
 </html>
-
-
