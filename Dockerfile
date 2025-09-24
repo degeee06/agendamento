@@ -1,5 +1,5 @@
-# Use Node 20 com Debian (mais compatível com OpenSSL)
-FROM node:20-bullseye
+# Use Node 20 com Debian Bullseye (tag correta)
+FROM node:20.11.1-bullseye
 
 # Diretório de trabalho no container
 WORKDIR /app
