@@ -60,43 +60,6 @@
             box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
         }
         
-        .status-pendente {
-            color: #fbbf24;
-            background-color: rgba(251, 191, 36, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-
-        .status-confirmado {
-            color: #34d399;
-            background-color: rgba(52, 211, 153, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-
-        .status-cancelado {
-            color: #f87171;
-            background-color: rgba(248, 113, 113, 0.15);
-            padding: 2px 6px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-        
-        .tab-dia.active {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        
-        .agendamento-card {
-            transition: all 0.3s ease;
-        }
-        
-        .agendamento-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        
         .loading-spinner {
             border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
@@ -144,39 +107,6 @@
             .mobile-text-center {
                 text-align: center;
             }
-            
-            .dias-tabs-container {
-                overflow-x: auto;
-                padding-bottom: 8px;
-            }
-            
-            .dias-tabs-container::-webkit-scrollbar {
-                height: 4px;
-            }
-            
-            .dias-tabs-container::-webkit-scrollbar-thumb {
-                background: rgba(255, 255, 255, 0.2);
-                border-radius: 4px;
-            }
-            
-            .dashboard-card {
-                transition: all 0.3s ease;
-            }
-            
-            .dashboard-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            }
-            
-            .stat-number {
-                font-size: 1.875rem;
-                font-weight: 700;
-            }
-            
-            .stat-label {
-                font-size: 0.875rem;
-                color: #D1D5DB;
-            }
         }
     </style>
 </head>
@@ -188,7 +118,7 @@
                 Agendamento
             </h1>
             <p class="text-lg opacity-90 max-w-2xl mx-auto">
-                Gerencie seus compromissos com uma interface intuitiva e elegante
+                Agende seu horário de forma rápida e segura
             </p>
         </header>
 
@@ -266,10 +196,10 @@
                 </button>
             </div>
         </form>
-    </div>
 
-    <!-- Toast Container -->
-    <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+        <!-- Toast Container -->
+        <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
+    </div>
 
     <script type="module">
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -279,14 +209,13 @@
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let telefoneMask = null;
-        let pagamentoPendente = false;
         let paymentCheckInterval = null;
         let currentPaymentId = null;
         let paymentExpiresAt = null;
 
         const form = document.getElementById('agendamentoForm');
-        const agendarText = document.getElementById("agendarText");
-        const agendarSpinner = document.getElementById("agendarSpinner");
+        const agendarText = document.getElementById('agendarText');
+        const agendarSpinner = document.getElementById('agendarSpinner');
         const telefoneInput = document.getElementById("Telefone");
         const dataInput = document.getElementById("Data");
         const horarioInput = document.getElementById("Horario");
@@ -573,8 +502,6 @@
                         showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
                     }
                 });
-                
-                pagamentoPendente = true;
                 
             } catch(err) { 
                 console.error(err); 
