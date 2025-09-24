@@ -241,9 +241,8 @@
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <i data-feather="calendar" class="w-5 h-5 text-gray-400"></i>
                                 </div>
-                               <input type="text" id="Data" name="Data" placeholder="Data do Agendamento" required 
-       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
-
+                                <input type="date" id="Data" name="Data" placeholder="Data do Agendamento" required 
+                                       class="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none input-field">
                             </div>
                         </div>
                         <div>
@@ -271,388 +270,331 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-    <!-- Inicialização do Flatpickr -->
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    flatpickr("#Data", {
-        altInput: true,
-        altFormat: "d/m/Y",
-        dateFormat: "Y-m-d",
-        minDate: "today"
-    });
-});
-</script>
+    <script type="module">
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-    
-<script type="module">
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let telefoneMask = null;
+        let pagamentoPendente = false;
+        let paymentCheckInterval = null;
+        let currentPaymentId = null;
+        let paymentExpiresAt = null;
 
-// GUARDE o token no localStorage
-localStorage.setItem("supabase_token", SUPABASE_ANON_KEY);
+        const form = document.getElementById('agendamentoForm');
+        const agendarText = document.getElementById("agendarText");
+        const agendarSpinner = document.getElementById("agendarSpinner");
+        const telefoneInput = document.getElementById("Telefone");
+        const dataInput = document.getElementById("Data");
+        const horarioInput = document.getElementById("Horario");
 
-// elementos do DOM
-const form = document.getElementById('agendamentoForm');
-const telefoneInput = document.getElementById("Telefone");
-const dataInput = document.getElementById("Data");
-const horarioInput = document.getElementById("Horario");
-const agendarText = document.getElementById("agendarText");
-const agendarSpinner = document.getElementById("agendarSpinner");
-const pixArea = document.getElementById("pixArea");
+        const pathParts = window.location.pathname.split('/');
+        const cliente = pathParts[1] || '';
 
-let telefoneMask = null;
-let currentPaymentId = null;
-let paymentExpiresAt = null;
-let paymentCheckInterval = null;
-let lastDataToSend = null;
-
-// extrair cliente da URL
-const pathParts = window.location.pathname.split('/').filter(p => p.trim() !== '');
-const cliente = pathParts[0] || 'cliente1';
-
-// ---------------- TOAST ----------------
-let activeToasts = [];
-function showToast(message, type = "success") {
-    const colors = {
-        success: "bg-gradient-to-r from-green-500 to-teal-400",
-        error: "bg-gradient-to-r from-red-500 to-pink-500",
-        info: "bg-gradient-to-r from-blue-500 to-cyan-400",
-        warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
-    };
-    const container = document.getElementById("toast-container") || (function(){ const c=document.createElement('div'); c.id='toast-container'; document.body.appendChild(c); return c; })();
-
-    if (activeToasts.length >= 3) {
-        const t = activeToasts.shift();
-        if (t && t.parentNode) t.parentNode.removeChild(t);
-    }
-
-    const toast = document.createElement("div");
-    toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
-    toast.textContent = message;
-    container.appendChild(toast);
-    activeToasts.push(toast);
-
-    requestAnimationFrame(() => {
-        toast.classList.remove("opacity-0", "translate-x-5");
-        toast.classList.add("opacity-100", "translate-x-0");
-    });
-
-    setTimeout(() => {
-        toast.classList.add("opacity-0", "translate-x-5");
-        setTimeout(()=>{ try{ toast.remove(); }catch(e){} }, 300);
-    }, 3000);
-}
-
-// ---------------- SUPABASE: carregar configuração ----------------
-async function carregarConfiguracoesCliente() {
-    try {
-        const { data, error } = await supabase
-            .from('config_horarios')
-            .select('*')
-            .eq('cliente_id', cliente)
-            .single();
-
-        if (error) {
-            console.error('Erro ao carregar configuração:', error);
-            return null;
-        }
-
-        if (data && data.dias_semana) {
-            data.dias_semana = data.dias_semana.map(Number);
-        }
-
-        return data;
-    } catch (err) {
-        console.error('Erro ao acessar Supabase:', err);
-        return null;
-    }
-}
-
-// ---------------- DATEPICKER (Flatpickr) ----------------
-async function initDatepicker() {
-    if (!dataInput) return;
-    const config = await carregarConfiguracoesCliente();
-    if (!config) {
-        console.warn('initDatepicker: sem config para cliente', cliente);
-        return;
-    }
-
-    const datasBloqueadas = Array.isArray(config.datas_bloqueadas) ? config.datas_bloqueadas : [];
-    const diasPermitidos = Array.isArray(config.dias_semana) ? config.dias_semana.map(Number) : [1,2,3,4,5];
-
-    flatpickr(dataInput, {
-        dateFormat: "Y-m-d",
-        minDate: "today",
-        disable: [
-            ...datasBloqueadas,
-            function(date) {
-                return !diasPermitidos.includes(date.getDay());
+        // ---------------- INICIALIZAÇÃO ----------------
+        function init() {
+            // Configurar máscara de telefone
+            if (telefoneInput) {
+                telefoneMask = IMask(telefoneInput, {
+                    mask: '(00) 00000-0000'
+                });
             }
-        ]
-    });
-}
-
-// ---------------- VALIDAÇÃO ----------------
-function validarDataSelecionada(dataStr, config) {
-    if (!dataStr || !config) return false;
-    if (Array.isArray(config.datas_bloqueadas) && config.datas_bloqueadas.includes(dataStr)) {
-        showToast('Esta data está bloqueada', 'error');
-        return false;
-    }
-    const dia = new Date(dataStr).getDay();
-    if (!Array.isArray(config.dias_semana) || !config.dias_semana.map(Number).includes(dia)) {
-        showToast('Dia da semana não permitido', 'error');
-        return false;
-    }
-    return true;
-}
-
-// ---------------- HORÁRIOS ----------------
-async function carregarHorariosDisponiveis(dataStr, config) {
-    if (!dataStr) { showToast('Selecione uma data primeiro', 'warning'); horarioInput.value=''; return; }
-    try {
-        fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`);
-        if (!res.ok) throw new Error('Erro ao consultar agendamentos');
-        const parsed = await res.json();
-        const agendamentos = parsed.agendamentos || parsed || [];
-        const horariosLivres = (config.horarios_disponiveis || []).filter(h => !agendamentos.some(a => a.horario === h));
-        atualizarCampoHorario(horariosLivres);
-    } catch(err) {
-        console.error(err);
-        showToast('Erro ao carregar horários', 'error');
-    }
-}
-
-function atualizarCampoHorario(horarios) {
-    if (!horarioInput) return;
-    let datalist = document.getElementById('horariosDisponiveis');
-    if (!datalist) {
-        datalist = document.createElement('datalist');
-        datalist.id = 'horariosDisponiveis';
-        document.body.appendChild(datalist);
-    }
-    datalist.innerHTML = '';
-    (horarios || []).forEach(h => {
-        const opt = document.createElement('option');
-        opt.value = h;
-        datalist.appendChild(opt);
-    });
-    horarioInput.setAttribute('list', 'horariosDisponiveis');
-}
-
-// ---------------- PIX e verificações ----------------
-function formatTimeRemaining(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-}
-
-function startPaymentTimer(expiresAt) {
-    if (paymentCheckInterval) clearInterval(paymentCheckInterval);
-    const countdownElement = document.getElementById('countdownTimer');
-    if (!countdownElement) return;
-    paymentCheckInterval = setInterval(() => {
-        const now = new Date();
-        const expires = new Date(expiresAt);
-        const timeRemaining = Math.floor((expires - now) / 1000);
-        if (timeRemaining <= 0) {
-            clearInterval(paymentCheckInterval);
-            countdownElement.textContent = 'Tempo esgotado!';
-            countdownElement.classList.add('countdown-warning');
-            return;
+            
+            // Permitir selecionar a partir de hoje (incluindo hoje)
+            const hoje = new Date();
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1); // Data de ontem
+            
+            if (dataInput) {
+                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
+            }
         }
-        countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
-        countdownElement.classList.toggle('countdown-warning', timeRemaining < 60);
-    }, 1000);
-}
 
-async function checkPaymentStatus(paymentId) {
-    try {
-       fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`);
-        if (!res.ok) throw new Error('Erro ao verificar pagamento');
-        const statusData = await res.json();
+        // ---------------- TOASTS ----------------
+        let activeToasts = [];
+        function showToast(message, type = "success") {
+            const colors = {
+                success: "bg-gradient-to-r from-green-500 to-teal-400",
+                error: "bg-gradient-to-r from-red-500 to-pink-500",
+                info: "bg-gradient-to-r from-blue-500 to-cyan-400",
+                warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
+            };
+            
+            const container = document.getElementById("toast-container");
+            if (activeToasts.length >= 3) {
+                const oldest = activeToasts.shift();
+                oldest.remove();
+            }
+            
+            const toast = document.createElement("div");
+            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
+            toast.innerHTML = `<i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+            activeToasts.push(toast);
+            feather.replace();
+            
+            requestAnimationFrame(()=>{
+                toast.classList.remove("opacity-0","translate-x-5"); 
+                toast.classList.add("opacity-100","translate-x-0");
+            });
+            
+            setTimeout(()=>{
+                toast.classList.add("opacity-0","translate-x-5"); 
+                setTimeout(()=>{
+                    toast.remove(); 
+                    activeToasts=activeToasts.filter(t=>t!==toast);
+                },300);
+            },3000);
+        }
 
-        if (statusData.status === 'approved') {
-            clearInterval(paymentCheckInterval);
-            if (lastDataToSend) {
-                try {
-                    const r = await fetch(`/agendar/${cliente}`, {
+        // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
+        function formatTimeRemaining(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
+            if (paymentCheckInterval) {
+                clearInterval(paymentCheckInterval);
+            }
+            
+            const countdownElement = document.getElementById('countdownTimer');
+            
+            // Atualizar o contador a cada segundo
+            paymentCheckInterval = setInterval(async () => {
+                const now = new Date();
+                const expires = new Date(expiresAt);
+                const timeRemaining = Math.floor((expires - now) / 1000);
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(paymentCheckInterval);
+                    countdownElement.innerHTML = 'Tempo esgotado!';
+                    countdownElement.classList.add('countdown-warning');
+                    
+                    // Limpar a área de pagamento
+                    const pixDiv = document.getElementById("pixArea");
+                    if (pixDiv) {
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                    Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                        
+                        feather.replace();
+                        
+                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                            form.dispatchEvent(new Event('submit'));
+                        });
+                    }
+                    
+                    return;
+                }
+                
+                // Atualizar o contador
+                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
+                
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
+                if (timeRemaining < 60) {
+                    countdownElement.classList.add('countdown-warning');
+                } else {
+                    countdownElement.classList.remove('countdown-warning');
+                }
+            }, 1000);
+        }
+
+        async function checkPaymentStatus(paymentId) {
+            try {
+                const statusResponse = await fetch(`/check-payment/${paymentId}`);
+                if (!statusResponse.ok) {
+                    throw new Error('Erro ao verificar pagamento');
+                }
+                
+                const statusData = await statusResponse.json();
+                
+                if (statusData.status === 'approved') {
+                    // Pagamento aprovado, parar de verificar
+                    clearInterval(paymentCheckInterval);
+                    
+                    // Enviar agendamento
+                    const formData = new FormData(form);
+                    const dataToSend = {};
+                    formData.forEach((v,k) => dataToSend[k] = v);
+                    
+                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem("supabase_token")}`
+                            'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(lastDataToSend)
+                        body: JSON.stringify(dataToSend)
                     });
-                    if (r.ok) {
-                        showToast('Agendamento confirmado e pagamento aprovado!', 'success');
+                    
+                    if (agendamentoResponse.ok) {
+                        showToast("Agendamento realizado com sucesso!", "success");
                         form.reset();
-                        pixArea.innerHTML = `<div class="text-center p-4 bg-green-900/20 rounded-lg"><p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p></div>`;
+                        
+                        const pixDiv = document.getElementById("pixArea");
+                        if (pixDiv) {
+                            pixDiv.innerHTML = `
+                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                                </div>
+                            `;
+                            feather.replace();
+                        }
                     } else {
-                        const err = await r.json().catch(()=>({message:'Erro ao criar agendamento'}));
-                        showToast(err.message || 'Erro ao criar agendamento', 'error');
+                        const errorData = await agendamentoResponse.json();
+                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
                     }
-                } catch(err) {
-                    console.error(err);
-                    showToast('Erro ao criar agendamento após pagamento', 'error');
-                } finally {
-                    lastDataToSend = null;
+                    
+                    return true;
+                } else if (statusData.status === 'expired') {
+                    // Pagamento expirado
+                    clearInterval(paymentCheckInterval);
+                    showToast("Tempo para pagamento expirado.", "error");
+                    return true;
                 }
-            } else {
-                showToast('Pagamento aprovado!', 'success');
+                
+                return false;
+            } catch (err) {
+                console.error("Erro ao verificar pagamento:", err);
+                return false;
             }
-            return true;
-        } else if (statusData.status === 'expired') {
-            clearInterval(paymentCheckInterval);
-            showToast('Pagamento expirado', 'error');
-            return true;
         }
-        return false;
-    } catch(err) {
-        console.error('checkPaymentStatus error:', err);
-        return false;
-    }
-}
 
-// ---------------- SUBMIT ----------------
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    const dataToSend = {};
-    formData.forEach((v,k) => dataToSend[k] = v);
+        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
 
-    if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-        showToast('Preencha todos os campos', 'warning');
-        return;
-    }
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
 
-    const config = await carregarConfiguracoesCliente();
-    if (!config) { showToast('Erro ao carregar configuração', 'error'); return; }
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
+            
+            try {
+                // Primeiro, criar o pagamento PIX - MERCADO PAGO
+                const valorEmReais = 0.01; // 1 centavo
 
-    if (!validarDataSelecionada(dataToSend.Data, config)) return;
-    if (!(config.horarios_disponiveis || []).includes(dataToSend.Horario)) { showToast('Horário não disponível', 'error'); return; }
+                const pagamentoResponse = await fetch('/create-pix', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+                        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+                        email: dataToSend.Email
+                    })
+                });
 
-    try {
-       fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`);
-        if (!res.ok) throw new Error('Erro ao consultar agendamentos');
-        const parsed = await res.json();
-        const agendamentos = parsed.agendamentos || parsed || [];
-        if (agendamentos.some(a => a.horario === dataToSend.Horario)) { showToast('Horário já ocupado', 'error'); return; }
-        if (agendamentos.length >= (config.max_agendamentos_dia || 9999)) { showToast('Limite diário atingido', 'error'); return; }
-    } catch(err) {
-        console.error(err);
-        showToast('Erro ao verificar horários', 'error');
-        return;
-    }
+                if (!pagamentoResponse.ok) {
+                    const errorData = await pagamentoResponse.json();
+                    throw new Error(errorData.error || 'Erro ao criar pagamento');
+                }
 
-    lastDataToSend = dataToSend;
-    agendarText.classList.add('hidden');
-    agendarSpinner.classList.remove('hidden');
-    form.querySelector('button[type="submit"]').disabled = true;
+                const pagamentoData = await pagamentoResponse.json();
+                currentPaymentId = pagamentoData.payment_id;
+                paymentExpiresAt = pagamentoData.expires_at;
+                
+                // Exibir QR Code e código PIX
+                let pixDiv = document.getElementById("pixArea");
+                if (!pixDiv) {
+                    pixDiv = document.createElement("div");
+                    pixDiv.id = "pixArea";
+                    pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+                    form.appendChild(pixDiv);
+                }
 
-    try {
-        if (paymentCheckInterval) { clearInterval(paymentCheckInterval); paymentCheckInterval = null; }
-
-        const valorEmReais = 0.01;
-        const pagamentoResponse = await fetch('/create-pix', {
-            method: 'POST',
-            headers: {
-                'Content-Type':'application/json',
-                'Authorization': `Bearer ${localStorage.getItem("supabase_token")}`
-            },
-            body: JSON.stringify({
-                amount: valorEmReais,
-                description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                email: dataToSend.Email
-            })
+                pixDiv.innerHTML = `
+                    <h3 class="text-center mb-3">Pagamento via PIX</h3>
+                    <div class="text-center mb-4">
+                        <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+                        <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+                    </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div class="text-center">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                            Já efetuei o pagamento
+                        </button>
+                    </div>
+                `;
+                
+                feather.replace();
+                
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
+                });
+                
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
+                
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    }
+                });
+                
+                pagamentoPendente = true;
+                
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar pagamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
+            }
         });
 
-        if (!pagamentoResponse.ok) {
-            const err = await pagamentoResponse.json().catch(()=>({error:'Erro ao criar pagamento'}));
-            throw new Error(err.error || err.message || 'Erro ao criar pagamento');
-        }
-
-        const pagamentoData = await pagamentoResponse.json();
-        currentPaymentId = pagamentoData.payment_id;
-        paymentExpiresAt = pagamentoData.expires_at;
-
-        pixArea.innerHTML = `
-            <h3 class="text-center mb-3">Pagamento via PIX</h3>
-            <div class="text-center mb-4">
-                <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-                <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-            </div>
-            <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
-            <div class="mb-4">
-                <p class="text-sm font-medium mb-1">Código PIX (copiar):</p>
-                <div class="flex items-center gap-2">
-                    <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
-                    <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700"><i data-feather="copy" class="w-4 h-4"></i></button>
-                </div>
-            </div>
-            <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date())/1000))}</div>
-            <div class="text-center mt-3"><button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">Já efetuei o pagamento</button></div>
-        `;
+        // ---------------- INIT ----------------
+        AOS.init({
+            duration: 800,
+            easing: 'ease-out-quart',
+            once: true
+        });
         feather.replace();
-        startPaymentTimer(paymentExpiresAt);
-
-        const copyBtn = document.getElementById('copyPixBtn');
-        if (copyBtn) copyBtn.onclick = () => {
-            const t = pixArea.querySelector('textarea');
-            if (t) { t.select(); document.execCommand('copy'); showToast('Código PIX copiado!', 'success'); }
-        };
-
-        const confirmBtn = document.getElementById('confirmPaymentBtn');
-        if (confirmBtn) confirmBtn.onclick = async () => {
-            const confirmed = await checkPaymentStatus(currentPaymentId);
-            if (!confirmed) showToast('Pagamento ainda não confirmado. Aguarde.', 'warning');
-        };
-
-        const polling = setInterval(async () => {
-            const done = await checkPaymentStatus(currentPaymentId);
-            if (done) clearInterval(polling);
-        }, 10000);
-
-    } catch(err) {
-        console.error(err);
-        showToast(err.message || 'Erro ao processar pagamento', 'error');
-    } finally {
-        agendarText.classList.remove('hidden');
-        agendarSpinner.classList.add('hidden');
-        form.querySelector('button[type="submit"]').disabled = false;
-    }
-});
-
-// ---------------- INIT ----------------
-async function init() {
-    if (telefoneInput) telefoneMask = IMask(telefoneInput, { mask: '(00) 00000-0000' });
-    await initDatepicker();
-
-    if (dataInput) {
-        dataInput.addEventListener('change', async () => {
-            const cfg = await carregarConfiguracoesCliente();
-            if (!cfg) return;
-            if (validarDataSelecionada(dataInput.value, cfg)) await carregarHorariosDisponiveis(dataInput.value, cfg);
-            else horarioInput.value = '';
-        });
-    }
-
-    if (horarioInput) {
-        horarioInput.addEventListener('focus', async () => {
-            if (!dataInput.value) { showToast('Selecione uma data primeiro', 'warning'); horarioInput.value=''; return; }
-            const cfg = await carregarConfiguracoesCliente();
-            if (cfg) await carregarHorariosDisponiveis(dataInput.value, cfg);
-        });
-    }
-}
-
-AOS.init({ duration: 800, easing: 'ease-out-quart', once: true });
-feather.replace();
-init();
-</script>
+        init();
+    </script>
+</body>
+</html>
