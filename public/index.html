@@ -834,116 +834,118 @@ if (token) {
         }
 
         // ---------------- RENDER AGENDAMENTOS ----------------
-        function renderAgendamentos() {
-            const filtroNome = searchInput.value.toLowerCase();
-            const filtroStatus = statusFilter.value;
+function renderAgendamentos() {
+    const filtroNome = searchInput.value.toLowerCase();
+    const filtroStatus = statusFilter.value;
 
-            const filtrados = agendamentosCache
-                .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
-                            (filtroStatus ? a.status === filtroStatus : true))
-                .filter(a => {
-                    const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-                    const hoje = new Date();
-                    
-                    if(diaSelecionado >= 1 && diaSelecionado <= 6) {
-                        return dataAgendamento.getDay() === diaSelecionado && 
-                               dataAgendamento >= new Date(hoje.setHours(0,0,0,0));
-                    } else {
-                        const semanas = -diaSelecionado;
-                        const dataLimite = new Date();
-                        dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                        return dataAgendamento >= new Date(dataLimite.setHours(0,0,0,0)) && 
-                               dataAgendamento < new Date(hoje.setHours(0,0,0,0));
-                    }
-                })
-                .sort((a,b) => {
-                    const dateA = new Date(`${a.data}T${a.horario}`);
-                    const dateB = new Date(`${b.data}T${b.horario}`);
-                    return dateA - dateB;
-                });
-
-            if (filtrados.length === 0) {
-                meusAgendamentos.innerHTML = `
-                    <div class='text-center py-8'>
-                        <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
-                            <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
-                        </div>
-                        <p class="text-gray-300">Nenhum agendamento encontrado</p>
-                    </div>
-                `;
-                feather.replace();
-                return;
+    const filtrados = agendamentosCache
+        .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) &&
+                    (filtroStatus ? a.status === filtroStatus : true))
+        .filter(a => {
+            const dataAgendamento = new Date(`${a.data}T${a.horario}`);
+            const hoje = new Date();
+            
+            // agora aceita domingo (0) também
+            if(diaSelecionado >= 0 && diaSelecionado <= 6) {
+                return dataAgendamento.getDay() === diaSelecionado && 
+                       dataAgendamento >= new Date(hoje.setHours(0,0,0,0));
+            } else {
+                const semanas = -diaSelecionado;
+                const dataLimite = new Date();
+                dataLimite.setDate(dataLimite.getDate() + semanas * 7);
+                return dataAgendamento >= new Date(dataLimite.setHours(0,0,0,0)) && 
+                       dataAgendamento < new Date(hoje.setHours(0,0,0,0));
             }
+        })
+        .sort((a,b) => {
+            const dateA = new Date(`${a.data}T${a.horario}`);
+            const dateB = new Date(`${b.data}T${b.horario}`);
+            return dateA - dateB;
+        });
 
-            meusAgendamentos.innerHTML = "";
+    if (filtrados.length === 0) {
+        meusAgendamentos.innerHTML = `
+            <div class='text-center py-8'>
+                <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
+                    <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
+                </div>
+                <p class="text-gray-300">Nenhum agendamento encontrado</p>
+            </div>
+        `;
+        feather.replace();
+        return;
+    }
 
-            filtrados.forEach(a => {
-                const div = document.createElement("div");
-                div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
-                
-                div.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
-                            <span class="font-medium">${a.horario}</span>
-                        </div>
-                        <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
-                            ${a.status}
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                            <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-medium">${a.nome}</h3>
-                            <p class="text-sm text-gray-300">${formatData(a.data)}</p>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="flex items-center gap-2">
-                            <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-                            <span class="truncate">${a.email}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                            <span>${a.telefone}</span>
-                        </div>
-                    </div>
-                `;
+    meusAgendamentos.innerHTML = "";
 
-                const btnContainer = document.createElement("div");
-                btnContainer.className = "flex gap-2 mt-4 flex-wrap";
+    filtrados.forEach(a => {
+        const div = document.createElement("div");
+        div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
+        
+        div.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex items-center gap-2">
+                    <i data-feather="clock" class="w-4 h-4 text-gray-300"></i>
+                    <span class="font-medium">${a.horario}</span>
+                </div>
+                <span class="text-sm px-2 py-1 rounded-full ${a.status === 'confirmado' ? 'bg-green-900/30 text-green-300' : a.status === 'pendente' ? 'bg-yellow-900/30 text-yellow-300' : 'bg-red-900/30 text-red-300'}">
+                    ${a.status}
+                </span>
+            </div>
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                    <i data-feather="user" class="w-4 h-4 text-gray-300"></i>
+                </div>
+                <div>
+                    <h3 class="font-medium">${a.nome}</h3>
+                    <p class="text-sm text-gray-300">${formatData(a.data)}</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="flex items-center gap-2">
+                    <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
+                    <span class="truncate">${a.email}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
+                    <span>${a.telefone}</span>
+                </div>
+            </div>
+        `;
 
-                // Confirmar
-                if (a.status !== "confirmado") {
-                    const btnConfirmar = document.createElement("button");
-                    btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
-                    btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
-                    btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
-                    btnContainer.appendChild(btnConfirmar);
-                }
+        const btnContainer = document.createElement("div");
+        btnContainer.className = "flex gap-2 mt-4 flex-wrap";
 
-                // Cancelar
-                const btnCancelar = document.createElement("button");
-                btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
-                btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
-                btnCancelar.addEventListener("click", () => cancelarAgendamento(a.cliente, a.id));
-                btnContainer.appendChild(btnCancelar);
-
-                // Reagendar
-                const btnReagendar = document.createElement("button");
-                btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
-                btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
-                btnReagendar.addEventListener("click", () => abrirModalReagendar(a));
-                btnContainer.appendChild(btnReagendar);
-
-                div.appendChild(btnContainer);
-                meusAgendamentos.appendChild(div);
-            });
-
-            feather.replace();
+        // Confirmar
+        if (a.status !== "confirmado") {
+            const btnConfirmar = document.createElement("button");
+            btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+            btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+            btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
+            btnContainer.appendChild(btnConfirmar);
         }
+
+        // Cancelar
+        const btnCancelar = document.createElement("button");
+        btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+        btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+        btnCancelar.addEventListener("click", () => cancelarAgendamento(a.cliente, a.id));
+        btnContainer.appendChild(btnCancelar);
+
+        // Reagendar
+        const btnReagendar = document.createElement("button");
+        btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
+        btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+        btnReagendar.addEventListener("click", () => abrirModalReagendar(a));
+        btnContainer.appendChild(btnReagendar);
+
+        div.appendChild(btnContainer);
+        meusAgendamentos.appendChild(div);
+    });
+
+    feather.replace();
+}
+
 
         // ---------------- MODAL REAGENDAR ----------------
         function abrirModalReagendar(agendamento) {
@@ -1368,4 +1370,5 @@ if (token) {
     </script>
 </body>
 </html>
+
 
