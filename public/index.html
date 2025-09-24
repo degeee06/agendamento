@@ -157,26 +157,26 @@
             .dias-tabs-container::-webkit-scrollbar-thumb {
                 background: rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
-
             }
-.dashboard-card {
-    transition: all 0.3s ease;
-}
 
-.dashboard-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
+            .dashboard-card {
+                transition: all 0.3s ease;
+            }
 
-.stat-number {
-    font-size: 1.875rem;
-    font-weight: 700;
-}
+            .dashboard-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
 
-.stat-label {
-    font-size: 0.875rem;
-    color: #D1D5DB;
+            .stat-number {
+                font-size: 1.875rem;
+                font-weight: 700;
+            }
 
+            .stat-label {
+                font-size: 0.875rem;
+                color: #D1D5DB;
+            }
         }
     </style>
 </head>
@@ -235,43 +235,43 @@
             </div>
         </div>
 
-<!-- Dashboard de Estatísticas -->
-<div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
-    <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
-            <div class="text-sm text-gray-300">Hoje</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
-            <div class="text-sm text-gray-300">Esta Semana</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
-            <div class="text-sm text-gray-300">Total</div>
-        </div>
-        <div class="bg-white/10 rounded-xl p-4 text-center">
-            <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
-            <div class="text-sm text-gray-300">Taxa de Confirmação</div>
-        </div>
-    </div>
+        <!-- Dashboard de Estatísticas -->
+        <div id="dashboardSection" style="display:none;" class="glass-card rounded-2xl p-6 mb-6" data-aos="fade-up">
+            <h2 class="text-xl font-semibold mb-4">📊 Dashboard</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-green-400" id="statHoje">0</div>
+                    <div class="text-sm text-gray-300">Hoje</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-blue-400" id="statSemana">0</div>
+                    <div class="text-sm text-gray-300">Esta Semana</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-purple-400" id="statTotal">0</div>
+                    <div class="text-sm text-gray-300">Total</div>
+                </div>
+                <div class="bg-white/10 rounded-xl p-4 text-center">
+                    <div class="text-2xl font-bold text-yellow-400" id="statTaxa">0%</div>
+                    <div class="text-sm text-gray-300">Taxa de Confirmação</div>
+                </div>
+            </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Gráfico de Status -->
-        <div class="bg-white/10 rounded-xl p-4">
-            <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
-            <div id="chartStatus" class="h-48"></div>
-        </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Gráfico de Status -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="font-medium mb-3">📈 Status dos Agendamentos</h3>
+                    <div id="chartStatus" class="h-48"></div>
+                </div>
 
-        <!-- Top Clientes -->
-        <div class="bg-white/10 rounded-xl p-4">
-            <h3 class="font-medium mb-3">👥 Top Clientes</h3>
-            <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                <!-- Top Clientes -->
+                <div class="bg-white/10 rounded-xl p-4">
+                    <h3 class="font-medium mb-3">👥 Top Clientes</h3>
+                    <div id="topClientes" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
         <!-- Appointment Form (Hidden Initially) -->
         <form id="agendamentoForm" style="display:none;" class="glass-card rounded-2xl p-8 mb-8" data-aos="fade-up">
@@ -467,11 +467,16 @@ if (token) {
     }
 }
 
-
-        function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
+        function formatData(data){ 
+            const [y,m,d] = data.split("-"); 
+            return `${d}/${m}/${y}`; 
+        }
 
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
+            console.log('Inicializando sistema...');
+            console.log('Cliente detectado:', cliente);
+            
             // Configurar máscara de telefone
             if (telefoneInput) {
                 telefoneMask = IMask(telefoneInput, {
@@ -479,23 +484,25 @@ if (token) {
                 });
             }
             
-            // Permitir selecionar a partir de hoje (incluindo hoje)
+            // Permitir selecionar a partir de hoje
             const hoje = new Date();
-            const ontem = new Date(hoje);
-            ontem.setDate(ontem.getDate() - 1); // Data de ontem
-            
             if (dataInput) {
-                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
+                dataInput.min = hoje.toISOString().split('T')[0];
             }
             
-            // Verificar se já está logado - RESTAURAR userToken PRIMEIRO
+            // Verificar se já está logado
             const token = localStorage.getItem('userToken');
             if (token) {
-                userToken = token; // ✅ RESTAURA O TOKEN ANTES DE USAR
+                userToken = token;
+                console.log('Usuário já logado, restaurando sessão...');
                 loginSection.style.display = 'none';
                 form.style.display = 'block';
                 logoutBtn.style.display = 'flex';
+                document.getElementById('filtersSection').style.display = 'block';
+                document.getElementById('diasTabs').style.display = 'flex';
                 listarAgendamentos();
+            } else {
+                console.log('Nenhum usuário logado, mostrando tela de login');
             }
         }
 
@@ -538,6 +545,7 @@ if (token) {
 
         // ---------------- RENDER AGENDAMENTOS ----------------
         function renderAgendamentos() {
+            console.log('Renderizando agendamentos...');
             const filtroNome = searchInput.value.toLowerCase();
             const filtroStatus = statusFilter.value;
 
@@ -564,6 +572,8 @@ if (token) {
                     const dateB = new Date(`${b.data}T${b.horario}`);
                     return dateA - dateB;
                 });
+
+            console.log(`Filtrados: ${filtrados.length} de ${agendamentosCache.length} agendamentos`);
 
             if (filtrados.length === 0) {
                 meusAgendamentos.innerHTML = `
@@ -692,7 +702,9 @@ if (token) {
             }
 
             // Preenche valores atuais e define data mínima como hoje
+            const hoje = new Date().toISOString().split('T')[0];
             modal.querySelector("#novaData").value = agendamento.data;
+            modal.querySelector("#novaData").min = hoje;
             modal.querySelector("#novoHorario").value = agendamento.horario;
 
             // Remove qualquer evento antigo para evitar duplicação
@@ -709,7 +721,6 @@ if (token) {
                     return;
                 }
 
-
                 reagendarAgendamento(agendamento.cliente, agendamento.id, novaData, novoHorario);
                 modal.classList.add("hidden");
             });
@@ -722,31 +733,53 @@ if (token) {
         async function listarAgendamentos(){
             if(!userToken) {
                 console.error("Token não disponível");
+                showToast("Faça login para ver os agendamentos", "warning");
                 return;
             }
             
             try{
-                const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: { "Authorization": `Bearer ${userToken}` }
+                console.log(`Buscando agendamentos para cliente: ${cliente}`);
+                
+                // CORREÇÃO: Usar endpoint correto do backend
+                const res = await fetch(`/api/agendamentos/${cliente}`, {
+                    headers: { 
+                        "Authorization": `Bearer ${userToken}`,
+                        "Content-Type": "application/json"
+                    }
                 });
                 
+                console.log('Resposta do servidor:', res.status, res.statusText);
+                
                 if (res.status === 401) {
-                    // Token expirado ou inválido
                     showToast("Sessão expirada. Faça login novamente.", "error");
-                    logoutBtn.click(); // Força logout
+                    logoutBtn.click();
                     return;
                 }
                 
-                const { agendamentos } = await res.json();
-                agendamentosCache = agendamentos;
+                if (!res.ok) {
+                    throw new Error(`Erro HTTP: ${res.status}`);
+                }
+                
+                const data = await res.json();
+                console.log('Dados recebidos:', data);
+                
+                agendamentosCache = data.agendamentos || data || [];
                 meusAgendamentos.style.display = 'block';
                 document.getElementById('filtersSection').style.display = 'block';
                 document.getElementById('diasTabs').style.display = 'flex';
+                
                 initTabsDias();
-                renderAgendamentos(); 
+                renderAgendamentos();
+                carregarDashboard();
+                
             } catch(e){
                 console.error("Erro ao listar agendamentos:", e);
-                showToast("Erro ao listar agendamentos","error");
+                showToast("Erro ao carregar agendamentos","error");
+                
+                // Fallback: mostrar seção vazia
+                meusAgendamentos.style.display = 'block';
+                document.getElementById('filtersSection').style.display = 'block';
+                document.getElementById('diasTabs').style.display = 'flex';
             }
         }
 
@@ -754,6 +787,7 @@ if (token) {
         loginBtn.addEventListener('click', async () => {
             const email = document.getElementById('email').value;
             const senha = document.getElementById('senha').value;
+            
             if(!email || !senha) {
                 showToast("Preencha email e senha", "warning");
                 return;
@@ -764,8 +798,14 @@ if (token) {
                 loginSpinner.classList.remove('hidden');
                 loginBtn.disabled = true;
                 
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+                console.log('Tentando login...');
+                const { data, error } = await supabase.auth.signInWithPassword({ 
+                    email, 
+                    password: senha 
+                });
+                
                 if(error){ 
+                    console.error('Erro no login:', error);
                     showToast(error.message,"error"); 
                     loginText.classList.remove('hidden');
                     loginSpinner.classList.add('hidden');
@@ -774,35 +814,25 @@ if (token) {
                 }
 
                 userToken = data.session.access_token;
+                console.log('Login realizado com sucesso');
 
-                // ✅ Salvar também o email junto com o token
+                // Salvar token
                 localStorage.setItem('userToken', userToken);
                 localStorage.setItem('userEmail', email);
 
                 loginSection.style.display = 'none';
                 form.style.display = 'block';
                 logoutBtn.style.display = 'flex';
+                document.getElementById('filtersSection').style.display = 'block';
+                document.getElementById('diasTabs').style.display = 'flex';
 
-                listarAgendamentos().then(() => {
-    let hoje = new Date().getDay();
-    if (hoje === 0) hoje = 1;
-    document.querySelector(`.tab-dia[data-dia="${hoje}"]`)?.click() ||
-    document.querySelector(`.tab-dia[data-dia="1"]`)?.click();
-
-    // Adiciona pequeno delay para garantir que os agendamentos foram carregados
-    setTimeout(() => {
-        carregarDashboard();
-    }, 500);
-});
+                await listarAgendamentos();
                 showToast("Login realizado com sucesso!", "success");
 
-                loginText.classList.remove('hidden');
-                loginSpinner.classList.add('hidden');
-                loginBtn.disabled = false;
-
             } catch(e) {
-                console.error(e);
+                console.error('Erro no login:', e);
                 showToast("Erro ao fazer login", "error");
+            } finally {
                 loginText.classList.remove('hidden');
                 loginSpinner.classList.add('hidden');
                 loginBtn.disabled = false;
@@ -815,7 +845,7 @@ if (token) {
                 await supabase.auth.signOut();
                 localStorage.removeItem('userToken');
                 localStorage.removeItem('userEmail');
-                userToken = null; // ✅ LIMPA A VARIÁVEL GLOBAL TAMBÉM
+                userToken = null;
 
                 form.style.display = 'none';
                 loginSection.style.display = 'block';
@@ -823,6 +853,7 @@ if (token) {
                 meusAgendamentos.style.display = 'none';
                 document.getElementById('filtersSection').style.display = 'none';
                 document.getElementById('diasTabs').style.display = 'none';
+                document.getElementById('dashboardSection').style.display = 'none';
 
                 showToast("Logout realizado com sucesso!", "success");
             } catch (e) {
@@ -831,131 +862,7 @@ if (token) {
             }
         });
 
-        // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
-        function formatTimeRemaining(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-        }
-
-        function startPaymentTimer(expiresAt) {
-            // Limpar qualquer intervalo existente
-            if (paymentCheckInterval) {
-                clearInterval(paymentCheckInterval);
-            }
-            
-            const countdownElement = document.getElementById('countdownTimer');
-            
-            // Atualizar o contador a cada segundo
-            paymentCheckInterval = setInterval(async () => {
-                const now = new Date();
-                const expires = new Date(expiresAt);
-                const timeRemaining = Math.floor((expires - now) / 1000);
-                
-                if (timeRemaining <= 0) {
-                    clearInterval(paymentCheckInterval);
-                    countdownElement.innerHTML = 'Tempo esgotado!';
-                    countdownElement.classList.add('countdown-warning');
-                    
-                    // Limpar a área de pagamento
-                    const pixDiv = document.getElementById("pixArea");
-                    if (pixDiv) {
-                        pixDiv.innerHTML = `
-                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
-                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
-                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
-                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                    Tentar novamente
-                                </button>
-                            </div>
-                        `;
-                        
-                        feather.replace();
-                        
-                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-                            form.dispatchEvent(new Event('submit'));
-                        });
-                    }
-                    
-                    return;
-                }
-                
-                // Atualizar o contador
-                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
-                
-                // Adicionar efeito de aviso quando faltar menos de 1 minuto
-                if (timeRemaining < 60) {
-                    countdownElement.classList.add('countdown-warning');
-                } else {
-                    countdownElement.classList.remove('countdown-warning');
-                }
-            }, 1000);
-        }
-
-        async function checkPaymentStatus(paymentId) {
-            try {
-                const statusResponse = await fetch(`/check-payment/${paymentId}`);
-                if (!statusResponse.ok) {
-                    throw new Error('Erro ao verificar pagamento');
-                }
-                
-                const statusData = await statusResponse.json();
-                
-                if (statusData.status === 'approved') {
-                    // Pagamento aprovado, parar de verificar
-                    clearInterval(paymentCheckInterval);
-                    
-                    // Enviar agendamento
-                    const formData = new FormData(form);
-                    const dataToSend = {};
-                    formData.forEach((v,k) => dataToSend[k] = v);
-                    
-                    const agendamentoResponse = await fetch(`/agendar/${cliente}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            "Authorization": `Bearer ${userToken}`
-                        },
-                        body: JSON.stringify(dataToSend)
-                    });
-                    
-                    if (agendamentoResponse.ok) {
-                        showToast("Agendamento realizado com sucesso!", "success");
-                        form.reset();
-                        
-                        const pixDiv = document.getElementById("pixArea");
-                        if (pixDiv) {
-                            pixDiv.innerHTML = `
-                                <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                                    <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                                    <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                                </div>
-                            `;
-                            feather.replace();
-                        }
-                        
-                        listarAgendamentos();
-                    } else {
-                        const errorData = await agendamentoResponse.json();
-                        showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
-                    }
-                    
-                    return true;
-                } else if (statusData.status === 'expired') {
-                    // Pagamento expirado
-                    clearInterval(paymentCheckInterval);
-                    showToast("Tempo para pagamento expirado.", "error");
-                    return true;
-                }
-                
-                return false;
-            } catch (err) {
-                console.error("Erro ao verificar pagamento:", err);
-                return false;
-            }
-        }
-
-        // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+        // ---------------- AGENDAR ----------------
         form.addEventListener('submit', async (e)=>{
             e.preventDefault();
             const formData=new FormData(form);
@@ -974,97 +881,33 @@ if (token) {
             form.querySelector('button[type="submit"]').disabled = true;
             
             try {
-    // Primeiro, criar o pagamento PIX - MERCADO PAGO
-    const valorEmReais = 0.01; // 1 centavo
-
-    const pagamentoResponse = await fetch('/create-pix', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
-            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-            email: dataToSend.Email
-        })
-    });
-
-    if (!pagamentoResponse.ok) {
-        const errorData = await pagamentoResponse.json();
-        throw new Error(errorData.error || 'Erro ao criar pagamento');
-    }
-
-    const pagamentoData = await pagamentoResponse.json();
-    currentPaymentId = pagamentoData.payment_id;
-    paymentExpiresAt = pagamentoData.expires_at;
-    
-    // Exibir QR Code e código PIX
-    let pixDiv = document.getElementById("pixArea");
-    if (!pixDiv) {
-        pixDiv = document.createElement("div");
-        pixDiv.id = "pixArea";
-        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-        form.appendChild(pixDiv);
-    }
-
-    pixDiv.innerHTML = `
-        <h3 class="text-center mb-3">Pagamento via PIX</h3>
-        <div class="text-center mb-4">
-            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-        </div>
-                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
-                    <div class="mb-4">
-                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                        <div class="flex items-center gap-2">
-                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
-                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                <i data-feather="copy" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
-                    <div class="text-center">
-                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
-                            Já efetuei o pagamento
-                        </button>
-                    </div>
-                `;
+                console.log('Enviando agendamento...', dataToSend);
                 
-                feather.replace();
-                
-                // Iniciar contador de tempo
-                startPaymentTimer(paymentExpiresAt);
-                
-                // Configurar botão de copiar
-                document.getElementById('copyPixBtn').addEventListener('click', () => {
-                    const textarea = document.querySelector('#pixArea textarea');
-                    textarea.select();
-                    document.execCommand('copy');
-                    showToast('Código PIX copiado!', 'success');
+                const agendamentoResponse = await fetch(`/api/agendar/${cliente}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        "Authorization": `Bearer ${userToken}`
+                    },
+                    body: JSON.stringify(dataToSend)
                 });
                 
-                // Configurar verificação automática do pagamento a cada 10 segundos
-                const paymentStatusInterval = setInterval(async () => {
-                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                    if (paymentConfirmed) {
-                        clearInterval(paymentStatusInterval);
-                    }
-                }, 10000);
+                console.log('Resposta do agendamento:', agendamentoResponse.status);
                 
-                // Configurar botão de confirmação de pagamento
-                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                    if (!paymentConfirmed) {
-                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
-                    }
-                });
-                
-                pagamentoPendente = true;
+                if (agendamentoResponse.ok) {
+                    const result = await agendamentoResponse.json();
+                    showToast("Agendamento realizado com sucesso!", "success");
+                    form.reset();
+                    listarAgendamentos();
+                } else {
+                    const errorData = await agendamentoResponse.json();
+                    showToast(errorData.message || "Não foi possível agendar, horário ocupado!", "error");
+                }
                 
             } catch(err) { 
-                console.error(err); 
-                showToast("Erro ao processar pagamento","error"); 
+                console.error('Erro no agendamento:', err); 
+                showToast("Erro ao processar agendamento","error"); 
             } finally {
-                // Esconder loading
                 agendarText.classList.remove('hidden');
                 agendarSpinner.classList.add('hidden');
                 form.querySelector('button[type="submit"]').disabled = false;
@@ -1105,9 +948,7 @@ if (token) {
                     btn.classList.add("bg-gradient-to-r", "from-indigo-500", "to-cyan-500", "active");
                     
                     const semanas = parseInt(btn.dataset.semana);
-                    const dataLimite = new Date();
-                    dataLimite.setDate(dataLimite.getDate() + semanas * 7);
-                    diaSelecionado = semanas; // Usar o valor numérico diretamente para semanas
+                    diaSelecionado = semanas;
                     renderAgendamentos();
                 });
             });
@@ -1141,7 +982,6 @@ if (token) {
                 return;
             }
             
-            // Adiciona cabeçalho
             doc.setFontSize(18);
             doc.setTextColor(40);
             doc.text("Agendamentos", 105, 20, null, null, "center");
@@ -1150,21 +990,17 @@ if (token) {
             doc.setTextColor(100);
             doc.text(`Cliente: ${cliente}`, 105, 30, null, null, "center");
             
-            // Adiciona data
             const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
             const today = new Date().toLocaleDateString('pt-BR', options);
             doc.text(`Gerado em: ${today}`, 105, 35, null, null, "center");
             
-            // Adiciona linha
             doc.setDrawColor(200);
             doc.line(20, 40, 190, 40);
             
-            // Configurações da tabela
             doc.setFontSize(10);
             doc.setTextColor(40);
             let y = 50;
             
-            // Cabeçalho da tabela
             doc.setFillColor(230);
             doc.rect(20, y, 170, 10, 'F');
             doc.text("Data", 25, y + 7);
@@ -1173,9 +1009,8 @@ if (token) {
             doc.text("Status", 160, y + 7);
             y += 10;
             
-            // Conteúdo da tabela
             filtrados.forEach(a => {
-                if(y > 270) { // Nova página se necessário
+                if(y > 270) {
                     doc.addPage();
                     y = 20;
                 }
@@ -1184,7 +1019,6 @@ if (token) {
                 doc.text(a.horario, 50, y + 7);
                 doc.text(a.nome, 80, y + 7);
                 
-                // Status com cor
                 if(a.status === 'confirmado') {
                     doc.setTextColor(0, 150, 0);
                 } else if(a.status === 'pendente') {
@@ -1202,20 +1036,19 @@ if (token) {
             showToast("Exportado para PDF com sucesso", "success");
         });
 
-        async function confirmarAgendamento(cliente, id) {
+        async function confirmarAgendamento(clienteId, id) {
             if (!userToken) {
                 showToast("Faça login para confirmar um agendamento.", "warning");
                 return;
             }
 
             try {
-                const res = await fetch(`/agendamentos/${cliente}/confirmar/${id}`, {
+                const res = await fetch(`/api/agendamentos/${clienteId}/confirmar/${id}`, {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${userToken}`,
                         "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ status: "confirmado", confirmado: true })
+                    }
                 });
 
                 const data = await res.json();
@@ -1224,7 +1057,7 @@ if (token) {
                     showToast("Agendamento confirmado com sucesso!", "success");
                     listarAgendamentos();
                 } else {
-                    showToast("Erro ao confirmar: " + (data.msg || data.message), "error");
+                    showToast("Erro ao confirmar: " + (data.message || data.msg), "error");
                 }
 
             } catch (e) {
@@ -1233,15 +1066,14 @@ if (token) {
             }
         }
 
-        // ---------------- CANCELAR AGENDAMENTO ----------------
-        async function cancelarAgendamento(cliente, id) {
+        async function cancelarAgendamento(clienteId, id) {
             if (!userToken) {
                 showToast("Faça login para cancelar um agendamento.", "warning");
                 return;
             }
 
             try {
-                const res = await fetch(`/agendamentos/${cliente}/cancelar/${id}`, {
+                const res = await fetch(`/api/agendamentos/${clienteId}/cancelar/${id}`, {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${userToken}`,
@@ -1254,7 +1086,7 @@ if (token) {
                     showToast("Agendamento cancelado com sucesso!", "success");
                     listarAgendamentos();
                 } else {
-                    showToast("Erro ao cancelar: " + (data.msg || data.message), "error");
+                    showToast("Erro ao cancelar: " + (data.message || data.msg), "error");
                 }
             } catch (e) {
                 console.error(e);
@@ -1262,175 +1094,155 @@ if (token) {
             }
         }
 
-        async function reagendarAgendamento(cliente, id, novaData, novoHorario) {
-    if (!userToken) {
-        showToast("Faça login para reagendar um agendamento.", "warning");
-        return;
-    }
-
-    try {
-        const res = await fetch(`/agendamentos/${cliente}/reagendar/${id}`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${userToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ 
-                novaData, 
-                novoHorario, 
-                status: "pendente", // SEMPRE volta para pendente
-                confirmado: false   // SEMPRE volta para não confirmado
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            showToast("Agendamento reagendado com sucesso!", "success");
-            listarAgendamentos();
-        } else {
-            // Detecta conflito de horário (erro do índice único)
-            if (data.code === "23505") {
-                showToast("Já existe um agendamento nesse horário para este cliente.", "error");
-            } else {
-                showToast("Erro ao reagendar: " + (data.msg || data.message), "error");
+        async function reagendarAgendamento(clienteId, id, novaData, novoHorario) {
+            if (!userToken) {
+                showToast("Faça login para reagendar um agendamento.", "warning");
+                return;
             }
-        }
 
-    } catch (e) {
-        console.error(e);
-        showToast("Erro de conexão ao reagendar.", "error");
-    }
-}
-       // ---------------- DASHBOARD ----------------
-// ---------------- DASHBOARD ----------------
-async function carregarDashboard() {
-    try {
-        console.log('Carregando dashboard...');
-        console.log('Total de agendamentos:', agendamentosCache.length);
-        
-        // Verifica se os elementos do dashboard existem
-        const dashboardSection = document.getElementById('dashboardSection');
-        if (!dashboardSection) {
-            console.error('Seção do dashboard não encontrada!');
-            return;
-        }
-        
-        // Mostra a seção do dashboard
-        dashboardSection.style.display = 'block';
-        
-        const hoje = new Date().toISOString().split('T')[0];
-        
-        // Corrige cálculo da semana (segunda-feira como início)
-        const hojeObj = new Date();
-        const diaSemana = hojeObj.getDay(); // 0 = domingo, 1 = segunda, etc.
-        
-        // Calcula a data de início da semana (segunda-feira)
-        const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-        const semanaInicio = new Date(hojeObj);
-        semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
-        const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
-        
-        console.log('Hoje:', hoje, 'Início da semana:', semanaInicioStr);
-        
-        // Estatísticas básicas
-        const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
-        const semanaCount = agendamentosCache.filter(a => {
-            const agendamentoDate = new Date(a.data);
-            return agendamentoDate >= new Date(semanaInicioStr) && a.data <= hoje;
-        }).length;
-        
-        const totalCount = agendamentosCache.length;
-        const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
-        const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
-        
-        // Atualiza os elementos se existirem
-        if (document.getElementById('statHoje')) {
-            document.getElementById('statHoje').textContent = hojeCount;
-        }
-        if (document.getElementById('statSemana')) {
-            document.getElementById('statSemana').textContent = semanaCount;
-        }
-        if (document.getElementById('statTotal')) {
-            document.getElementById('statTotal').textContent = totalCount;
-        }
-        if (document.getElementById('statTaxa')) {
-            document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
-        }
-        
-        console.log('Estatísticas:', {hojeCount, semanaCount, totalCount, taxaConfirmacao});
-        
-        // Gráfico de status (implementação simples)
-        const statusCount = {
-            pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
-            confirmado: confirmadosCount,
-            cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
-        };
-        
-        const chartStatus = document.getElementById('chartStatus');
-        if (chartStatus) {
-            chartStatus.innerHTML = `
-                <div class="h-full flex flex-col justify-center">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Pendente: ${statusCount.pendente}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
-                        <div class="w-24 bg-gray-600 rounded-full h-2">
-                            <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Top clientes
-        const clientesCount = {};
-        agendamentosCache.forEach(a => {
-            if (!clientesCount[a.nome]) {
-                clientesCount[a.nome] = 0;
-            }
-            clientesCount[a.nome]++;
-        });
-        
-        const topClientes = Object.entries(clientesCount)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5);
-        
-        const topClientesDiv = document.getElementById('topClientes');
-        if (topClientesDiv) {
-            topClientesDiv.innerHTML = '';
-            
-            if (topClientes.length === 0) {
-                topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
-            } else {
-                topClientes.forEach(([nome, count]) => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
-                    div.innerHTML = `
-                        <span class="text-sm truncate">${nome}</span>
-                        <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
-                    `;
-                    topClientesDiv.appendChild(div);
+            try {
+                const res = await fetch(`/api/agendamentos/${clienteId}/reagendar/${id}`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${userToken}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ 
+                        novaData, 
+                        novoHorario
+                    })
                 });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast("Agendamento reagendado com sucesso!", "success");
+                    listarAgendamentos();
+                } else {
+                    if (data.code === "23505") {
+                        showToast("Já existe um agendamento nesse horário.", "error");
+                    } else {
+                        showToast("Erro ao reagendar: " + (data.message || data.msg), "error");
+                    }
+                }
+
+            } catch (e) {
+                console.error(e);
+                showToast("Erro de conexão ao reagendar.", "error");
             }
         }
-        
-        console.log('Dashboard carregado com sucesso!');
-        
-    } catch (e) {
-        console.error('Erro ao carregar dashboard:', e);
-    }
-}
+
+        // ---------------- DASHBOARD ----------------
+        async function carregarDashboard() {
+            try {
+                console.log('Carregando dashboard...');
+                
+                const dashboardSection = document.getElementById('dashboardSection');
+                if (!dashboardSection || agendamentosCache.length === 0) {
+                    if (dashboardSection) dashboardSection.style.display = 'none';
+                    return;
+                }
+                
+                dashboardSection.style.display = 'block';
+                
+                const hoje = new Date().toISOString().split('T')[0];
+                const hojeObj = new Date();
+                const diaSemana = hojeObj.getDay();
+                
+                const diffSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+                const semanaInicio = new Date(hojeObj);
+                semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
+                const semanaInicioStr = semanaInicio.toISOString().split('T')[0];
+                
+                const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
+                const semanaCount = agendamentosCache.filter(a => {
+                    return a.data >= semanaInicioStr && a.data <= hoje;
+                }).length;
+                
+                const totalCount = agendamentosCache.length;
+                const confirmadosCount = agendamentosCache.filter(a => a.status === 'confirmado').length;
+                const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
+                
+                if (document.getElementById('statHoje')) {
+                    document.getElementById('statHoje').textContent = hojeCount;
+                }
+                if (document.getElementById('statSemana')) {
+                    document.getElementById('statSemana').textContent = semanaCount;
+                }
+                if (document.getElementById('statTotal')) {
+                    document.getElementById('statTotal').textContent = totalCount;
+                }
+                if (document.getElementById('statTaxa')) {
+                    document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
+                }
+                
+                const statusCount = {
+                    pendente: agendamentosCache.filter(a => a.status === 'pendente').length,
+                    confirmado: confirmadosCount,
+                    cancelado: agendamentosCache.filter(a => a.status === 'cancelado').length
+                };
+                
+                const chartStatus = document.getElementById('chartStatus');
+                if (chartStatus) {
+                    chartStatus.innerHTML = `
+                        <div class="h-full flex flex-col justify-center">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm">Pendente: ${statusCount.pendente}</span>
+                                <div class="w-24 bg-gray-600 rounded-full h-2">
+                                    <div class="bg-yellow-400 h-2 rounded-full" style="width: ${(statusCount.pendente/totalCount)*100 || 0}%"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm">Confirmado: ${statusCount.confirmado}</span>
+                                <div class="w-24 bg-gray-600 rounded-full h-2">
+                                    <div class="bg-green-400 h-2 rounded-full" style="width: ${(statusCount.confirmado/totalCount)*100 || 0}%"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm">Cancelado: ${statusCount.cancelado}</span>
+                                <div class="w-24 bg-gray-600 rounded-full h-2">
+                                    <div class="bg-red-400 h-2 rounded-full" style="width: ${(statusCount.cancelado/totalCount)*100 || 0}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                const clientesCount = {};
+                agendamentosCache.forEach(a => {
+                    if (!clientesCount[a.nome]) {
+                        clientesCount[a.nome] = 0;
+                    }
+                    clientesCount[a.nome]++;
+                });
+                
+                const topClientes = Object.entries(clientesCount)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+                
+                const topClientesDiv = document.getElementById('topClientes');
+                if (topClientesDiv) {
+                    topClientesDiv.innerHTML = '';
+                    
+                    if (topClientes.length === 0) {
+                        topClientesDiv.innerHTML = '<p class="text-gray-400 text-sm">Nenhum cliente encontrado</p>';
+                    } else {
+                        topClientes.forEach(([nome, count]) => {
+                            const div = document.createElement('div');
+                            div.className = 'flex justify-between items-center py-2 border-b border-white/10 last:border-b-0';
+                            div.innerHTML = `
+                                <span class="text-sm truncate">${nome}</span>
+                                <span class="bg-white/10 px-2 py-1 rounded text-xs">${count}</span>
+                            `;
+                            topClientesDiv.appendChild(div);
+                        });
+                    }
+                }
+                
+            } catch (e) {
+                console.error('Erro ao carregar dashboard:', e);
+            }
+        }
 
         // ---------------- INIT ----------------
         AOS.init({
@@ -1443,4 +1255,3 @@ async function carregarDashboard() {
     </script>
 </body>
 </html>
-
