@@ -838,28 +838,41 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
-  // Verifica se Mercado Pago está configurado
-  if (!payment) {
-    return res.status(500).json({ error: "Mercado Pago não configurado" });
-  }
-
-  const { amount, description, email } = req.body;
-  if (!amount || !email) return res.status(400).json({ error: "Faltando dados" });
-
   try {
-    // ⏰ Calcula data de expiração (15 minutos)
-    const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    
-   const result = await payment.create({
-  body: {
-    transaction_amount: Number(amount),
-    description: description || "Pagamento de Agendamento",
-    payment_method_id: "pix",
-    payer: { email }
-  },
+    const { amount, description, email } = req.body;
+
+    if (!amount || !email) {
+      return res.status(400).json({ error: "Dados inválidos" });
+    }
+
+    const result = await mercadopago.payment.create({
+      body: {
+        transaction_amount: Number(amount),
+        description: description || "Pagamento de Agendamento",
+        payment_method_id: "pix",
+        payer: {
+          email: email,
+        },
+      },
+    });
+
+    const payment = result.response;
+
+    // Retorna QR Code base64 + chave copia e cola
+    res.json({
+      payment_id: payment.id,
+      qr_code: payment.point_of_interaction.transaction_data.qr_code,
+      qr_code_base64: payment.point_of_interaction.transaction_data.qr_code_base64,
+      status: payment.status,
+      expires_at: payment.date_of_expiration, // MP gera sozinho
+    });
+  } catch (err) {
+    console.error("Erro ao criar pagamento PIX:", err);
+    res.status(500).json({ error: "Erro ao criar pagamento PIX" });
+  }
 });
+
 
 
     console.log("💰 Pagamento criado no Mercado Pago:", result.id, result.status, "Expira:", dateOfExpiration);
@@ -1353,6 +1366,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
