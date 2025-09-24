@@ -1016,7 +1016,7 @@ function renderAgendamentos() {
             modal.classList.remove("hidden");
         }
 
-        // ---------------- LISTAR AGENDAMENTOS ----------------
+       // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
             if(!userToken) {
                 console.error("Token não disponível");
@@ -1029,8 +1029,9 @@ function renderAgendamentos() {
                 });
                 
                 if (res.status === 401) {
+                    // Token expirado ou inválido
                     showToast("Sessão expirada. Faça login novamente.", "error");
-                    logoutBtn.click();
+                    logoutBtn.click(); // Força logout
                     return;
                 }
                 
@@ -1040,8 +1041,7 @@ function renderAgendamentos() {
                 document.getElementById('filtersSection').style.display = 'block';
                 document.getElementById('diasTabs').style.display = 'flex';
                 initTabsDias();
-                renderAgendamentos();
-                carregarDashboard();
+                renderAgendamentos(); 
             } catch(e){
                 console.error("Erro ao listar agendamentos:", e);
                 showToast("Erro ao listar agendamentos","error");
@@ -1370,5 +1370,6 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
