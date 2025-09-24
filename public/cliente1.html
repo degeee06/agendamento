@@ -401,15 +401,20 @@
     // Primeiro, criar o pagamento PIX - MERCADO PAGO
     const valorEmReais = 0.01; // 1 centavo
 
-    const pagamentoResponse = await fetch('/create-pix', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            amount: valorEmReais, // Valor EM REAIS para Mercado Pago
-            description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-            email: dataToSend.Email
-        })
-    });
+   const pagamentoResponse = await fetch('/create-pix', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+        email: dataToSend.Email,
+        nome: dataToSend.Nome,
+        telefone: dataToSend.Telefone,
+        data: dataToSend.Data,
+        horario: dataToSend.Horario,
+        cliente: cliente // já definido no path
+    })
+});
 
     if (!pagamentoResponse.ok) {
         const errorData = await pagamentoResponse.json();
