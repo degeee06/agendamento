@@ -559,14 +559,13 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .order("horario", { ascending: true });
 
     if (error) throw error;
-
-    // envia apenas o array
-    res.json(data || []);
+    res.json(data || []); // retorna direto como array
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 
 
@@ -1057,6 +1056,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
