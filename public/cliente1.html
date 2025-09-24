@@ -287,12 +287,15 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
     
-    <script type="module">
+<script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// GUARDE o token no localStorage
+localStorage.setItem("supabase_token", SUPABASE_ANON_KEY);
 
 // elementos do DOM
 const form = document.getElementById('agendamentoForm');
@@ -307,9 +310,9 @@ let telefoneMask = null;
 let currentPaymentId = null;
 let paymentExpiresAt = null;
 let paymentCheckInterval = null;
-let lastDataToSend = null; // guarda os dados do último submit (para criar agendamento após pagamento)
+let lastDataToSend = null;
 
-// extrair cliente da URL (fallback)
+// extrair cliente da URL
 const pathParts = window.location.pathname.split('/').filter(p => p.trim() !== '');
 const cliente = pathParts[0] || 'cliente1';
 
@@ -324,7 +327,6 @@ function showToast(message, type = "success") {
     };
     const container = document.getElementById("toast-container") || (function(){ const c=document.createElement('div'); c.id='toast-container'; document.body.appendChild(c); return c; })();
 
-    // remover excedentes
     if (activeToasts.length >= 3) {
         const t = activeToasts.shift();
         if (t && t.parentNode) t.parentNode.removeChild(t);
@@ -361,7 +363,6 @@ async function carregarConfiguracoesCliente() {
             return null;
         }
 
-        // Normalizar tipos (dias_semana como números)
         if (data && data.dias_semana) {
             data.dias_semana = data.dias_semana.map(Number);
         }
@@ -391,23 +392,20 @@ async function initDatepicker() {
         disable: [
             ...datasBloqueadas,
             function(date) {
-                // day: 0=domingo ... 6=sabado
                 return !diasPermitidos.includes(date.getDay());
             }
         ]
-        // onChange: o listener de change já está configurado em init()
     });
 }
 
 // ---------------- VALIDAÇÃO ----------------
 function validarDataSelecionada(dataStr, config) {
     if (!dataStr || !config) return false;
-    const formatted = dataStr; // flatpickr retorna "YYYY-MM-DD"
-    if (Array.isArray(config.datas_bloqueadas) && config.datas_bloqueadas.includes(formatted)) {
+    if (Array.isArray(config.datas_bloqueadas) && config.datas_bloqueadas.includes(dataStr)) {
         showToast('Esta data está bloqueada', 'error');
         return false;
     }
-    const dia = new Date(formatted).getDay();
+    const dia = new Date(dataStr).getDay();
     if (!Array.isArray(config.dias_semana) || !config.dias_semana.map(Number).includes(dia)) {
         showToast('Dia da semana não permitido', 'error');
         return false;
@@ -419,10 +417,13 @@ function validarDataSelecionada(dataStr, config) {
 async function carregarHorariosDisponiveis(dataStr, config) {
     if (!dataStr) { showToast('Selecione uma data primeiro', 'warning'); horarioInput.value=''; return; }
     try {
-        const res = await fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`);
+        const res = await fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`, {
+            headers: {
+                "Authorization": `Bearer ${localStorage.getItem("supabase_token")}`
+            }
+        });
         if (!res.ok) throw new Error('Erro ao consultar agendamentos');
         const parsed = await res.json();
-        // backend pode retornar { agendamentos: [...] } ou só um array
         const agendamentos = parsed.agendamentos || parsed || [];
         const horariosLivres = (config.horarios_disponiveis || []).filter(h => !agendamentos.some(a => a.horario === h));
         atualizarCampoHorario(horariosLivres);
@@ -477,18 +478,22 @@ function startPaymentTimer(expiresAt) {
 
 async function checkPaymentStatus(paymentId) {
     try {
-        const res = await fetch(`/check-payment/${paymentId}`);
+        const res = await fetch(`/check-payment/${paymentId}`, {
+            headers: { "Authorization": `Bearer ${localStorage.getItem("supabase_token")}` }
+        });
         if (!res.ok) throw new Error('Erro ao verificar pagamento');
         const statusData = await res.json();
 
         if (statusData.status === 'approved') {
-            // criar agendamento com os dados salvos (se houver)
             clearInterval(paymentCheckInterval);
             if (lastDataToSend) {
                 try {
                     const r = await fetch(`/agendar/${cliente}`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem("supabase_token")}`
+                        },
                         body: JSON.stringify(lastDataToSend)
                     });
                     if (r.ok) {
@@ -521,30 +526,28 @@ async function checkPaymentStatus(paymentId) {
     }
 }
 
-// ---------------- SUBMIT (validações antes de criar PIX) ----------------
+// ---------------- SUBMIT ----------------
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
     const dataToSend = {};
     formData.forEach((v,k) => dataToSend[k] = v);
 
-    // campos obrigatórios
     if (!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
         showToast('Preencha todos os campos', 'warning');
         return;
     }
 
-    // carregar config
     const config = await carregarConfiguracoesCliente();
     if (!config) { showToast('Erro ao carregar configuração', 'error'); return; }
 
-    // validar data e horário
     if (!validarDataSelecionada(dataToSend.Data, config)) return;
     if (!(config.horarios_disponiveis || []).includes(dataToSend.Horario)) { showToast('Horário não disponível', 'error'); return; }
 
-    // verificar agendamentos do dia
     try {
-        const res = await fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataToSend.Data)}`);
+        const res = await fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataToSend.Data)}`, {
+            headers: { "Authorization": `Bearer ${localStorage.getItem("supabase_token")}` }
+        });
         if (!res.ok) throw new Error('Erro ao consultar agendamentos');
         const parsed = await res.json();
         const agendamentos = parsed.agendamentos || parsed || [];
@@ -556,20 +559,21 @@ form.addEventListener('submit', async (e) => {
         return;
     }
 
-    // pronto para criar PIX
-    lastDataToSend = dataToSend; // guardar para criar agendamento após pagamento
+    lastDataToSend = dataToSend;
     agendarText.classList.add('hidden');
     agendarSpinner.classList.remove('hidden');
     form.querySelector('button[type="submit"]').disabled = true;
 
     try {
-        // limpar possível intervalo anterior
         if (paymentCheckInterval) { clearInterval(paymentCheckInterval); paymentCheckInterval = null; }
 
-        const valorEmReais = 0.01; // ajuste
+        const valorEmReais = 0.01;
         const pagamentoResponse = await fetch('/create-pix', {
             method: 'POST',
-            headers: {'Content-Type':'application/json'},
+            headers: {
+                'Content-Type':'application/json',
+                'Authorization': `Bearer ${localStorage.getItem("supabase_token")}`
+            },
             body: JSON.stringify({
                 amount: valorEmReais,
                 description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
@@ -586,7 +590,6 @@ form.addEventListener('submit', async (e) => {
         currentPaymentId = pagamentoData.payment_id;
         paymentExpiresAt = pagamentoData.expires_at;
 
-        // render PIX area
         pixArea.innerHTML = `
             <h3 class="text-center mb-3">Pagamento via PIX</h3>
             <div class="text-center mb-4">
@@ -607,7 +610,6 @@ form.addEventListener('submit', async (e) => {
         feather.replace();
         startPaymentTimer(paymentExpiresAt);
 
-        // handlers (usar onclick para evitar múltiplos listeners duplicados)
         const copyBtn = document.getElementById('copyPixBtn');
         if (copyBtn) copyBtn.onclick = () => {
             const t = pixArea.querySelector('textarea');
@@ -620,7 +622,6 @@ form.addEventListener('submit', async (e) => {
             if (!confirmed) showToast('Pagamento ainda não confirmado. Aguarde.', 'warning');
         };
 
-        // verificar automaticamente a cada 10s
         const polling = setInterval(async () => {
             const done = await checkPaymentStatus(currentPaymentId);
             if (done) clearInterval(polling);
@@ -639,11 +640,8 @@ form.addEventListener('submit', async (e) => {
 // ---------------- INIT ----------------
 async function init() {
     if (telefoneInput) telefoneMask = IMask(telefoneInput, { mask: '(00) 00000-0000' });
-
-    // inicializar datepicker — carrega config internamente
     await initDatepicker();
 
-    // listeners (por segurança só adicionamos se inputs existirem)
     if (dataInput) {
         dataInput.addEventListener('change', async () => {
             const cfg = await carregarConfiguracoesCliente();
@@ -662,15 +660,7 @@ async function init() {
     }
 }
 
-
-        // ---------------- INIT ----------------
-        AOS.init({
-            duration: 800,
-            easing: 'ease-out-quart',
-            once: true
-        });
-        feather.replace();
-        init();
-    </script>
-</body>
-</html>
+AOS.init({ duration: 800, easing: 'ease-out-quart', once: true });
+feather.replace();
+init();
+</script>
