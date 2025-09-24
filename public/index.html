@@ -1369,7 +1369,7 @@ if (token) {
             }
         }
 
-       // ---------------- DASHBOARD ----------------
+
 // ---------------- DASHBOARD ----------------
 async function carregarDashboard() {
     try {
@@ -1379,10 +1379,11 @@ async function carregarDashboard() {
         dashboardSection.style.display = 'block';
 
         // Busca os agendamentos do backend
-      const res = await fetch(`/agendamentos/${clienteId}`);
+        const res = await fetch(`/agendamentos/${clienteId}`);
         if (!res.ok) throw new Error('Erro ao carregar agendamentos');
-        const agendamentosCache = await res.json(); // agora é um array diretamente
 
+        const agendamentosCache = await res.json();
+        if (!Array.isArray(agendamentosCache)) throw new Error('Dados de agendamentos inválidos');
 
         // Normaliza status
         agendamentosCache.forEach(a => {
@@ -1396,6 +1397,7 @@ async function carregarDashboard() {
         const semanaInicio = new Date(hojeObj);
         semanaInicio.setDate(hojeObj.getDate() - diffSegunda);
 
+        // Contadores
         const hojeCount = agendamentosCache.filter(a => a.data === hoje).length;
         const semanaCount = agendamentosCache.filter(a => new Date(a.data) >= semanaInicio && new Date(a.data) <= hojeObj).length;
         const totalCount = agendamentosCache.length;
@@ -1403,10 +1405,11 @@ async function carregarDashboard() {
         const taxaConfirmacao = totalCount > 0 ? Math.round((confirmadosCount / totalCount) * 100) : 0;
 
         // Atualiza contadores
-        if (document.getElementById('statHoje')) document.getElementById('statHoje').textContent = hojeCount;
-        if (document.getElementById('statSemana')) document.getElementById('statSemana').textContent = semanaCount;
-        if (document.getElementById('statTotal')) document.getElementById('statTotal').textContent = totalCount;
-        if (document.getElementById('statTaxa')) document.getElementById('statTaxa').textContent = `${taxaConfirmacao}%`;
+        const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+        setText('statHoje', hojeCount);
+        setText('statSemana', semanaCount);
+        setText('statTotal', totalCount);
+        setText('statTaxa', `${taxaConfirmacao}%`);
 
         // Status para gráficos
         const statusCount = {
@@ -1514,6 +1517,7 @@ document.querySelectorAll('.dias-semana-btn').forEach(btn => {
     </script>
 </body>
 </html>
+
 
 
 
