@@ -1064,8 +1064,9 @@ if (token) {
                 });
                 
                 if (res.status === 401) {
+                    // Token expirado ou inválido
                     showToast("Sessão expirada. Faça login novamente.", "error");
-                    logoutBtn.click();
+                    logoutBtn.click(); // Força logout
                     return;
                 }
                 
@@ -1075,8 +1076,7 @@ if (token) {
                 document.getElementById('filtersSection').style.display = 'block';
                 document.getElementById('diasTabs').style.display = 'flex';
                 initTabsDias();
-                renderAgendamentos();
-                carregarDashboard();
+                renderAgendamentos(); 
             } catch(e){
                 console.error("Erro ao listar agendamentos:", e);
                 showToast("Erro ao listar agendamentos","error");
@@ -1406,3 +1406,4 @@ if (token) {
     </script>
 </body>
 </html>
+
