@@ -417,11 +417,7 @@ function validarDataSelecionada(dataStr, config) {
 async function carregarHorariosDisponiveis(dataStr, config) {
     if (!dataStr) { showToast('Selecione uma data primeiro', 'warning'); horarioInput.value=''; return; }
     try {
-        const res = await fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`, {
-            headers: {
-                "Authorization": `Bearer ${localStorage.getItem("supabase_token")}`
-            }
-        });
+        fetch(`/agendamentos/${cliente}?data=${encodeURIComponent(dataStr)}`);
         if (!res.ok) throw new Error('Erro ao consultar agendamentos');
         const parsed = await res.json();
         const agendamentos = parsed.agendamentos || parsed || [];
