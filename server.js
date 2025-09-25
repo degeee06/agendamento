@@ -117,12 +117,19 @@ async function authMiddleware(req, res, next) {
     req.user = data.user;
     req.clienteId = data.user.user_metadata?.cliente_id;
     
-    // Se o usuário tiver a flag admin, marca isAdmin
-    req.isAdmin = data.user.user_metadata?.role === "admin" || false;
+    // CORREÇÃO: Verificar isAdmin corretamente
+    req.isAdmin = data.user.user_metadata?.isAdmin === true || 
+                 data.user.user_metadata?.role === "admin" || 
+                 false;
 
-    // Apenas usuários comuns precisam de cliente_id
+    console.log('🔐 Middleware - User:', data.user.email);
+    console.log('🔐 Middleware - clienteId:', req.clienteId);
+    console.log('🔐 Middleware - isAdmin:', req.isAdmin);
+    console.log('🔐 Middleware - Metadata:', data.user.user_metadata);
+
+    // Apenas usuários comuns precisam de cliente_id (admin pode não ter)
     if (!req.clienteId && !req.isAdmin) {
-      return res.status(403).json({ msg: "Usuário sem cliente_id" });
+      return res.status(403).json({ msg: "Usuário sem cliente_id e não é admin" });
     }
 
     next();
@@ -131,7 +138,6 @@ async function authMiddleware(req, res, next) {
     res.status(500).json({ msg: "Erro interno no servidor" });
   }
 }
-
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   try {
@@ -552,15 +558,55 @@ app.get("/cliente/:cliente", (req, res) => {
 
 // ---------------- ROTAS EXISTENTES (MANTIDAS) ----------------
 
-app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
+app.get("/agendamentos/:cliente?", authMiddleware, async (req, res) => {
   try {
-    const { cliente } = req.params;
+    let cliente = req.params.cliente;
 
-    // Se não for admin, restringe ao próprio clienteId
-    if (!req.isAdmin && req.clienteId !== cliente) {
-      return res.status(403).json({ msg: "Acesso negado" });
+    console.log('🔍 Parâmetro cliente:', cliente);
+    console.log('👤 Usuário:', req.user);
+    console.log('📊 Metadata:', req.user.user_metadata);
+
+    // Se for admin, cliente pode ser passado ou não
+    if (req.user.user_metadata?.isAdmin) {
+      console.log('✅ Usuário é admin');
+      
+      // Admin: se não passar cliente, retorna TODOS os agendamentos
+      if (!cliente || cliente === 'undefined') {
+        console.log('📦 Buscando TODOS os agendamentos para admin');
+        
+        const { data, error } = await supabase
+          .from("agendamentos")
+          .select("*")
+          .neq("status", "cancelado")
+          .order("data", { ascending: true })
+          .order("horario", { ascending: true });
+
+        if (error) {
+          console.error('❌ Erro Supabase:', error);
+          throw error;
+        }
+        
+        console.log(`✅ Admin: encontrados ${data?.length || 0} agendamentos`);
+        return res.json({ agendamentos: data || [] });
+      } else {
+        console.log(`📦 Buscando agendamentos do cliente específico: ${cliente}`);
+      }
+    } else {
+      // Cliente normal: força a ver apenas o próprio cliente
+      console.log('👤 Usuário é cliente normal');
+      if (!cliente) {
+        cliente = req.user.user_metadata?.cliente_id;
+        console.log(`🔧 Cliente definido do metadata: ${cliente}`);
+      }
+      
+      if (req.user.user_metadata?.cliente_id !== cliente) {
+        console.log('❌ Acesso negado: cliente não corresponde');
+        return res.status(403).json({ msg: "Acesso negado" });
+      }
     }
 
+    console.log(`🔍 Buscando agendamentos para cliente: ${cliente}`);
+    
     const { data, error } = await supabase
       .from("agendamentos")
       .select("*")
@@ -569,11 +615,16 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
-    if (error) throw error;
-
+    if (error) {
+      console.error('❌ Erro Supabase:', error);
+      throw error;
+    }
+    
+    console.log(`✅ Encontrados ${data?.length || 0} agendamentos para ${cliente}`);
     res.json({ agendamentos: data || [] });
+
   } catch (err) {
-    console.error("Erro ao listar agendamentos:", err);
+    console.error("❌ Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
@@ -982,6 +1033,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
