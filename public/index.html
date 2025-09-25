@@ -1014,6 +1014,19 @@ if (token) {
             modal.classList.remove("hidden");
         }
 
+function carregarDashboard() {
+    const container = document.getElementById("meusAgendamentos");
+    container.innerHTML = "";
+
+    agendamentosCache.forEach(a => {
+        const div = document.createElement("div");
+        div.textContent = `${a.nome} - ${formatData(a.data)} ${a.horario} - ${a.status}`;
+        container.appendChild(div);
+    });
+}
+
+
+        
         // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
             if(!userToken) {
@@ -1368,4 +1381,5 @@ if (token) {
     </script>
 </body>
 </html>
+
 
