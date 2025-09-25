@@ -306,14 +306,17 @@
         const dataInput = document.getElementById("Data");
         const horarioInput = document.getElementById("Horario");
         
-       const pathParts = window.location.pathname.split('/');
+      const pathParts = window.location.pathname.split('/');
 let cliente = "cliente1"; // padrão
 
-// tenta pegar cliente da URL (/cliente/cliente1)
-if (pathParts[1] === "cliente" && pathParts[2]) {
+if (pathParts[1] && pathParts[1] !== "cliente") {
+    // URL /cliente1
+    cliente = pathParts[1];
+} else if (pathParts[1] === "cliente" && pathParts[2]) {
+    // URL /cliente/cliente1
     cliente = pathParts[2];
 } else {
-    // se não tiver na URL, tenta extrair do token
+    // tenta extrair do token
     const token = localStorage.getItem("userToken");
     if (token) {
         try {
