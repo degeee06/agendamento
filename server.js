@@ -1008,6 +1008,29 @@ app.get("/health", (req, res) => {
   });
 });
 
+// ========== ROTAS PARA SERVIR ARQUIVOS HTML ==========
+
+// Serve o painel de admin (index.html)
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Serve páginas de cliente dinamicamente
+app.get("/cliente/:cliente", (req, res) => {
+    const cliente = req.params.cliente;
+    res.sendFile(path.join(__dirname, "public", `${cliente}.html`));
+});
+
+// Rota alternativa direta para cliente1.html
+app.get("/cliente1", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "cliente1.html"));
+});
+
+// Catch-all para outras rotas - redireciona para admin
+app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 // ---------------- Servidor ----------------
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
@@ -1023,6 +1046,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
