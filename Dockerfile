@@ -1,22 +1,20 @@
-# 1️⃣ Imagem base (Docker Hub oficial)
-FROM alpine:3.18
+# Use Node 20 com Debian (mais compatível com OpenSSL)
+FROM node:20-bullseye
 
-# 2️⃣ Define diretório de trabalho
+# Diretório de trabalho no container
 WORKDIR /app
 
-# 3️⃣ Copia package.json e package-lock.json
+# Copia package.json e package-lock.json
 COPY package*.json ./
 
-# 4️⃣ Instala dependências
-RUN npm install --production
+# Instala dependências
+RUN npm install
 
-# 5️⃣ Copia o restante do código
+# Copia todo o restante da aplicação
 COPY . .
 
-# 6️⃣ Expõe a porta que o Render vai usar
-EXPOSE 3000
+# Porta que o Render vai expor (use a mesma do seu server.js)
+EXPOSE 10000
 
-# 7️⃣ Comando para rodar a aplicação
+# Comando para iniciar o server
 CMD ["node", "server.js"]
-
-
