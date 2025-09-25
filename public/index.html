@@ -568,38 +568,48 @@ window.formatData = formatData;
             return passaFiltroNome && passaFiltroStatus;
         })
         .filter(a => {
-            if (!a.data || !a.horario) {
-                console.log('❌ Agendamento sem data/horário:', a);
-                return true; // Mostrar mesmo sem data para debug
-            }
+    if (!a.data || !a.horario) {
+        console.log('❌ Agendamento sem data/horário:', a);
+        return false;
+    }
+    
+    try {
+        const dataAgendamento = new Date(`${a.data}T${a.horario}`);
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        
+        if (isNaN(dataAgendamento.getTime())) {
+            console.log('❌ Data inválida:', a.data, a.horario);
+            return false;
+        }
+        
+        // FILTRO POR DIA DA SEMANA CORRIGIDO
+        if (diaSelecionado >= 0 && diaSelecionado <= 6) {
+            // Filtro por dia específico (0-6)
+            const passaFiltroDia = dataAgendamento.getDay() === diaSelecionado;
+            const ehDataFutura = dataAgendamento >= hoje;
+            return passaFiltroDia && ehDataFutura;
+        } else {
+            // Filtro por semanas (-1 = semana passada, 1 = próxima semana, etc)
+            const semanas = diaSelecionado;
+            const dataLimite = new Date();
             
-            try {
-                const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-                const hoje = new Date();
-                
-                if (isNaN(dataAgendamento.getTime())) {
-                    console.log('❌ Data inválida, mas mostrando mesmo assim:', a);
-                    return true; // Mostrar para debug
-                }
-                
-                // ⚠️ REMOVER FILTRO POR DIA TEMPORARIAMENTE - MOSTRAR TODOS
-                console.log('📅 Agendamento:', a.data, a.horario, 'Dia da semana:', dataAgendamento.getDay());
-                return true; // Mostrar TODOS os agendamentos
-                
-            } catch (error) {
-                console.log('❌ Erro ao processar data, mas mostrando:', error, a);
-                return true; // Mostrar para debug
+            if (semanas > 0) {
+                // Próximas semanas (futuro)
+                dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
+                return dataAgendamento >= hoje && dataAgendamento <= dataLimite;
+            } else {
+                // Semanas passadas (passado)
+                dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
+                return dataAgendamento < hoje && dataAgendamento >= dataLimite;
             }
-        })
-        .sort((a, b) => {
-            try {
-                const dateA = new Date(`${a.data}T${a.horario}`);
-                const dateB = new Date(`${b.data}T${b.horario}`);
-                return dateA - dateB;
-            } catch (error) {
-                return 0;
-            }
-        });
+        }
+        
+    } catch (error) {
+        console.log('❌ Erro ao processar data:', error, a);
+        return false;
+    }
+})
     
     console.log('✅ Agendamentos filtrados:', filtrados);
     console.log('📅 Dia selecionado:', diaSelecionado);
@@ -1304,6 +1314,7 @@ window.formatData = formatData;
     </script>
 </body>
 </html>
+
 
 
 
