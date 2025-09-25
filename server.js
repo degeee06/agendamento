@@ -117,16 +117,21 @@ async function authMiddleware(req, res, next) {
     req.user = data.user;
     req.clienteId = data.user.user_metadata?.cliente_id;
     
-    if (!req.clienteId) {
+    // Se o usuário tiver a flag admin, marca isAdmin
+    req.isAdmin = data.user.user_metadata?.role === "admin" || false;
+
+    // Apenas usuários comuns precisam de cliente_id
+    if (!req.clienteId && !req.isAdmin) {
       return res.status(403).json({ msg: "Usuário sem cliente_id" });
     }
-    
+
     next();
   } catch (error) {
     console.error("Erro no middleware de auth:", error);
     res.status(500).json({ msg: "Erro interno no servidor" });
   }
 }
+
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   try {
@@ -550,7 +555,11 @@ app.get("/cliente/:cliente", (req, res) => {
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
+    // Se não for admin, restringe ao próprio clienteId
+    if (!req.isAdmin && req.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Acesso negado" });
+    }
 
     const { data, error } = await supabase
       .from("agendamentos")
@@ -561,12 +570,14 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .order("horario", { ascending: true });
 
     if (error) throw error;
+
     res.json({ agendamentos: data || [] });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
@@ -1076,5 +1087,6 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
