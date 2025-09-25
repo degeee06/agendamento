@@ -1340,13 +1340,178 @@ function renderAgendamentos() {
             }
         }
 
-// ---------------- EVENTOS DOS BOTÕES ----------------
-document.getElementById("salvarConfigBtn")?.addEventListener("click", salvarConfiguracoes);
-document.getElementById("adicionarHorarioBtn")?.addEventListener("click", adicionarHorario);
-document.getElementById("adicionarDataBtn")?.addEventListener("click", adicionarDataBloqueada);
-document.getElementById("salvarConfigDataBtn")?.addEventListener("click", salvarConfiguracaoData);
-document.getElementById("adicionarHorarioEspecificoBtn")?.addEventListener("click", adicionarHorarioEspecifico);
+        // ========== FUNÇÕES GLOBAIS PARA OS BOTÕES ==========
+// Adicione estas funções no final, antes do fechamento da tag </script>
 
+// Funções para Configuração de Horários
+window.toggleDiaSemana = function(dia) {
+    const btn = document.querySelector(`[data-dia="${dia}"]`);
+    btn.classList.toggle('active');
+};
+
+window.salvarConfiguracoes = async function() {
+    // Sua implementação existente aqui
+    try {
+        const diasSemana = Array.from(document.querySelectorAll('.dias-semana-btn.active'))
+            .map(btn => parseInt(btn.dataset.dia));
+        const horarios = Array.from(document.querySelectorAll('#horariosConfig .horario-btn'))
+            .map(btn => btn.textContent.trim().split(' ')[0]);
+        
+        const config = {
+            dias_semana: diasSemana,
+            horarios_disponiveis: horarios,
+            intervalo_minutos: parseInt(document.getElementById('intervaloMinutos').value),
+            max_agendamentos_dia: parseInt(document.getElementById('maxAgendamentos').value),
+            datas_bloqueadas: configHorarios?.datas_bloqueadas || []
+        };
+
+        const response = await fetch(`/admin/config/${cliente}`, {
+            method: 'PUT',
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(config)
+        });
+
+        if (response.ok) {
+            showToast('Configurações salvas com sucesso!', 'success');
+            carregarConfiguracoes();
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        showToast('Erro ao salvar configurações', 'error');
+    }
+};
+
+window.adicionarHorario = function() {
+    const novoHorario = document.getElementById('novoHorario').value;
+    if (!novoHorario) return;
+    
+    const horarioFormatado = novoHorario.substring(0, 5);
+    if (!configHorarios.horarios_disponiveis.includes(horarioFormatado)) {
+        configHorarios.horarios_disponiveis.push(horarioFormatado);
+        configHorarios.horarios_disponiveis.sort();
+        renderizarConfiguracoes();
+        document.getElementById('novoHorario').value = '';
+    }
+};
+
+window.adicionarDataBloqueada = function() {
+    const data = document.getElementById('dataBloqueada').value;
+    if (!data) return;
+    
+    if (!configHorarios.datas_bloqueadas.includes(data)) {
+        configHorarios.datas_bloqueadas.push(data);
+        configHorarios.datas_bloqueadas.sort();
+        renderizarConfiguracoes();
+        document.getElementById('dataBloqueada').value = '';
+    }
+};
+
+// Funções para Configuração de Datas Específicas
+window.salvarConfiguracaoData = async function() {
+    if (!dataSelecionadaCalendario) return;
+    
+    try {
+        const horariosEspecificos = Array.from(document.querySelectorAll('#horariosEspecificos span'))
+            .map(span => span.textContent);
+            
+        const config = {
+            data: dataSelecionadaCalendario,
+            bloqueada: document.getElementById('dataBloqueadaCheck').checked,
+            max_agendamentos: document.getElementById('maxAgendamentosData').value || null,
+            horarios_disponiveis: horariosEspecificos.length > 0 ? horariosEspecificos : null
+        };
+
+        const response = await fetch(`/admin/config/${cliente}/datas`, {
+            method: 'POST',
+            headers: {
+                "Authorization": `Bearer ${userToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(config)
+        });
+
+        if (response.ok) {
+            showToast('Configuração da data salva com sucesso!', 'success');
+            gerarCalendario();
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        showToast('Erro ao salvar configuração da data', 'error');
+    }
+};
+
+window.adicionarHorarioEspecifico = function() {
+    const horario = document.getElementById('novoHorarioEspecifico').value;
+    if (!horario) return;
+    
+    const horarioFormatado = horario.substring(0, 5);
+    const horariosContainer = document.getElementById('horariosEspecificos');
+    
+    const div = document.createElement('div');
+    div.className = 'flex justify-between items-center p-1 bg-white/5 rounded';
+    div.innerHTML = `
+        <span>${horarioFormatado}</span>
+        <button class="text-red-400 hover:text-red-300" onclick="this.parentElement.remove()">
+            <i data-feather="x" class="w-3 h-3"></i>
+        </button>
+    `;
+    horariosContainer.appendChild(div);
+    document.getElementById('novoHorarioEspecifico').value = '';
+    feather.replace();
+};
+
+// ========== EVENT LISTENERS PARA BOTÕES EXISTENTES ==========
+// Adicione isso após o DOM carregar
+document.addEventListener('DOMContentLoaded', function() {
+    // Configuração de Horários
+    const salvarConfigBtn = document.querySelector('button[onclick*="salvarConfiguracoes"]');
+    if (salvarConfigBtn) {
+        salvarConfigBtn.removeAttribute('onclick');
+        salvarConfigBtn.addEventListener('click', salvarConfiguracoes);
+    }
+    
+    const addHorarioBtn = document.querySelector('button[onclick*="adicionarHorario"]');
+    if (addHorarioBtn) {
+        addHorarioBtn.removeAttribute('onclick');
+        addHorarioBtn.addEventListener('click', adicionarHorario);
+    }
+    
+    const addDataBtn = document.querySelector('button[onclick*="adicionarDataBloqueada"]');
+    if (addDataBtn) {
+        addDataBtn.removeAttribute('onclick');
+        addDataBtn.addEventListener('click', adicionarDataBloqueada);
+    }
+    
+    // Dias da semana - adiciona event listeners
+    document.querySelectorAll('.dias-semana-btn').forEach(btn => {
+        const dia = btn.dataset.dia;
+        btn.removeAttribute('onclick');
+        btn.addEventListener('click', () => toggleDiaSemana(dia));
+    });
+});
+
+// ========== FUNÇÕES DE REMOÇÃO (já existentes, mas confirmar) ==========
+window.removerHorario = function(horario) {
+    configHorarios.horarios_disponiveis = configHorarios.horarios_disponiveis.filter(h => h !== horario);
+    renderizarConfiguracoes();
+};
+
+window.removerDataBloqueada = function(data) {
+    configHorarios.datas_bloqueadas = configHorarios.datas_bloqueadas.filter(d => d !== data);
+    renderizarConfiguracoes();
+};
+
+window.removerHorarioEspecifico = function(horario) {
+    const divs = document.querySelectorAll('#horariosEspecificos div');
+    divs.forEach(div => {
+        if (div.querySelector('span').textContent === horario) {
+            div.remove();
+        }
+    });
+};
 
         
         // ---------------- INIT ----------------
@@ -1373,6 +1538,7 @@ document.getElementById("adicionarHorarioEspecificoBtn")?.addEventListener("clic
     </script>
 </body>
 </html>
+
 
 
 
