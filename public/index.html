@@ -285,12 +285,12 @@
         const calendarSection = document.getElementById("calendarSection");
         
         const pathParts = window.location.pathname.split('/');
-        
-        // cliente padrão (enquanto só existe 1)
-let cliente = "cliente1";
 
 // DETECTAR SE É ADMIN PELA URL
 const isAdminPath = !window.location.pathname.includes('/cliente/');
+
+// cliente padrão (enquanto só existe 1)
+let cliente = "cliente1";
 
 // se tiver token no login, tenta extrair o cliente_id
 const token = localStorage.getItem("userToken");
@@ -301,10 +301,11 @@ if (token) {
             cliente = payload.user_metadata.cliente_id;
         }
         
-        // Se é admin pela URL, força cliente como null
+        // Se é admin pela URL, NÃO zera o cliente - mantém para outras funções
+        // Apenas ajustamos o comportamento na função listarAgendamentos()
         if (isAdminPath) {
-            cliente = null;
             console.log('👑 Modo admin detectado pela URL');
+            // cliente mantém o valor, mas a função listarAgendamentos vai tratar diferente
         }
     } catch (e) {
         console.error("Erro ao decodificar token:", e);
@@ -543,6 +544,8 @@ if (token) {
         
        // ---------------- RENDER AGENDAMENTOS ----------------
 function renderAgendamentos() {
+    console.log('🔍 Renderizando agendamentos, cache:', agendamentosCache);
+    
     const filtroNome = searchInput.value.toLowerCase();
     const filtroStatus = statusFilter.value;
     
@@ -558,45 +561,42 @@ function renderAgendamentos() {
             return passaFiltroNome && passaFiltroStatus;
         })
         .filter(a => {
-            if (!a.data || !a.horario) return false;
+            if (!a.data || !a.horario) {
+                console.log('❌ Agendamento sem data/horário:', a);
+                return false;
+            }
             
-            const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0); // Zera horas para comparar apenas a data
-            
-            // Verifica se a data do agendamento é válida
-            if (isNaN(dataAgendamento.getTime())) return false;
-            
-            // Filtro por dia da semana (0-6) - mostra apenas futuros
-            if (diaSelecionado >= 0 && diaSelecionado <= 6) {
-                return dataAgendamento.getDay() === diaSelecionado && 
-                       dataAgendamento >= hoje;
-            } 
-            // Filtro por semanas
-            else {
-                const semanas = diaSelecionado;
-                const dataLimite = new Date();
+            try {
+                const dataAgendamento = new Date(`${a.data}T${a.horario}`);
+                const hoje = new Date();
+                hoje.setHours(0, 0, 0, 0);
                 
-                if (semanas > 0) {
-                    // Próximas semanas (futuro)
-                    dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
-                    return dataAgendamento >= hoje && dataAgendamento <= dataLimite;
-                } else {
-                    // Semanas passadas (passado)
-                    dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
-                    return dataAgendamento < hoje && dataAgendamento >= dataLimite;
+                if (isNaN(dataAgendamento.getTime())) {
+                    console.log('❌ Data inválida:', a.data, a.horario);
+                    return false;
                 }
+                
+                // REMOVER FILTRO POR DIA TEMPORARIAMENTE PARA TESTE
+                // Mostrar TODOS os agendamentos sem filtrar por dia
+                return true;
+                
+            } catch (error) {
+                console.log('❌ Erro ao processar data:', error, a);
+                return false;
             }
         })
         .sort((a, b) => {
-            const dateA = new Date(`${a.data}T${a.horario}`);
-            const dateB = new Date(`${b.data}T${b.horario}`);
-            return dateA - dateB;
+            try {
+                const dateA = new Date(`${a.data}T${a.horario}`);
+                const dateB = new Date(`${b.data}T${b.horario}`);
+                return dateA - dateB;
+            } catch (error) {
+                return 0;
+            }
         });
     
-    console.log('Agendamentos cache:', agendamentosCache);
-    console.log('Filtrados:', filtrados);
-    console.log('Dia selecionado:', diaSelecionado);
+    console.log('✅ Agendamentos filtrados:', filtrados);
+    console.log('📅 Dia selecionado:', diaSelecionado);
     
     if (filtrados.length === 0) {
         meusAgendamentos.innerHTML = `
@@ -606,6 +606,7 @@ function renderAgendamentos() {
                 </div>
                 <p class="text-gray-300">Nenhum agendamento encontrado</p>
                 <p class="text-sm text-gray-400 mt-2">Total no cache: ${agendamentosCache.length}</p>
+                <p class="text-sm text-gray-400">Filtro aplicado: ${filtroStatus || 'Todos'}</p>
             </div>
         `;
         feather.replace();
@@ -754,7 +755,7 @@ function renderAgendamentos() {
             modal.classList.remove("hidden");
         }
         
-       async function listarAgendamentos(){
+      async function listarAgendamentos(){
     if(!userToken) return;
     
     try{
@@ -789,6 +790,11 @@ function renderAgendamentos() {
             
             agendamentosCache = data.agendamentos || [];
             console.log('📊 Agendamentos no cache:', agendamentosCache.length);
+            
+            // DEBUG: Mostrar os agendamentos recebidos
+            if (agendamentosCache.length > 0) {
+                console.log('📋 Detalhes dos agendamentos:', agendamentosCache);
+            }
             
             meusAgendamentos.style.display = 'block';
             document.getElementById('filtersSection').style.display = 'block';
@@ -1279,6 +1285,7 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
 
