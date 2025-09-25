@@ -531,8 +531,9 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+
 // Serve páginas de cliente dinamicamente
-app.get("/:cliente", (req, res) => {
+app.get("/cliente/:cliente", (req, res) => {
   const cliente = req.params.cliente;
   const filePath = path.join(__dirname, "public", `${cliente}.html`);
 
@@ -542,6 +543,7 @@ app.get("/:cliente", (req, res) => {
     }
   });
 });
+
 
 // ---------------- ROTAS EXISTENTES (MANTIDAS) ----------------
 
@@ -1074,5 +1076,6 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
