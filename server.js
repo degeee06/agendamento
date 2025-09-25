@@ -231,164 +231,131 @@ const DIAS_SEMANA = [
 
 // ---------------- FUNÇÕES PARA CONFIGURAÇÃO ----------------
 
-// Obter configurações de horários
-async function getConfigHorarios(clienteId) {
-  try {
-    const { data, error } = await supabase
-      .from("config_horarios")
-      .select("*")
-      .eq("cliente_id", clienteId)
-      .single();
+// ---------------- FUNÇÕES AUXILIARES PARA HORÁRIOS ----------------
 
-    if (error || !data) {
-      // Retorna configuração padrão se não existir
-      return {
-        dias_semana: [1, 2, 3, 4, 5], // Segunda a Sexta
-        horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-        intervalo_minutos: 60,
-        max_agendamentos_dia: 10,
-        datas_bloqueadas: [],
-        dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
-      };
+// Obter configuração de horários do cliente
+async function getConfigHorarios(cliente) {
+    const { data, error } = await supabase
+        .from("config_horarios")
+        .select("*")
+        .eq("cliente_id", cliente)
+        .single();
+
+    if (error) {
+        console.log(`Configuração não encontrada para ${cliente}, usando padrão`);
+        return {
+            dias_semana: [1, 2, 3, 4, 5], // Segunda a Sexta
+            horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
+            intervalo_minutos: 60,
+            max_agendamentos_dia: 10,
+            datas_bloqueadas: []
+        };
     }
 
-    // Adiciona informações dos dias da semana
-    data.dias_semana_info = DIAS_SEMANA.filter(dia => data.dias_semana.includes(dia.id));
-    return data;
-  } catch (error) {
-    console.error("Erro ao obter configurações de horários:", error);
+    // Converter times para formato HH:MM
+    const horariosFormatados = data.horarios_disponiveis.map(time => {
+        return time.substring(0, 5); // Pega apenas HH:MM
+    });
+
     return {
-      dias_semana: [1, 2, 3, 4, 5],
-      horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-      intervalo_minutos: 60,
-      max_agendamentos_dia: 10,
-      datas_bloqueadas: [],
-      dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
+        ...data,
+        horarios_disponiveis: horariosFormatados
     };
-  }
 }
 
-// Obter configurações específicas por data
-async function getConfigDataEspecifica(clienteId, data) {
-  try {
+// Obter configuração específica para uma data
+async function getConfigDataEspecifica(cliente, data) {
     const { data: configData, error } = await supabase
-      .from("config_datas_especificas")
-      .select("*")
-      .eq("cliente_id", clienteId)
-      .eq("data", data)
-      .single();
+        .from("config_datas_especificas")
+        .select("*")
+        .eq("cliente_id", cliente)
+        .eq("data", data)
+        .single();
 
     if (error) return null;
-    return configData;
-  } catch (error) {
-    console.error("Erro ao obter configuração específica:", error);
-    return null;
-  }
+
+    // Converter times para formato HH:MM
+    const horariosFormatados = configData.horarios_disponiveis?.map(time => {
+        return time.substring(0, 5);
+    }) || [];
+
+    const horariosBloqueadosFormatados = configData.horarios_bloqueados?.map(time => {
+        return time.substring(0, 5);
+    }) || [];
+
+    return {
+        ...configData,
+        horarios_disponiveis: horariosFormatados,
+        horarios_bloqueados: horariosBloqueadosFormatados
+    };
 }
 
-// Verificar se horário está disponível considerando configurações
-async function verificarDisponibilidade(clienteId, data, horario, ignoreId = null) {
-  try {
-    const config = await getConfigHorarios(clienteId);
-    const configData = await getConfigDataEspecifica(clienteId, data);
-    
-    // Verificar se a data está bloqueada
-    if (configData?.bloqueada) {
-      return false;
-    }
+// Obter horários disponíveis para uma data específica
+async function getHorariosDisponiveis(cliente, data) {
+    try {
+        // 1. Obter configuração geral do cliente
+        const configGeral = await getConfigHorarios(cliente);
+        
+        // 2. Obter configuração específica da data (se existir)
+        const configData = await getConfigDataEspecifica(cliente, data);
+        
+        // 3. Se a data estiver bloqueada, retornar array vazio
+        if (configData?.bloqueada) {
+            return [];
+        }
+        
+        // 4. Verificar se é um dia da semana permitido
+        const dataObj = new Date(data);
+        const diaSemana = dataObj.getDay();
+        
+        if (!configGeral.dias_semana.includes(diaSemana) && !configData) {
+            return [];
+        }
+        
+        // 5. Definir lista base de horários
+        let horariosBase = configGeral.horarios_disponiveis;
+        
+        // 6. Se existe configuração específica, usar seus horários
+        if (configData?.horarios_disponiveis?.length > 0) {
+            horariosBase = configData.horarios_disponiveis;
+        }
+        
+        // 7. Remover horários bloqueados da configuração específica
+        if (configData?.horarios_bloqueados?.length > 0) {
+            horariosBase = horariosBase.filter(horario => 
+                !configData.horarios_bloqueados.includes(horario)
+            );
+        }
+        
+        // 8. Obter agendamentos existentes para a data
+        const { data: agendamentos, error } = await supabase
+            .from("agendamentos")
+            .select("horario")
+            .eq("cliente", cliente)
+            .eq("data", data)
+            .neq("status", "cancelado");
 
-    // Verificar se a data está na lista de datas bloqueadas
-    if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
-      return false;
-    }
-
-    // Verificar dia da semana
-    const dataObj = new Date(data);
-    const diaSemana = dataObj.getDay();
-    if (!config.dias_semana.includes(diaSemana)) {
-      return false;
-    }
-
-    // Verificar horários disponíveis
-    let horariosPermitidos = config.horarios_disponiveis || [];
-    
-    // Aplicar configurações específicas da data
-    if (configData) {
-      if (configData.horarios_disponiveis) {
-        horariosPermitidos = configData.horarios_disponiveis;
-      }
-      if (configData.horarios_bloqueados && configData.horarios_bloqueados.includes(horario)) {
-        return false;
-      }
-    }
-
-    if (!horariosPermitidos.includes(horario)) {
-      return false;
-    }
-
-    // Verificar limite de agendamentos do dia
-    const maxAgendamentos = configData?.max_agendamentos || config.max_agendamentos_dia;
-    const { data: agendamentosDia } = await supabase
-      .from("agendamentos")
-      .select("id")
-      .eq("cliente", clienteId)
-      .eq("data", data)
-      .neq("status", "cancelado");
-
-    if (agendamentosDia && agendamentosDia.length >= maxAgendamentos) {
-      return false;
-    }
-
-    return await horarioDisponivel(clienteId, data, horario, ignoreId);
-  } catch (error) {
-    console.error("Erro na verificação de disponibilidade:", error);
-    return false;
-  }
-}
-
-// Obter horários disponíveis para uma data
-async function getHorariosDisponiveis(clienteId, data) {
-  try {
-    const config = await getConfigHorarios(clienteId);
-    const configData = await getConfigDataEspecifica(clienteId, data);
-    
-    // Verificar se a data está bloqueada
-    if (configData?.bloqueada || (config.datas_bloqueadas && config.datas_bloqueadas.includes(data))) {
-      return [];
-    }
-
-    let horariosPermitidos = config.horarios_disponiveis || [];
-    
-    // Aplicar configurações específicas da data
-    if (configData) {
-      if (configData.horarios_disponiveis) {
-        horariosPermitidos = configData.horarios_disponiveis;
-      }
-      // Remover horários bloqueados
-      if (configData.horarios_bloqueados) {
-        horariosPermitidos = horariosPermitidos.filter(horario => 
-          !configData.horarios_bloqueados.includes(horario)
+        if (error) throw error;
+        
+        // 9. Filtrar horários já ocupados
+        const horariosOcupados = agendamentos.map(a => a.horario.substring(0, 5));
+        const horariosDisponiveis = horariosBase.filter(horario => 
+            !horariosOcupados.includes(horario)
         );
-      }
+        
+        // 10. Verificar limite máximo de agendamentos
+        const maxAgendamentos = configData?.max_agendamentos || configGeral.max_agendamentos_dia;
+        if (agendamentos.length >= maxAgendamentos) {
+            return [];
+        }
+        
+        return horariosDisponiveis.sort();
+        
+    } catch (error) {
+        console.error("Erro ao obter horários disponíveis:", error);
+        return [];
     }
-
-    // Verificar quais horários estão disponíveis
-    const horariosDisponiveis = [];
-    
-    for (const horario of horariosPermitidos) {
-      const disponivel = await horarioDisponivel(clienteId, data, horario);
-      if (disponivel) {
-        horariosDisponiveis.push(horario);
-      }
-    }
-
-    return horariosDisponiveis;
-  } catch (error) {
-    console.error("Erro ao obter horários disponíveis:", error);
-    return [];
-  }
 }
-
 // ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
 
 // Obter configurações
@@ -503,56 +470,79 @@ app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
 
 // ---------------- ROTAS PÚBLICAS PARA CLIENTES ----------------
 
-// Obter horários disponíveis para uma data (para cliente1.html)
+// Obter horários disponíveis para uma data
 app.get("/api/horarios-disponiveis/:cliente", async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    const { data } = req.query;
+    try {
+        const { cliente } = req.params;
+        const { data } = req.query;
 
-    if (!data) {
-      return res.status(400).json({ msg: "Data é obrigatória" });
+        if (!data) {
+            return res.status(400).json({ msg: "Data é obrigatória" });
+        }
+
+        const horarios = await getHorariosDisponiveis(cliente, data);
+        res.json({ 
+            horarios_disponiveis: horarios,
+            data: data,
+            cliente: cliente
+        });
+    } catch (err) {
+        console.error("Erro ao obter horários disponíveis:", err);
+        res.status(500).json({ msg: "Erro interno" });
     }
-
-    const horarios = await getHorariosDisponiveis(cliente, data);
-    res.json({ horarios_disponiveis: horarios });
-  } catch (err) {
-    console.error("Erro ao obter horários disponíveis:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
 });
 
-// Obter dias da semana disponíveis para um cliente
-app.get("/api/dias-disponiveis/:cliente", async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    const config = await getConfigHorarios(cliente);
-    
-    res.json({ 
-      dias_semana: config.dias_semana,
-      dias_semana_info: config.dias_semana_info 
-    });
-  } catch (err) {
-    console.error("Erro ao obter dias disponíveis:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// Serve o painel de admin (index.html)
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-
-// Serve páginas de cliente dinamicamente
-app.get("/cliente/:cliente", (req, res) => {
-  const cliente = req.params.cliente;
-  const filePath = path.join(__dirname, "public", `${cliente}.html`);
-
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      res.status(404).send("Página do cliente não encontrada");
+// Obter configuração completa do cliente
+app.get("/api/config/:cliente", async (req, res) => {
+    try {
+        const { cliente } = req.params;
+        const config = await getConfigHorarios(cliente);
+        
+        // Adicionar informações dos dias da semana
+        const diasSemanaInfo = {
+            0: "Domingo", 1: "Segunda", 2: "Terça", 3: "Quarta", 
+            4: "Quinta", 5: "Sexta", 6: "Sábado"
+        };
+        
+        res.json({ 
+            ...config,
+            dias_semana_info: diasSemanaInfo
+        });
+    } catch (err) {
+        console.error("Erro ao obter configuração:", err);
+        res.status(500).json({ msg: "Erro interno" });
     }
-  });
+});
+
+// Verificar se uma data está disponível
+app.get("/api/verificar-data/:cliente", async (req, res) => {
+    try {
+        const { cliente } = req.params;
+        const { data } = req.query;
+
+        if (!data) {
+            return res.status(400).json({ msg: "Data é obrigatória" });
+        }
+
+        const configGeral = await getConfigHorarios(cliente);
+        const configData = await getConfigDataEspecifica(cliente, data);
+        
+        const dataObj = new Date(data);
+        const diaSemana = dataObj.getDay();
+        
+        const disponivel = !configData?.bloqueada && 
+                          (configGeral.dias_semana.includes(diaSemana) || configData);
+        
+        res.json({ 
+            disponivel,
+            motivo: !disponivel ? 
+                (configData?.bloqueada ? "Data bloqueada" : "Dia da semana não disponível") : 
+                "Data disponível"
+        });
+    } catch (err) {
+        console.error("Erro ao verificar data:", err);
+        res.status(500).json({ msg: "Erro interno" });
+    }
 });
 
 
@@ -1033,6 +1023,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
