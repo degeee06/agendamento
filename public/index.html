@@ -550,8 +550,7 @@ window.formatData = formatData;
 
 
         
-       // ---------------- RENDER AGENDAMENTOS ----------------
-function renderAgendamentos() {
+      function renderAgendamentos() {
     console.log('🔍 Renderizando agendamentos, cache:', agendamentosCache);
     
     const filtroNome = searchInput.value.toLowerCase();
@@ -571,26 +570,25 @@ function renderAgendamentos() {
         .filter(a => {
             if (!a.data || !a.horario) {
                 console.log('❌ Agendamento sem data/horário:', a);
-                return false;
+                return true; // Mostrar mesmo sem data para debug
             }
             
             try {
                 const dataAgendamento = new Date(`${a.data}T${a.horario}`);
                 const hoje = new Date();
-                hoje.setHours(0, 0, 0, 0);
                 
                 if (isNaN(dataAgendamento.getTime())) {
-                    console.log('❌ Data inválida:', a.data, a.horario);
-                    return false;
+                    console.log('❌ Data inválida, mas mostrando mesmo assim:', a);
+                    return true; // Mostrar para debug
                 }
                 
-                // REMOVER FILTRO POR DIA TEMPORARIAMENTE PARA TESTE
-                // Mostrar TODOS os agendamentos sem filtrar por dia
-                return true;
+                // ⚠️ REMOVER FILTRO POR DIA TEMPORARIAMENTE - MOSTRAR TODOS
+                console.log('📅 Agendamento:', a.data, a.horario, 'Dia da semana:', dataAgendamento.getDay());
+                return true; // Mostrar TODOS os agendamentos
                 
             } catch (error) {
-                console.log('❌ Erro ao processar data:', error, a);
-                return false;
+                console.log('❌ Erro ao processar data, mas mostrando:', error, a);
+                return true; // Mostrar para debug
             }
         })
         .sort((a, b) => {
@@ -606,6 +604,14 @@ function renderAgendamentos() {
     console.log('✅ Agendamentos filtrados:', filtrados);
     console.log('📅 Dia selecionado:', diaSelecionado);
     
+    // DEBUG: Mostrar detalhes do primeiro agendamento
+    if (filtrados.length > 0) {
+        console.log('🔍 Detalhes do primeiro agendamento:', filtrados[0]);
+        console.log('📅 Data do agendamento:', filtrados[0].data);
+        console.log('⏰ Horário do agendamento:', filtrados[0].horario);
+        console.log('📆 Dia da semana:', new Date(`${filtrados[0].data}T${filtrados[0].horario}`).getDay());
+    }
+    
     if (filtrados.length === 0) {
         meusAgendamentos.innerHTML = `
             <div class='text-center py-8'>
@@ -615,6 +621,10 @@ function renderAgendamentos() {
                 <p class="text-gray-300">Nenhum agendamento encontrado</p>
                 <p class="text-sm text-gray-400 mt-2">Total no cache: ${agendamentosCache.length}</p>
                 <p class="text-sm text-gray-400">Filtro aplicado: ${filtroStatus || 'Todos'}</p>
+                <p class="text-sm text-gray-400">Dia selecionado: ${diaSelecionado}</p>
+                <button onclick="console.log('Agendamentos cache:', agendamentosCache)" class="mt-4 px-4 py-2 bg-blue-600 rounded">
+                    Debug no Console
+                </button>
             </div>
         `;
         feather.replace();
@@ -691,6 +701,7 @@ function renderAgendamentos() {
     });
     
     feather.replace();
+    console.log('✅ Renderização concluída - elementos criados');
 }
         
         // ---------------- MODAL REAGENDAR ----------------
@@ -1293,6 +1304,7 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
 
