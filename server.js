@@ -97,6 +97,28 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
+async function limparAgendamentosExpirados() {
+  try {
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .lt("data", new Date().toISOString())
+      .eq("status", "pendente");
+
+    if (error) return console.error("Erro ao buscar agendamentos expirados:", error);
+
+    for (const agendamento of agendamentos) {
+      await supabase.from("agendamentos")
+        .update({ status: "cancelado" })
+        .eq("id", agendamento.id);
+      console.log("Agendamento expirado cancelado:", agendamento.id);
+    }
+  } catch (err) {
+    console.error("Erro ao limpar agendamentos expirados:", err);
+  }
+}
+
+
 // ---------------- Middleware ----------------
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
@@ -374,6 +396,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
