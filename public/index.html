@@ -471,6 +471,24 @@
         const configSection = document.getElementById("configSection");
         const calendarSection = document.getElementById("calendarSection");
 
+        const pathParts = window.location.pathname.split('/');
+       // cliente padrão (enquanto só existe 1)
+let cliente = "cliente1";
+
+// se tiver token no login, tenta extrair o cliente_id
+const token = localStorage.getItem("userToken");
+if (token) {
+    try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        if (payload?.user_metadata?.cliente_id) {
+            cliente = payload.user_metadata.cliente_id;
+        }
+    } catch (e) {
+        console.error("Erro ao decodificar token:", e);
+    }
+}
+
+
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
@@ -1350,6 +1368,4 @@
     </script>
 </body>
 </html>
-
-
 
