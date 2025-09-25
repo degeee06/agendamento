@@ -109,27 +109,21 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
 // ---------------- Middleware ----------------
 
 // Middleware para rotas de cliente (autenticação normal)
-async function authMiddleware(req, res, next) {
-  const token = req.headers["authorization"]?.split("Bearer ")[1];
-  if (!token) return res.status(401).json({ msg: "Token não enviado" });
+function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ msg: "Token ausente" });
 
   try {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
-
-    req.user = data.user;
-    req.clienteId = data.user.user_metadata?.cliente_id;
-
-    if (!req.clienteId) {
-      return res.status(403).json({ msg: "Usuário sem cliente_id" });
-    }
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    req.clienteId = payload?.user_metadata?.cliente_id;
+    req.isAdmin = payload?.user_metadata?.role === "admin"; // novo
 
     next();
-  } catch (error) {
-    console.error("Erro no middleware de auth:", error);
-    res.status(500).json({ msg: "Erro interno no servidor" });
+  } catch (err) {
+    res.status(401).json({ msg: "Token inválido" });
   }
 }
+
 
 // Middleware para rotas admin
 async function adminAuthMiddleware(req, res, next) {
@@ -409,7 +403,8 @@ async function getHorariosDisponiveis(clienteId, data) {
 app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!req.isAdmin && req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
 
     const config = await getConfigHorarios(cliente);
     res.json(config);
@@ -761,6 +756,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
