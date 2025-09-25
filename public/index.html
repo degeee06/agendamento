@@ -471,31 +471,6 @@
         const configSection = document.getElementById("configSection");
         const calendarSection = document.getElementById("calendarSection");
 
-       const pathParts = window.location.pathname.split('/');
-let cliente = "cliente1"; // padrão
-
-// tenta pegar cliente da URL (/cliente/cliente1)
-if (pathParts[1] === "cliente" && pathParts[2]) {
-    cliente = pathParts[2];
-} else {
-    // se não tiver na URL, tenta extrair do token
-    const token = localStorage.getItem("userToken");
-    if (token) {
-        try {
-            const payload = JSON.parse(atob(token.split(".")[1]));
-            if (payload?.user_metadata?.cliente_id) {
-                cliente = payload.user_metadata.cliente_id;
-            }
-        } catch (e) {
-            console.error("Erro ao decodificar token:", e);
-        }
-    }
-}
-
-console.log("Cliente definido:", cliente);
-
-
-
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
 
@@ -1375,5 +1350,6 @@ console.log("Cliente definido:", cliente);
     </script>
 </body>
 </html>
+
 
 
