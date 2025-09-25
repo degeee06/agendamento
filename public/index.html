@@ -751,20 +751,29 @@ function renderAgendamentos() {
     if(!userToken) return;
     
     try{
-        const res = await fetch(`/agendamentos/${cliente}`, {
+        // Para admin: não passa cliente (busca todos)
+        // Para cliente normal: passa o clienteId
+        let url = '/agendamentos';
+        if (cliente && cliente !== 'admin') {
+            url = `/agendamentos/${cliente}`;
+        }
+        
+        console.log('🔍 Buscando agendamentos na URL:', url);
+        
+        const res = await fetch(url, {
             headers: {
                 "Authorization": `Bearer ${userToken}`
             }
         });
         
-        console.log('Resposta da API:', res);
+        console.log('📡 Resposta da API:', res.status, res.statusText);
         
         if (res.ok) {
             const data = await res.json();
-            console.log('Dados recebidos:', data);
+            console.log('✅ Dados recebidos:', data);
             
             agendamentosCache = data.agendamentos || [];
-            console.log('Agendamentos no cache:', agendamentosCache);
+            console.log('📊 Agendamentos no cache:', agendamentosCache.length);
             
             meusAgendamentos.style.display = 'block';
             document.getElementById('filtersSection').style.display = 'block';
@@ -773,10 +782,11 @@ function renderAgendamentos() {
             initTabsDias();
             renderAgendamentos();
         } else {
-            console.error('Erro na resposta:', await res.text());
+            const errorText = await res.text();
+            console.error('❌ Erro na resposta:', errorText);
         }
     } catch(e){
-        console.error("Erro ao listar agendamentos:", e);
+        console.error("❌ Erro ao listar agendamentos:", e);
     }
 }
         
@@ -1255,5 +1265,6 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
