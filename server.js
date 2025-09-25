@@ -423,7 +423,8 @@ app.get("/api/dias-semana", (req, res) => {
 app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!req.isAdmin && req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
 
     const { dias_semana, horarios_disponiveis, intervalo_minutos, max_agendamentos_dia, datas_bloqueadas } = req.body;
 
@@ -459,7 +460,8 @@ app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
     const { cliente } = req.params;
     const { startDate, endDate } = req.query;
     
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!req.isAdmin && req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
 
     let query = supabase
       .from("config_datas_especificas")
@@ -484,7 +486,8 @@ app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
 app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!req.isAdmin && req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
 
     const { data: dataConfig, horarios_disponiveis, horarios_bloqueados, max_agendamentos, bloqueada } = req.body;
 
@@ -562,7 +565,7 @@ app.get("/cliente/:cliente", (req, res) => {
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!req.isAdmin && req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const { data, error } = await supabase
       .from("agendamentos")
@@ -584,7 +587,8 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    if (!req.isAdmin && req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+
 
     const { Nome, Email, Telefone, Data, Horario } = req.body;
     if (!Nome || !Email || !Telefone || !Data || !Horario)
@@ -756,6 +760,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
