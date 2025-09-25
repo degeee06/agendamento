@@ -118,14 +118,13 @@ async function limparAgendamentosExpirados() {
   }
 }
 
-
 // ---------------- Middleware ----------------
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ msg: "Token ausente" });
 
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], 'base64').toString());
     req.clienteId = payload?.user_metadata?.cliente_id;
     req.isAdmin = payload?.user_metadata?.role === "admin";
     next();
@@ -155,6 +154,10 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   }
 }
 
+async function verificarDisponibilidade(cliente, data, horario, ignoreId = null) {
+  return await horarioDisponivel(cliente, data, horario, ignoreId);
+}
+
 const DIAS_SEMANA = [
   { id: 0, nome: "Domingo", abreviacao: "Dom" },
   { id: 1, nome: "Segunda-feira", abreviacao: "Seg" },
@@ -172,7 +175,6 @@ function checkAdminOrOwner(req, cliente) {
   }
   return true;
 }
-
 
 // ---------------- ROTAS CONFIGURAÇÕES ----------------
 app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
@@ -243,7 +245,7 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/agendar/:cliente", authMiddleware, async (req,res)=>{
+app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   const { cliente } = req.params;
   if (!checkAdminOrOwner(req, cliente)) return res.status(403).json({ msg: "Acesso negado" });
 
@@ -252,11 +254,20 @@ app.post("/agendar/:cliente", authMiddleware, async (req,res)=>{
     if (!Nome || !Email || !Telefone || !Data || !Horario) 
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
+    const disponivel = await horarioDisponivel(cliente, Data, Horario);
     if(!disponivel) return res.status(400).json({ msg: "Horário indisponível" });
 
-    const { data, error } = await supabase.from("agendamentos")
-      .insert([{ cliente, nome:Nome, email:Email.toLowerCase(), telefone:Telefone, data:Data, horario:Horario, status:"pendente", confirmado:false }])
+    const { data: agendamento, error } = await supabase.from("agendamentos")
+      .insert([{ 
+        cliente, 
+        nome: Nome, 
+        email: Email.toLowerCase(), 
+        telefone: Telefone, 
+        data: Data, 
+        horario: Horario, 
+        status: "pendente", 
+        confirmado: false 
+      }])
       .select().single();
     
     if(error) throw error;
@@ -264,25 +275,27 @@ app.post("/agendar/:cliente", authMiddleware, async (req,res)=>{
     try {
       const doc = await accessSpreadsheet(cliente);
       const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(data));
-      await sheet.addRow(data);
-    } catch(e){ console.error("Erro Google Sheets:", e); }
+      await ensureDynamicHeaders(sheet, Object.keys(agendamento));
+      await sheet.addRow(agendamento);
+    } catch(e){ 
+      console.error("Erro Google Sheets:", e); 
+    }
 
-    res.json({ msg:"Agendamento realizado com sucesso!", agendamento:data });
+    res.json({ msg:"Agendamento realizado com sucesso!", agendamento });
   } catch {
     res.status(500).json({ msg:"Erro interno" });
   }
 });
 
 // Confirmar / Cancelar / Reagendar
-app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
+app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { cliente, id } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
     
     const { data, error } = await supabase.from("agendamentos")
-      .update({confirmado:true,status:"confirmado"})
-      .eq("id",id).eq("cliente",cliente).select().single();
+      .update({confirmado: true, status: "confirmado"})
+      .eq("id", id).eq("cliente", cliente).select().single();
     
     if (error) throw error;
     
@@ -293,21 +306,21 @@ app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
     
-    res.json({msg:"Agendamento confirmado", agendamento:data});
+    res.json({msg:"Agendamento confirmado", agendamento: data});
   } catch (error) {
     console.error("Erro ao confirmar agendamento:", error);
     res.status(500).json({msg:"Erro interno"});
   }
 });
 
-app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=>{
+app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { cliente, id } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
     
     const { data, error } = await supabase.from("agendamentos")
-      .update({status:"cancelado", confirmado:false})
-      .eq("id",id).eq("cliente",cliente).select().single();
+      .update({status: "cancelado", confirmado: false})
+      .eq("id", id).eq("cliente", cliente).select().single();
     
     if (error) throw error;
     
@@ -318,14 +331,14 @@ app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
     
-    res.json({msg:"Agendamento cancelado", agendamento:data});
+    res.json({msg:"Agendamento cancelado", agendamento: data});
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);
     res.status(500).json({msg:"Erro interno"});
   }
 });
 
-app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)=>{
+app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res) => {
   try {
     const { cliente, id } = req.params;
     const { novaData, novoHorario } = req.body;
@@ -356,14 +369,12 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
     
-    res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
+    res.json({msg:"Agendamento reagendado com sucesso", agendamento: data});
   } catch (error) {
     console.error("Erro ao reagendar:", error);
     res.status(500).json({msg:"Erro interno"});
   }
 });
-
-
 
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
@@ -396,11 +407,3 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
-
-
-
-
-
-
-
-
