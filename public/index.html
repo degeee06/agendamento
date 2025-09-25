@@ -534,53 +534,62 @@
             }
         }
         
-        // ---------------- RENDER AGENDAMENTOS ----------------
+       // ---------------- RENDER AGENDAMENTOS ----------------
 function renderAgendamentos() {
     const filtroNome = searchInput.value.toLowerCase();
     const filtroStatus = statusFilter.value;
     
     const filtrados = agendamentosCache
-        .filter(a => ((a.nome + a.email).toLowerCase().includes(filtroNome)) && 
-                    (filtroStatus ? a.status === filtroStatus : true))
         .filter(a => {
+            // Filtro por nome/email
+            const nomeEmail = (a.nome + ' ' + (a.email || '')).toLowerCase();
+            const passaFiltroNome = nomeEmail.includes(filtroNome);
+            
+            // Filtro por status
+            const passaFiltroStatus = filtroStatus ? a.status === filtroStatus : true;
+            
+            return passaFiltroNome && passaFiltroStatus;
+        })
+        .filter(a => {
+            if (!a.data || !a.horario) return false;
+            
             const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-            const hoje = new Date(); 
-            const hojeZero = new Date(hoje);
-            hojeZero.setHours(0,0,0,0);
-
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0); // Zera horas para comparar apenas a data
+            
+            // Verifica se a data do agendamento é válida
+            if (isNaN(dataAgendamento.getTime())) return false;
+            
+            // Filtro por dia da semana (0-6) - mostra apenas futuros
             if (diaSelecionado >= 0 && diaSelecionado <= 6) {
-                // Dia da semana (inclui domingo = 0)
-                return dataAgendamento.getDay() === diaSelecionado &&
-                       dataAgendamento >= hojeZero;
-            } else {
-                if (diaSelecionado === -1) { // próxima semana
-                    const inicio = new Date(hojeZero);
-                    inicio.setDate(inicio.getDate() + 7);
-                    const fim = new Date(inicio);
-                    fim.setDate(fim.getDate() + 7);
-                    return dataAgendamento >= inicio && dataAgendamento < fim;
-                }
-                if (diaSelecionado === -2) { // próximas 2 semanas
-                    const inicio = new Date(hojeZero);
-                    inicio.setDate(inicio.getDate() + 14);
-                    const fim = new Date(inicio);
-                    fim.setDate(fim.getDate() + 14);
-                    return dataAgendamento >= inicio && dataAgendamento < fim;
-                }
-                if (diaSelecionado === -3) { // semana passada
-                    const inicio = new Date(hojeZero);
-                    inicio.setDate(inicio.getDate() - 7);
-                    const fim = new Date(hojeZero);
-                    return dataAgendamento >= inicio && dataAgendamento < fim;
+                return dataAgendamento.getDay() === diaSelecionado && 
+                       dataAgendamento >= hoje;
+            } 
+            // Filtro por semanas
+            else {
+                const semanas = diaSelecionado;
+                const dataLimite = new Date();
+                
+                if (semanas > 0) {
+                    // Próximas semanas (futuro)
+                    dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
+                    return dataAgendamento >= hoje && dataAgendamento <= dataLimite;
+                } else {
+                    // Semanas passadas (passado)
+                    dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
+                    return dataAgendamento < hoje && dataAgendamento >= dataLimite;
                 }
             }
-            return false;
         })
-        .sort((a,b) => {
+        .sort((a, b) => {
             const dateA = new Date(`${a.data}T${a.horario}`);
             const dateB = new Date(`${b.data}T${b.horario}`);
             return dateA - dateB;
         });
+    
+    console.log('Agendamentos cache:', agendamentosCache);
+    console.log('Filtrados:', filtrados);
+    console.log('Dia selecionado:', diaSelecionado);
     
     if (filtrados.length === 0) {
         meusAgendamentos.innerHTML = `
@@ -589,6 +598,7 @@ function renderAgendamentos() {
                     <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
                 </div>
                 <p class="text-gray-300">Nenhum agendamento encontrado</p>
+                <p class="text-sm text-gray-400 mt-2">Total no cache: ${agendamentosCache.length}</p>
             </div>
         `;
         feather.replace();
@@ -625,11 +635,11 @@ function renderAgendamentos() {
             <div class="grid grid-cols-2 gap-2 text-sm">
                 <div class="flex items-center gap-2">
                     <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
-                    <span class="truncate">${a.email}</span>
+                    <span class="truncate">${a.email || 'Não informado'}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
-                    <span>${a.telefone}</span>
+                    <span>${a.telefone || 'Não informado'}</span>
                 </div>
             </div>
         `;
@@ -737,32 +747,38 @@ function renderAgendamentos() {
             modal.classList.remove("hidden");
         }
         
-        // ---------------- LISTAR AGENDAMENTOS ----------------
         async function listarAgendamentos(){
-            if(!userToken) return;
-            
-            try{
-                const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`
-                    }
-                });
-                
-                if (res.ok) {
-                    const { agendamentos } = await res.json();
-                    agendamentosCache = agendamentos || [];
-                    
-                    meusAgendamentos.style.display = 'block';
-                    document.getElementById('filtersSection').style.display = 'block';
-                    document.getElementById('diasTabs').style.display = 'flex';
-                    
-                    initTabsDias();
-                    renderAgendamentos();
-                }
-            } catch(e){
-                console.error("Erro ao listar agendamentos:", e);
+    if(!userToken) return;
+    
+    try{
+        const res = await fetch(`/agendamentos/${cliente}`, {
+            headers: {
+                "Authorization": `Bearer ${userToken}`
             }
+        });
+        
+        console.log('Resposta da API:', res);
+        
+        if (res.ok) {
+            const data = await res.json();
+            console.log('Dados recebidos:', data);
+            
+            agendamentosCache = data.agendamentos || [];
+            console.log('Agendamentos no cache:', agendamentosCache);
+            
+            meusAgendamentos.style.display = 'block';
+            document.getElementById('filtersSection').style.display = 'block';
+            document.getElementById('diasTabs').style.display = 'flex';
+            
+            initTabsDias();
+            renderAgendamentos();
+        } else {
+            console.error('Erro na resposta:', await res.text());
         }
+    } catch(e){
+        console.error("Erro ao listar agendamentos:", e);
+    }
+}
         
         // ---------------- LOGIN ----------------
         loginBtn.addEventListener('click', async () => {
@@ -1239,4 +1255,5 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
