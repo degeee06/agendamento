@@ -475,6 +475,23 @@
         const configSection = document.getElementById("configSection");
         const calendarSection = document.getElementById("calendarSection");
 
+          // Detecta cliente pela URL (só no frontend cliente)
+const pathParts = window.location.pathname.split("/");
+if (!window.cliente) {
+    if (pathParts[1] && pathParts[1] !== "cliente") {
+        // URL /cliente1
+        window.cliente = pathParts[1];
+    } else if (pathParts[1] === "cliente" && pathParts[2]) {
+        // URL /cliente/cliente1
+        window.cliente = pathParts[2];
+    } else {
+        // Fallback admin
+        window.cliente = "admin";
+    }
+}
+
+console.log("Cliente definido:", window.cliente);
+
 
 
         function formatData(data){ const [y,m,d] = data.split("-"); return `${d}/${m}/${y}`; }
@@ -1370,6 +1387,7 @@ function carregarDashboard() {
     </script>
 </body>
 </html>
+
 
 
 
