@@ -269,7 +269,12 @@
         let configHorarios = null;
         let configDatasEspecificas = [];
         let dataSelecionadaCalendario = null;
-        
+        function formatData(data){
+    if (!data) return 'Data inválida';
+    const [y, m, d] = data.split("-");
+    return `${d}/${m}/${y}`;
+}
+
         const form = document.getElementById('agendamentoForm');
         const loginBtn = document.getElementById('loginBtn');
         const loginSection = document.getElementById('loginSection');
@@ -311,7 +316,8 @@ if (token) {
         console.error("Erro ao decodificar token:", e);
     }
 }
-        
+        // Tornar global
+window.formatData = formatData;
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
             // Verificar se já está logado
@@ -541,6 +547,8 @@ if (token) {
                 console.error('Erro ao carregar configuração da data:', error);
             }
         }
+
+
         
        // ---------------- RENDER AGENDAMENTOS ----------------
 function renderAgendamentos() {
@@ -1285,6 +1293,7 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
 
