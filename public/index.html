@@ -1021,36 +1021,27 @@ function renderAgendamentos() {
         }
 
        // ---------------- LISTAR AGENDAMENTOS ----------------
-        async function listarAgendamentos(){
-            if(!userToken) {
-                console.error("Token não disponível");
-                return;
-            }
-            
-            try{
-                const res = await fetch(`/agendamentos/${cliente}`, {
-                    headers: { "Authorization": `Bearer ${userToken}` }
-                });
-                
-                if (res.status === 401) {
-                    // Token expirado ou inválido
-                    showToast("Sessão expirada. Faça login novamente.", "error");
-                    logoutBtn.click(); // Força logout
-                    return;
-                }
-                
-                const { agendamentos } = await res.json();
-                agendamentosCache = agendamentos;
-                meusAgendamentos.style.display = 'block';
-                document.getElementById('filtersSection').style.display = 'block';
-                document.getElementById('diasTabs').style.display = 'flex';
-                initTabsDias();
-                renderAgendamentos(); 
-            } catch(e){
-                console.error("Erro ao listar agendamentos:", e);
-                showToast("Erro ao listar agendamentos","error");
-            }
+       async function listarAgendamentos(){
+    if(!userToken) return;
+    
+    try{
+        const res = await fetch(`/agendamentos/${cliente}`, {
+            headers: { "Authorization": `Bearer ${userToken}` }
+        });
+        
+        if (res.ok) {
+            const { agendamentos } = await res.json();
+            agendamentosCache = agendamentos || [];
+            meusAgendamentos.style.display = 'block';
+            document.getElementById('filtersSection').style.display = 'block';
+            document.getElementById('diasTabs').style.display = 'flex';
+            initTabsDias();
+            renderAgendamentos();
         }
+    } catch(e){
+        console.error("Erro ao listar agendamentos:", e);
+    }
+}
 
         // ---------------- LOGIN ----------------
         loginBtn.addEventListener('click', async () => {
@@ -1374,6 +1365,7 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
 
