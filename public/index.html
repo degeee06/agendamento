@@ -287,25 +287,29 @@
         const pathParts = window.location.pathname.split('/');
         
         // cliente padrão (enquanto só existe 1)
-        let cliente = "cliente1";
-        
-        // se tiver token no login, tenta extrair o cliente_id
-        const token = localStorage.getItem("userToken");
-        if (token) {
-            try {
-                const payload = JSON.parse(atob(token.split(".")[1]));
-                if (payload?.user_metadata?.cliente_id) {
-                    cliente = payload.user_metadata.cliente_id;
-                }
-            } catch (e) {
-                console.error("Erro ao decodificar token:", e);
-            }
+let cliente = "cliente1";
+
+// DETECTAR SE É ADMIN PELA URL
+const isAdminPath = !window.location.pathname.includes('/cliente/');
+
+// se tiver token no login, tenta extrair o cliente_id
+const token = localStorage.getItem("userToken");
+if (token) {
+    try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        if (payload?.user_metadata?.cliente_id) {
+            cliente = payload.user_metadata.cliente_id;
         }
         
-        function formatData(data){
-            const [y,m,d] = data.split("-");
-            return `${d}/${m}/${y}`;
+        // Se é admin pela URL, força cliente como null
+        if (isAdminPath) {
+            cliente = null;
+            console.log('👑 Modo admin detectado pela URL');
         }
+    } catch (e) {
+        console.error("Erro ao decodificar token:", e);
+    }
+}
         
         // ---------------- INICIALIZAÇÃO ----------------
         function init() {
@@ -367,24 +371,27 @@
         }
         
         // ---------------- CONFIGURAÇÕES DE HORÁRIOS ----------------
-        async function carregarConfiguracoes() {
-            try {
-                const response = await fetch(`/admin/config/${cliente}`, {
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`
-                    }
-                });
-                
-                if (response.ok) {
-                    configHorarios = await response.json();
-                    renderizarConfiguracoes();
-                } else {
-                    console.error('Erro ao carregar configurações');
-                }
-            } catch (error) {
-                console.error('Erro:', error);
+       async function carregarConfiguracoes() {
+    try {
+        // Para admin, não passa cliente (busca configurações padrão)
+        const url = cliente ? `/admin/config/${cliente}` : '/admin/config';
+        
+        const response = await fetch(url, {
+            headers: {
+                "Authorization": `Bearer ${userToken}`
             }
+        });
+        
+        if (response.ok) {
+            configHorarios = await response.json();
+            renderizarConfiguracoes();
+        } else {
+            console.error('Erro ao carregar configurações');
         }
+    } catch (error) {
+        console.error('Erro:', error);
+    }
+}
         
         function renderizarConfiguracoes() {
             if (!configHorarios) return;
@@ -747,15 +754,23 @@ function renderAgendamentos() {
             modal.classList.remove("hidden");
         }
         
-        async function listarAgendamentos(){
+       async function listarAgendamentos(){
     if(!userToken) return;
     
     try{
-        // Para admin: não passa cliente (busca todos)
-        // Para cliente normal: passa o clienteId
-        let url = '/agendamentos';
-        if (cliente && cliente !== 'admin') {
-            url = `/agendamentos/${cliente}`;
+        // DETERMINAR SE É ADMIN OU CLIENTE PELA URL ATUAL
+        const isAdmin = !window.location.pathname.includes('/cliente/');
+        
+        let url;
+        if (isAdmin) {
+            // ADMIN: busca TODOS os agendamentos (sem parâmetro cliente)
+            url = '/agendamentos';
+            console.log('👑 Admin buscando TODOS os agendamentos');
+        } else {
+            // CLIENTE: busca apenas os agendamentos do cliente específico
+            const clienteFromPath = window.location.pathname.split('/').pop();
+            url = `/agendamentos/${clienteFromPath}`;
+            console.log('👤 Cliente buscando agendamentos:', clienteFromPath);
         }
         
         console.log('🔍 Buscando agendamentos na URL:', url);
@@ -789,7 +804,6 @@ function renderAgendamentos() {
         console.error("❌ Erro ao listar agendamentos:", e);
     }
 }
-        
         // ---------------- LOGIN ----------------
         loginBtn.addEventListener('click', async () => {
             const email = document.getElementById('email').value;
@@ -1265,6 +1279,7 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
 
