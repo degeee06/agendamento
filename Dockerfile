@@ -1,5 +1,5 @@
 # 1️⃣ Imagem base (Docker Hub oficial)
-FROM docker.io/library/node:20-alpine
+FROM node:20-alpine
 
 # 2️⃣ Define diretório de trabalho
 WORKDIR /app
@@ -18,3 +18,4 @@ EXPOSE 3000
 
 # 7️⃣ Comando para rodar a aplicação
 CMD ["node", "server.js"]
+
