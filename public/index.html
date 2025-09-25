@@ -1340,6 +1340,14 @@ function renderAgendamentos() {
             }
         }
 
+// ---------------- EVENTOS DOS BOTÕES ----------------
+document.getElementById("salvarConfigBtn")?.addEventListener("click", salvarConfiguracoes);
+document.getElementById("adicionarHorarioBtn")?.addEventListener("click", adicionarHorario);
+document.getElementById("adicionarDataBtn")?.addEventListener("click", adicionarDataBloqueada);
+document.getElementById("salvarConfigDataBtn")?.addEventListener("click", salvarConfiguracaoData);
+document.getElementById("adicionarHorarioEspecificoBtn")?.addEventListener("click", adicionarHorarioEspecifico);
+
+
         
         // ---------------- INIT ----------------
         AOS.init({
@@ -1365,6 +1373,7 @@ function renderAgendamentos() {
     </script>
 </body>
 </html>
+
 
 
 
