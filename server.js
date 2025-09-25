@@ -543,9 +543,8 @@ app.get("/:cliente", (req, res) => {
   });
 });
 
-// ---------------- ROTAS EXISTENTES (MANTIDAS E CORRIGIDAS) ----------------
+// ---------------- ROTAS EXISTENTES (MANTIDAS) ----------------
 
-// ROTA CORRIGIDA: Listar agendamentos
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
@@ -555,14 +554,11 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .select("*")
       .eq("cliente", cliente)
+      .neq("status", "cancelado")
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
-    if (error) {
-      console.error("Erro ao buscar agendamentos:", error);
-      return res.status(500).json({ msg: "Erro ao buscar agendamentos" });
-    }
-    
+    if (error) throw error;
     res.json({ agendamentos: data || [] });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
@@ -1078,3 +1074,5 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
+
