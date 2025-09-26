@@ -265,7 +265,7 @@
         
         let userToken = null;
         let agendamentosCache = [];
-        let diaSelecionado = null;
+        let diaSelecionado = 1;
         let configHorarios = null;
         let configDatasEspecificas = [];
         let dataSelecionadaCalendario = null;
@@ -438,8 +438,7 @@ function logout() {
 
 
         
-
-// ---------------- INICIALIZAÇÃO (CORRIGIDA + FORÇAR EXIBIÇÃO) ----------------
+  // ---------------- INICIALIZAÇÃO (CORRIGIDA) ----------------
 async function init() {
     console.log('🚀 Inicializando sistema admin...');
     
@@ -455,7 +454,7 @@ async function init() {
             configSection.style.display = 'block';
             calendarSection.style.display = 'block';
             
-            // ✅ Carregar dados em sequência com tratamento de erro
+            // ✅ CORREÇÃO: Carregar dados em sequência com tratamento de erro
             await carregarConfiguracoes().catch(err => {
                 console.error('Erro ao carregar configurações:', err);
                 // Não impede o carregamento dos agendamentos
@@ -465,13 +464,8 @@ async function init() {
                 console.error('Erro ao carregar agendamentos:', err);
             });
             
+            initTabsDias();
             gerarCalendario();
-
-            // ✅ FORÇAR EXIBIÇÃO DA SEÇÃO
-            document.getElementById('meusAgendamentos').style.display = 'block';
-            document.getElementById('filtersSection').style.display = 'block'; 
-            document.getElementById('diasTabs').style.display = 'block';
-
             console.log('✅ Sistema admin inicializado com sucesso');
         } else {
             // Usuário não autenticado - mostrar login
@@ -489,10 +483,9 @@ async function init() {
         configSection.style.display = 'none';
         calendarSection.style.display = 'none';
     }
-
+    
     adicionarEventListeners();
 }
-
 // 🔍 DEBUG: Verificar estado do login
 function debugAuthState() {
     console.log('🔐 ESTADO DA AUTENTICAÇÃO:');
@@ -715,48 +708,101 @@ async function carregarConfiguracoes() {
 
 
         
-  // ---------------- RENDER AGENDAMENTOS ----------------
-function renderAgendamentos() {
+      function renderAgendamentos() {
     console.log('🔍 Renderizando agendamentos, cache:', agendamentosCache);
-
-    const meusAgendamentos = document.getElementById('meusAgendamentos');
-    if (!meusAgendamentos) return console.error('❌ Elemento meusAgendamentos não encontrado');
-
-    meusAgendamentos.style.display = 'block';
-    document.getElementById('filtersSection').style.display = 'block';
-    document.getElementById('diasTabs').style.display = 'block';
-
-    if (diaSelecionado === null) {
-        meusAgendamentos.innerHTML = `<p class="text-gray-300">Selecione um dia da semana</p>`;
-        return;
+    console.log('📅 Dia selecionado:', diaSelecionado);
+    console.log('📊 Total no cache:', agendamentosCache.length);
+    const filtroNome = searchInput.value.toLowerCase();
+    const filtroStatus = statusFilter.value;
+    
+    const filtrados = agendamentosCache
+        .filter(a => {
+            // Filtro por nome/email
+            const nomeEmail = (a.nome + ' ' + (a.email || '')).toLowerCase();
+            const passaFiltroNome = nomeEmail.includes(filtroNome);
+            
+            // Filtro por status
+            const passaFiltroStatus = filtroStatus ? a.status === filtroStatus : true;
+            
+            return passaFiltroNome && passaFiltroStatus;
+        })
+        // SUBSTITUIR o trecho problemático do filtro por:
+.filter(a => {
+    if (!a.data || !a.horario) {
+        console.log('❌ Agendamento sem data/horário:', a);
+        return false;
     }
-
-    // 🔑 Semana atual (domingo → sábado)
-    const hoje = new Date();
-    const domingo = new Date(hoje);
-    domingo.setDate(hoje.getDate() - hoje.getDay()); // domingo desta semana
-    const sabado = new Date(domingo);
-    sabado.setDate(domingo.getDate() + 6); // sábado desta semana
-
-    // 🔎 Filtrar só os agendamentos do dia selecionado dentro da semana
-    const filtrados = agendamentosCache.filter(a => {
-        const dataObj = new Date(`${a.data}T${a.horario}`);
-        const dia = dataObj.getDay();
-        return dataObj >= domingo && dataObj <= sabado && dia === diaSelecionado;
-    });
-
-    console.log('✅ Agendamentos filtrados:', filtrados.length);
-
+    
+    try {
+        // CORREÇÃO: Criar data de forma segura
+        const [ano, mes, dia] = a.data.split('-');
+        const [hora, minuto] = a.horario.split(':');
+        const dataAgendamento = new Date(ano, mes - 1, dia, hora, minuto);
+        
+        // CORREÇÃO: Data de hoje sem fuso horário
+        const hoje = new Date();
+        const hojeUTC = new Date(Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()));
+        
+        if (isNaN(dataAgendamento.getTime())) {
+            console.log('❌ Data inválida:', a.data, a.horario);
+            return false;
+        }
+        
+        // CORREÇÃO: Filtro por dia da semana (0-6)
+        if (diaSelecionado >= 0 && diaSelecionado <= 6) {
+            return dataAgendamento.getDay() === diaSelecionado;
+        } 
+        // CORREÇÃO: Filtro por semanas
+        else {
+            const semanas = diaSelecionado;
+            const diffDias = Math.floor((dataAgendamento - hojeUTC) / (1000 * 60 * 60 * 24));
+            const diffSemanas = Math.floor(diffDias / 7);
+            
+            return diffSemanas === semanas;
+        }
+        
+    } catch (error) {
+        console.log('❌ Erro ao processar data:', error, a);
+        return false;
+    }
+})
+    
+    console.log('✅ Agendamentos filtrados:', filtrados);
+    console.log('📅 Dia selecionado:', diaSelecionado);
+    
+    // DEBUG: Mostrar detalhes do primeiro agendamento
+    if (filtrados.length > 0) {
+        console.log('🔍 Detalhes do primeiro agendamento:', filtrados[0]);
+        console.log('📅 Data do agendamento:', filtrados[0].data);
+        console.log('⏰ Horário do agendamento:', filtrados[0].horario);
+        console.log('📆 Dia da semana:', new Date(`${filtrados[0].data}T${filtrados[0].horario}`).getDay());
+    }
+    
     if (filtrados.length === 0) {
-        meusAgendamentos.innerHTML = `<p class="text-gray-300">Nenhum agendamento neste dia</p>`;
+        meusAgendamentos.innerHTML = `
+            <div class='text-center py-8'>
+                <div class="p-4 rounded-full bg-white/10 inline-block mb-4">
+                    <i data-feather="calendar" class="w-8 h-8 text-gray-300"></i>
+                </div>
+                <p class="text-gray-300">Nenhum agendamento encontrado</p>
+                <p class="text-sm text-gray-400 mt-2">Total no cache: ${agendamentosCache.length}</p>
+                <p class="text-sm text-gray-400">Filtro aplicado: ${filtroStatus || 'Todos'}</p>
+                <p class="text-sm text-gray-400">Dia selecionado: ${diaSelecionado}</p>
+                <button onclick="console.log('Agendamentos cache:', agendamentosCache)" class="mt-4 px-4 py-2 bg-blue-600 rounded">
+                    Debug no Console
+                </button>
+            </div>
+        `;
+        feather.replace();
         return;
     }
-
+    
     meusAgendamentos.innerHTML = "";
-
+    
     filtrados.forEach(a => {
         const div = document.createElement("div");
         div.className = `agendamento-card glass-card rounded-xl p-5 mb-4 transition-all duration-300 ${a.status}`;
+        
         div.innerHTML = `
             <div class="flex justify-between items-start mb-2">
                 <div class="flex items-center gap-2">
@@ -777,18 +823,52 @@ function renderAgendamentos() {
                     <p class="text-sm text-gray-300">${formatData(a.data)}</p>
                 </div>
             </div>
+            
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="flex items-center gap-2">
+                    <i data-feather="mail" class="w-4 h-4 text-gray-300"></i>
+                    <span class="truncate">${a.email || 'Não informado'}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i data-feather="phone" class="w-4 h-4 text-gray-300"></i>
+                    <span>${a.telefone || 'Não informado'}</span>
+                </div>
+            </div>
         `;
+        
+        const btnContainer = document.createElement("div");
+        btnContainer.className = "flex gap-2 mt-4 flex-wrap";
+        
+        // Confirmar
+        if (a.status !== "confirmado") {
+            const btnConfirmar = document.createElement("button");
+            btnConfirmar.innerHTML = `<i data-feather="check" class="w-4 h-4"></i> Confirmar`;
+            btnConfirmar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+            btnConfirmar.addEventListener("click", () => confirmarAgendamento(a.cliente, a.id));
+            btnContainer.appendChild(btnConfirmar);
+        }
+        
+        // Cancelar
+        const btnCancelar = document.createElement("button");
+        btnCancelar.innerHTML = `<i data-feather="x" class="w-4 h-4"></i> Cancelar`;
+        btnCancelar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-red-500 to-rose-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+        btnCancelar.addEventListener("click", () => cancelarAgendamento(a.cliente, a.id));
+        btnContainer.appendChild(btnCancelar);
+        
+        // Reagendar
+        const btnReagendar = document.createElement("button");
+        btnReagendar.innerHTML = `<i data-feather="refresh-cw" class="w-4 h-4"></i> Reagendar`;
+        btnReagendar.className = "px-3 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-1 shadow-md hover:opacity-90 transition-all";
+        btnReagendar.addEventListener("click", () => abrirModalReagendar(a));
+        btnContainer.appendChild(btnReagendar);
+        
+        div.appendChild(btnContainer);
         meusAgendamentos.appendChild(div);
     });
-
+    
     feather.replace();
-    console.log('✅ Renderização concluída');
+    console.log('✅ Renderização concluída - elementos criados');
 }
-
-// ---------------- INICIALIZAÇÃO ----------------
-initTabsDias();
-renderAgendamentos(); // chama no load, pode mostrar mensagem inicial
-
         
         // ---------------- MODAL REAGENDAR ----------------
         function abrirModalReagendar(agendamento) {
@@ -1003,8 +1083,6 @@ logoutBtn.addEventListener('click', async () => {
         // ---------------- FILTROS ----------------
         searchInput.addEventListener("input", renderAgendamentos);
         statusFilter.addEventListener("change", renderAgendamentos);
-
-
         
         // ---------------- TABS ----------------
         function initTabsDias(){
@@ -1456,11 +1534,6 @@ window.removerDataBloqueada = function(data) {
     </script>
 </body>
 </html>
-
-
-
-
-
 
 
 
