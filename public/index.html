@@ -439,6 +439,7 @@ function logout() {
 
         
   // ---------------- INICIALIZAÇÃO (CORRIGIDA) ----------------
+// ---------------- INICIALIZAÇÃO (CORRIGIDA) ----------------
 async function init() {
     console.log('🚀 Inicializando sistema admin...');
     
@@ -465,6 +466,11 @@ async function init() {
             });
             
             gerarCalendario();
+
+            // Mostrar seções extras só autenticado
+            document.getElementById('meusAgendamentos').style.display = 'block';
+            document.getElementById('filtersSection').style.display = 'block'; 
+            document.getElementById('diasTabs').style.display = 'block';
             
             console.log('✅ Sistema admin inicializado com sucesso');
         } else {
@@ -483,9 +489,34 @@ async function init() {
         configSection.style.display = 'none';
         calendarSection.style.display = 'none';
     }
-    
+
     adicionarEventListeners();
 }
+
+// 🔍 DEBUG: Verificar estado do login
+function debugAuthState() {
+    console.log('🔐 ESTADO DA AUTENTICAÇÃO:');
+    console.log('Token:', localStorage.getItem('userToken') ? 'EXISTE' : 'NÃO EXISTE');
+    console.log('Email:', localStorage.getItem('userEmail'));
+    console.log('Cliente ID:', localStorage.getItem('userClienteId'));
+    console.log('Is Admin:', localStorage.getItem('userIsAdmin'));
+    
+    // Testar token atual
+    const token = localStorage.getItem('userToken');
+    if (token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            console.log('Token payload:', {
+                email: payload.email,
+                exp: new Date(payload.exp * 1000),
+                expirado: Date.now() >= payload.exp * 1000
+            });
+        } catch (e) {
+            console.error('Erro ao decodificar token:', e);
+        }
+    }
+}
+
 // 🔍 DEBUG: Verificar estado do login
 function debugAuthState() {
     console.log('🔐 ESTADO DA AUTENTICAÇÃO:');
@@ -708,77 +739,24 @@ async function carregarConfiguracoes() {
 
 
         
-      function renderAgendamentos() {
+     function renderAgendamentos() {
     console.log('🔍 Renderizando agendamentos, cache:', agendamentosCache);
     
-    const filtroNome = searchInput.value.toLowerCase();
-    const filtroStatus = statusFilter.value;
-    
-    const filtrados = agendamentosCache
-        .filter(a => {
-            // Filtro por nome/email
-            const nomeEmail = (a.nome + ' ' + (a.email || '')).toLowerCase();
-            const passaFiltroNome = nomeEmail.includes(filtroNome);
-            
-            // Filtro por status
-            const passaFiltroStatus = filtroStatus ? a.status === filtroStatus : true;
-            
-            return passaFiltroNome && passaFiltroStatus;
-        })
-        .filter(a => {
-    if (!a.data || !a.horario) {
-        console.log('❌ Agendamento sem data/horário:', a);
-        return false;
+    const meusAgendamentos = document.getElementById('meusAgendamentos');
+    if (!meusAgendamentos) {
+        console.error('❌ Elemento meusAgendamentos não encontrado');
+        return;
     }
-    
-    try {
-        const dataAgendamento = new Date(`${a.data}T${a.horario}`);
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        
-        if (isNaN(dataAgendamento.getTime())) {
-            console.log('❌ Data inválida:', a.data, a.horario);
-            return false;
-        }
-        
-        // FILTRO POR DIA DA SEMANA CORRIGIDO
-        if (diaSelecionado >= 0 && diaSelecionado <= 6) {
-            // Filtro por dia específico (0-6)
-            const passaFiltroDia = dataAgendamento.getDay() === diaSelecionado;
-            const ehDataFutura = dataAgendamento >= hoje;
-            return passaFiltroDia && ehDataFutura;
-        } else {
-            // Filtro por semanas (-1 = semana passada, 1 = próxima semana, etc)
-            const semanas = diaSelecionado;
-            const dataLimite = new Date();
-            
-            if (semanas > 0) {
-                // Próximas semanas (futuro)
-                dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
-                return dataAgendamento >= hoje && dataAgendamento <= dataLimite;
-            } else {
-                // Semanas passadas (passado)
-                dataLimite.setDate(dataLimite.getDate() + (semanas * 7));
-                return dataAgendamento < hoje && dataAgendamento >= dataLimite;
-            }
-        }
-        
-    } catch (error) {
-        console.log('❌ Erro ao processar data:', error, a);
-        return false;
-    }
-})
-    
-    console.log('✅ Agendamentos filtrados:', filtrados);
-    console.log('📅 Dia selecionado:', diaSelecionado);
-    
-    // DEBUG: Mostrar detalhes do primeiro agendamento
-    if (filtrados.length > 0) {
-        console.log('🔍 Detalhes do primeiro agendamento:', filtrados[0]);
-        console.log('📅 Data do agendamento:', filtrados[0].data);
-        console.log('⏰ Horário do agendamento:', filtrados[0].horario);
-        console.log('📆 Dia da semana:', new Date(`${filtrados[0].data}T${filtrados[0].horario}`).getDay());
-    }
+
+    // ✅ MOSTRAR A SEÇÃO (IMPORTANTE!)
+    meusAgendamentos.style.display = 'block';
+    document.getElementById('filtersSection').style.display = 'block';
+    document.getElementById('diasTabs').style.display = 'block';
+
+    // ✅ REMOVER FILTROS TEMPORARIAMENTE PARA TESTE
+    const filtrados = agendamentosCache; // Mostra TODOS sem filtros
+
+    console.log('✅ Agendamentos a serem exibidos:', filtrados.length);
     
     if (filtrados.length === 0) {
         meusAgendamentos.innerHTML = `
@@ -788,9 +766,7 @@ async function carregarConfiguracoes() {
                 </div>
                 <p class="text-gray-300">Nenhum agendamento encontrado</p>
                 <p class="text-sm text-gray-400 mt-2">Total no cache: ${agendamentosCache.length}</p>
-                <p class="text-sm text-gray-400">Filtro aplicado: ${filtroStatus || 'Todos'}</p>
-                <p class="text-sm text-gray-400">Dia selecionado: ${diaSelecionado}</p>
-                <button onclick="console.log('Agendamentos cache:', agendamentosCache)" class="mt-4 px-4 py-2 bg-blue-600 rounded">
+                <button onclick="debugAgendamentos()" class="mt-4 px-4 py-2 bg-blue-600 rounded">
                     Debug no Console
                 </button>
             </div>
@@ -871,6 +847,24 @@ async function carregarConfiguracoes() {
     feather.replace();
     console.log('✅ Renderização concluída - elementos criados');
 }
+
+
+// 🔧 FUNÇÃO DE DEBUG
+function debugAgendamentos() {
+    console.log('🔍 DEBUG AGENDAMENTOS:');
+    console.log('agendamentosCache:', agendamentosCache);
+    console.log('diaSelecionado:', diaSelecionado);
+    console.log('searchInput value:', document.getElementById('searchInput')?.value);
+    console.log('statusFilter value:', document.getElementById('statusFilter')?.value);
+    
+    // Testar filtro manualmente
+    const testeFiltro = agendamentosCache.filter(a => {
+        const dataObj = new Date(`${a.data}T${a.horario}`);
+        return dataObj.getDay() === diaSelecionado;
+    });
+    console.log('🔍 Teste filtro dia', diaSelecionado, ':', testeFiltro.length, 'resultados');
+}
+
         
         // ---------------- MODAL REAGENDAR ----------------
         function abrirModalReagendar(agendamento) {
@@ -1536,6 +1530,7 @@ window.removerDataBloqueada = function(data) {
     </script>
 </body>
 </html>
+
 
 
 
