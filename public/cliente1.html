@@ -446,25 +446,31 @@ function aplicarConfiguracoesNoFormulario(config) {
     console.log('✅ Configurações aplicadas no formulário');
 }
 
-// ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const formData=new FormData(form);
-            const dataToSend={};
-            formData.forEach((v,k)=>dataToSend[k]=v);
+// ---------------- AGENDAR COM VALIDAÇÃO DUPLA ----------------
+form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const formData = new FormData(form);
+    const dataToSend = {};
+    formData.forEach((v,k) => dataToSend[k] = v);
 
-            // Verifica campos obrigatórios
-            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
-                showToast("Preencha todos os campos", "warning");
-                return;
-            }
+    // Verifica campos obrigatórios
+    if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+        showToast("Preencha todos os campos", "warning");
+        return;
+    }
 
-            // Mostrar loading
-            agendarText.classList.add('hidden');
-            agendarSpinner.classList.remove('hidden');
-            form.querySelector('button[type="submit"]').disabled = true;
-            
-            try {
+    // ✅ VALIDAÇÃO DUPLA NO FRONTEND (antes de enviar para o backend)
+    const config = await carregarConfiguracoesCliente();
+    if (!validarDataSelecionada(dataToSend.Data, config)) {
+        return;
+    }
+
+    // Mostrar loading
+    agendarText.classList.add('hidden');
+    agendarSpinner.classList.remove('hidden');
+    form.querySelector('button[type="submit"]').disabled = true;
+    
+    try {
     // Primeiro, criar o pagamento PIX - MERCADO PAGO
     const valorEmReais = 0.01; // 1 centavo
 
@@ -698,8 +704,7 @@ async function carregarConfiguracoesCliente() {
     }
 }
         
-        // ---------------- VALIDAR DATA SELECIONADA ----------------
-        // ---------------- VALIDAR DATA SELECIONADA ----------------
+        // ---------------- VALIDAR DATA SELECIONADA CORRIGIDA ----------------
 function validarDataSelecionada(data, config) {
     if (!data) return false;
     
@@ -708,10 +713,13 @@ function validarDataSelecionada(data, config) {
     
     const dataObj = new Date(data + 'T00:00:00');
     const diaSemana = dataObj.getDay();
-    const dataISO = dataObj.toISOString().split('T')[0];
+    const dataISO = data; // Já está no formato YYYY-MM-DD
+
+    console.log(`🔍 Validando data: ${dataISO}, dia semana: ${diaSemana}`);
 
     // 1. Verificar se a data está na lista de datas bloqueadas gerais
     if (configGeral.datas_bloqueadas && configGeral.datas_bloqueadas.includes(dataISO)) {
+        console.log('❌ Data bloqueada na configuração geral');
         showToast('Esta data não está disponível para agendamento', 'error');
         document.getElementById('Data').value = '';
         return false;
@@ -721,6 +729,7 @@ function validarDataSelecionada(data, config) {
     const configDataEspecifica = configDatas.find(d => d.data === dataISO);
     if (configDataEspecifica) {
         if (configDataEspecifica.bloqueada) {
+            console.log('❌ Data bloqueada na configuração específica');
             showToast('Esta data não está disponível para agendamento', 'error');
             document.getElementById('Data').value = '';
             return false;
@@ -730,6 +739,7 @@ function validarDataSelecionada(data, config) {
     // 3. Verificar se o dia da semana está disponível
     if (!configGeral.dias_semana.includes(diaSemana)) {
         const diasSemanaNomes = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+        console.log(`❌ Dia da semana não permitido: ${diasSemanaNomes[diaSemana]}`);
         showToast(`${diasSemanaNomes[diaSemana]} não está disponível para agendamento`, 'error');
         document.getElementById('Data').value = '';
         return false;
@@ -739,11 +749,13 @@ function validarDataSelecionada(data, config) {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
     if (dataObj < hoje) {
+        console.log('❌ Data no passado');
         showToast('Não é possível agendar para datas passadas', 'error');
         document.getElementById('Data').value = '';
         return false;
     }
 
+    console.log('✅ Data válida');
     return true;
 }
         
