@@ -105,6 +105,69 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
+// ---------------- ROTA PARA CLIENTE BUSCAR CONFIGURAÇÕES ----------------
+app.get("/config/:cliente", async (req, res) => {
+    try {
+        const { cliente } = req.params;
+        
+        console.log(`🔧 Buscando configurações para cliente: ${cliente}`);
+        
+        // Buscar configurações gerais
+        const configHorarios = await getConfigHorarios(cliente);
+        
+        // Buscar configurações específicas de datas (próximos 30 dias)
+        const trintaDiasFrente = new Date();
+        trintaDiasFrente.setDate(trintaDiasFrente.getDate() + 30);
+        
+        const { data: configDatas, error } = await supabase
+            .from("config_datas_especificas")
+            .select("*")
+            .eq("cliente_id", cliente)
+            .gte("data", new Date().toISOString().split('T')[0])
+            .lte("data", trintaDiasFrente.toISOString().split('T')[0])
+            .order("data", { ascending: true });
+
+        res.json({
+            config_geral: configHorarios,
+            config_datas_especificas: configDatas || []
+        });
+        
+    } catch (err) {
+        console.error("Erro ao buscar configurações para cliente:", err);
+        res.status(500).json({ error: "Erro interno ao carregar configurações" });
+    }
+});
+
+// ---------------- VERIFICAR SE HORÁRIO ESTÁ DISPONÍVEL ----------------
+async function horarioDisponivel(clienteId, data, horario, ignoreId = null) {
+    try {
+        let query = supabase
+            .from("agendamentos")
+            .select("id")
+            .eq("cliente", clienteId)
+            .eq("data", data)
+            .eq("horario", horario)
+            .neq("status", "cancelado");
+
+        if (ignoreId) {
+            query = query.neq("id", ignoreId);
+        }
+
+        const { data: agendamentos, error } = await query;
+
+        if (error) {
+            console.error("Erro ao verificar horário:", error);
+            return false;
+        }
+
+        return agendamentos.length === 0;
+    } catch (error) {
+        console.error("Erro na verificação de horário:", error);
+        return false;
+    }
+}
+
+
 // ---------------- ROTA DEBUG TOKEN ----------------
 app.post("/debug-token", async (req, res) => {
     try {
@@ -1114,6 +1177,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
