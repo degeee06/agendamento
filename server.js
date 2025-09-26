@@ -354,78 +354,49 @@ async function getConfigHorarios(clienteId) {
   try {
     console.log(`🔍 Buscando configurações no banco para: ${clienteId}`);
     
+    // 🔧 CORREÇÃO: Use .select() em vez de .single() para pegar múltiplos registros
     const { data, error } = await supabase
       .from("config_horarios")
       .select("*")
       .eq("cliente_id", clienteId)
-      .maybeSingle();  // 🔧 CORREÇÃO: Usar maybeSingle
+      .order("created_at", { ascending: false }); // Pega o mais recente primeiro
 
     if (error) {
       console.log('❌ Erro na query:', error);
       return criarConfiguracaoPadrao();
     }
 
-    if (!data) {
+    if (!data || data.length === 0) {
       console.log('ℹ️ Nenhuma configuração encontrada para cliente:', clienteId);
       return criarConfiguracaoPadrao();
     }
 
-    // 🔧 CORREÇÃO CRÍTICA: Log detalhado dos dados BRUTOS do banco
-    console.log('✅ Dados BRUTOS do banco:', {
-      id: data.id,
-      cliente_id: data.cliente_id,
-      dias_semana: data.dias_semana,
-      horarios_disponiveis: data.horarios_disponiveis,
-      datas_bloqueadas: data.datas_bloqueadas,
-      datas_bloqueadas_count: data.datas_bloqueadas ? data.datas_bloqueadas.length : 0
-    });
-
-    // 🔧 CORREÇÃO: Converter strings para números
-    let dias_semana = data.dias_semana;
-    if (Array.isArray(dias_semana) && dias_semana.length > 0) {
-      if (typeof dias_semana[0] === 'string') {
-        dias_semana = dias_semana.map(dia => parseInt(dia));
-        console.log('🔧 Dias convertidos para número:', dias_semana);
-      }
-    } else {
-      dias_semana = [1, 2, 3, 4, 5];
-    }
-
-    // 🔧 CORREÇÃO: Formatar horários
-    let horarios_disponiveis = data.horarios_disponiveis || [];
-    if (Array.isArray(horarios_disponiveis) && horarios_disponiveis.length > 0) {
-      horarios_disponiveis = horarios_disponiveis.map(horario => {
-        if (typeof horario === 'string') {
-          // Remove segundos se existirem (09:00:00 → 09:00)
-          return horario.split(':').slice(0, 2).join(':');
-        }
-        return horario;
+    // 🔧 CORREÇÃO: Se houver múltiplos registros, usar o mais recente e logar alerta
+    if (data.length > 1) {
+      console.warn(`⚠️ ENCONTRADOS ${data.length} REGISTROS DUPLICADOS PARA ${clienteId}`);
+      console.warn('📊 Registros encontrados:');
+      data.forEach((record, index) => {
+        console.warn(`  ${index + 1}. ID: ${record.id}, Criado: ${record.created_at}`);
       });
-    } else {
-      horarios_disponiveis = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"];
+      console.warn('🔧 Usando o registro mais recente');
+      
+      // 🔧 OPÇÃO: Aqui você pode automaticamente deletar os duplicados
+      // await limparRegistrosDuplicados(clienteId, data[0].id);
     }
 
-    // 🔧 CORREÇÃO: Garantir array de datas bloqueadas
-    let datas_bloqueadas = data.datas_bloqueadas || [];
-    if (!Array.isArray(datas_bloqueadas)) {
-      datas_bloqueadas = [];
-    }
+    const configData = data[0]; // Usa o mais recente
 
-    console.log('🎯 Configuração FINAL processada:', {
-      dias_semana: dias_semana,
-      horarios_disponiveis: horarios_disponiveis,
-      datas_bloqueadas: datas_bloqueadas,
-      datas_bloqueadas_count: datas_bloqueadas.length
+    console.log('✅ Dados BRUTOS do banco:', {
+      id: configData.id,
+      cliente_id: configData.cliente_id,
+      dias_semana: configData.dias_semana,
+      horarios_disponiveis: configData.horarios_disponiveis,
+      datas_bloqueadas: configData.datas_bloqueadas,
+      datas_bloqueadas_count: configData.datas_bloqueadas ? configData.datas_bloqueadas.length : 0
     });
 
-    return {
-      dias_semana: dias_semana,
-      horarios_disponiveis: horarios_disponiveis,
-      intervalo_minutos: data.intervalo_minutos || 60,
-      max_agendamentos_dia: data.max_agendamentos_dia || 10,
-      datas_bloqueadas: datas_bloqueadas,
-      dias_semana_info: DIAS_SEMANA.filter(dia => dias_semana.includes(dia.id))
-    };
+    // Processar a configuração
+    return processarConfiguracao(configData);
 
   } catch (error) {
     console.error("❌ Erro crítico ao obter configurações:", error);
@@ -433,18 +404,25 @@ async function getConfigHorarios(clienteId) {
   }
 }
 
-// 🔧 FUNÇÃO AUXILIAR: Criar configuração padrão
-function criarConfiguracaoPadrao() {
-  console.log('🔄 Usando configuração padrão');
-  return {
-    dias_semana: [1, 2, 3, 4, 5],
-    horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-    intervalo_minutos: 60,
-    max_agendamentos_dia: 10,
-    datas_bloqueadas: [],
-    dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
-  };
+// 🔧 FUNÇÃO AUXILIAR: Limpar registros duplicados
+async function limparRegistrosDuplicados(clienteId, idManter) {
+  try {
+    const { error } = await supabase
+      .from("config_horarios")
+      .delete()
+      .eq("cliente_id", clienteId)
+      .neq("id", idManter);
+
+    if (error) {
+      console.error('❌ Erro ao limpar registros duplicados:', error);
+    } else {
+      console.log('✅ Registros duplicados removidos');
+    }
+  } catch (error) {
+    console.error('❌ Erro na limpeza de duplicados:', error);
+  }
 }
+
 
 // 🔧 TESTE: Verificar conexão direta
 async function testeConexaoConfig() {
@@ -1263,6 +1241,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
