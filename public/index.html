@@ -324,33 +324,24 @@ window.formatData = formatData;
 
 // 🔄 VERIFICAR AUTENTICAÇÃO
 // 🔄 VERIFICAR AUTENTICAÇÃO (ADMIN)
+// 🔄 VERIFICAR AUTENTICAÇÃO (ADMIN)
 async function checkAuth() {
     const token = localStorage.getItem('userToken');
     
     if (!token) {
         console.log('❌ Nenhum token encontrado');
-        window.location.href = '/login.html';
         return false;
     }
 
     try {
         // Testa o token atual
-        const response = await fetch('/debug-token', {
+        const response = await fetchWithAuth('/debug-token', {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
             body: JSON.stringify({ token })
         });
         
         if (!response.ok) {
-            // Token inválido - tenta renovar
-            const refreshed = await refreshAuthToken();
-            if (!refreshed) {
-                throw new Error('Não foi possível renovar o token');
-            }
-            return true;
+            throw new Error('Token inválido');
         }
         
         const result = await response.json();
@@ -359,14 +350,14 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('❌ Erro de autenticação:', error);
-        logout();
+        // Não faz logout automático aqui - deixa a init() decidir
         return false;
     }
 }
 
-// 🔄 FETCH COM AUTENTICAÇÃO AUTOMÁTICA
+// 🔄 FETCH COM AUTENTICAÇÃO AUTOMÁTICA (ADMIN)
 async function fetchWithAuth(url, options = {}) {
-    const token = localStorage.getItem('userToken');
+    let token = localStorage.getItem('userToken');
     
     const headers = {
         'Content-Type': 'application/json',
@@ -385,9 +376,14 @@ async function fetchWithAuth(url, options = {}) {
         const refreshed = await refreshAuthToken();
         
         if (refreshed) {
-            const newToken = localStorage.getItem('userToken');
-            headers['Authorization'] = `Bearer ${newToken}`;
+            // Repete a requisição com o novo token
+            token = localStorage.getItem('userToken');
+            headers['Authorization'] = `Bearer ${token}`;
             response = await fetch(url, { ...options, headers });
+        } else {
+            // Não conseguiu renovar - faz logout
+            logout();
+            throw new Error('Sessão expirada. Faça login novamente.');
         }
     }
     
@@ -442,40 +438,80 @@ function logout() {
 
 
         
-    // ---------------- INICIALIZAÇÃO ----------------
-// ---------------- INICIALIZAÇÃO ----------------
+  // ---------------- INICIALIZAÇÃO (CORRIGIDA) ----------------
 async function init() {
     console.log('🚀 Inicializando sistema admin...');
     
-    // Verificar autenticação
-    const isAuthenticated = await checkAuth();
-    
-    if (isAuthenticated) {
-        // ✅ CORREÇÃO: Carregar dados SE usuário autenticado
-        userToken = localStorage.getItem('userToken');
-        loginSection.style.display = 'none';
-        logoutBtn.style.display = 'flex';
-        configSection.style.display = 'block';
-        calendarSection.style.display = 'block';
+    try {
+        // Verificar autenticação
+        const isAuthenticated = await checkAuth();
         
-        // ✅ CORREÇÃO: Carregar configurações e agendamentos
-        await carregarConfiguracoes();
-        await listarAgendamentos();
-        gerarCalendario();
-        
-        console.log('✅ Sistema admin inicializado com sucesso');
-    } else {
-        // Usuário não autenticado
+        if (isAuthenticated) {
+            // Usuário autenticado - mostrar conteúdo
+            userToken = localStorage.getItem('userToken');
+            loginSection.style.display = 'none';
+            logoutBtn.style.display = 'flex';
+            configSection.style.display = 'block';
+            calendarSection.style.display = 'block';
+            
+            // ✅ CORREÇÃO: Carregar dados em sequência com tratamento de erro
+            await carregarConfiguracoes().catch(err => {
+                console.error('Erro ao carregar configurações:', err);
+                // Não impede o carregamento dos agendamentos
+            });
+            
+            await listarAgendamentos().catch(err => {
+                console.error('Erro ao carregar agendamentos:', err);
+            });
+            
+            gerarCalendario();
+            
+            console.log('✅ Sistema admin inicializado com sucesso');
+        } else {
+            // Usuário não autenticado - mostrar login
+            loginSection.style.display = 'block';
+            logoutBtn.style.display = 'none';
+            configSection.style.display = 'none';
+            calendarSection.style.display = 'none';
+            console.log('🔒 Aguardando autenticação...');
+        }
+    } catch (error) {
+        console.error('❌ Erro crítico na inicialização:', error);
+        // Fallback: mostrar tela de login
         loginSection.style.display = 'block';
         logoutBtn.style.display = 'none';
         configSection.style.display = 'none';
         calendarSection.style.display = 'none';
-        console.log('🔒 Aguardando autenticação...');
     }
     
     adicionarEventListeners();
 }
+// 🔍 DEBUG: Verificar estado do login
+function debugAuthState() {
+    console.log('🔐 ESTADO DA AUTENTICAÇÃO:');
+    console.log('Token:', localStorage.getItem('userToken') ? 'EXISTE' : 'NÃO EXISTE');
+    console.log('Email:', localStorage.getItem('userEmail'));
+    console.log('Cliente ID:', localStorage.getItem('userClienteId'));
+    console.log('Is Admin:', localStorage.getItem('userIsAdmin'));
+    
+    // Testar token atual
+    const token = localStorage.getItem('userToken');
+    if (token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            console.log('Token payload:', {
+                email: payload.email,
+                exp: new Date(payload.exp * 1000),
+                expirado: Date.now() >= payload.exp * 1000
+            });
+        } catch (e) {
+            console.error('Erro ao decodificar token:', e);
+        }
+    }
+}
 
+
+        
 // ====== INICIALIZAR AO CARREGAR A PÁGINA ======
 document.addEventListener('DOMContentLoaded', function() {
     init();
@@ -521,86 +557,55 @@ document.addEventListener('DOMContentLoaded', function() {
             },3000);
         }
         
-        // ---------------- CONFIGURAÇÕES DE HORÁRIOS ----------------
-     // ---------------- CARREGAR CONFIGURAÇÕES ----------------
+        // ---------------- CARREGAR CONFIGURAÇÕES (CORRIGIDA) ----------------
 async function carregarConfiguracoes() {
     try {
         console.log('📡 Carregando configurações...');
         
-        // ✅ CORREÇÃO: Obter clienteId do localStorage ou do usuário
-        const clienteId = localStorage.getItem('userClienteId') || 'cliente1';
-        console.log('🔧 Cliente ID:', clienteId);
+        // ✅ CORREÇÃO: Obter clienteId de forma segura
+        const userClienteId = localStorage.getItem('userClienteId');
+        const clienteId = userClienteId || 'cliente1'; // Fallback seguro
+        
+        console.log('🔧 Usando Cliente ID:', clienteId);
         
         const response = await fetchWithAuth(`/admin/config/${clienteId}`);
         
         if (!response.ok) {
+            // Se for erro 403 (acesso negado), pode ser porque é admin tentando acessar cliente específico
+            if (response.status === 403) {
+                console.log('⚠️ Admin tentando acessar config específica, buscando config geral...');
+                // Como admin, pode buscar configurações de algum cliente padrão ou não carregar
+                showToast('Admin - Use a interface de configurações específicas', 'info');
+                return;
+            }
             throw new Error(`Erro HTTP: ${response.status}`);
         }
         
         const data = await response.json();
         console.log('✅ Configurações carregadas:', data);
         
-        // Preencher os campos do formulário
-        document.getElementById('diasSemana').value = data.dias_semana.join(',');
-        document.getElementById('horariosDisponiveis').value = data.horarios_disponiveis.join(',');
-        document.getElementById('intervaloMinutos').value = data.intervalo_minutos;
-        document.getElementById('maxAgendamentos').value = data.max_agendamentos_dia;
-        document.getElementById('datasBloqueadas').value = data.datas_bloqueadas.join(',');
+        // ✅ CORREÇÃO: Verificar se elementos existem antes de preencher
+        if (document.getElementById('diasSemana')) {
+            document.getElementById('diasSemana').value = data.dias_semana?.join(',') || '';
+        }
+        if (document.getElementById('horariosDisponiveis')) {
+            document.getElementById('horariosDisponiveis').value = data.horarios_disponiveis?.join(',') || '';
+        }
+        if (document.getElementById('intervaloMinutos')) {
+            document.getElementById('intervaloMinutos').value = data.intervalo_minutos || 60;
+        }
+        if (document.getElementById('maxAgendamentos')) {
+            document.getElementById('maxAgendamentos').value = data.max_agendamentos_dia || 10;
+        }
+        if (document.getElementById('datasBloqueadas')) {
+            document.getElementById('datasBloqueadas').value = data.datas_bloqueadas?.join(',') || '';
+        }
         
     } catch (error) {
         console.error('❌ Erro ao carregar configurações:', error);
-        showToast('Erro ao carregar configurações', 'error');
+        showToast('Erro ao carregar configurações: ' + error.message, 'error');
     }
 }
-        
-        function renderizarConfiguracoes() {
-            if (!configHorarios) return;
-            
-            // Dias da semana
-            document.querySelectorAll('.dias-semana-btn').forEach(btn => {
-                const dia = parseInt(btn.dataset.dia);
-                if (configHorarios.dias_semana.includes(dia)) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-            
-            // Horários
-            const horariosContainer = document.getElementById('horariosConfig');
-            horariosContainer.innerHTML = '';
-            
-            configHorarios.horarios_disponiveis.forEach(horario => {
-                const btn = document.createElement('button');
-                btn.className = 'horario-btn p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all';
-                btn.textContent = horario;
-                btn.innerHTML = `${horario} <i data-feather="x" class="w-3 h-3 ml-1 inline"></i>`;
-                btn.addEventListener('click', () => removerHorario(horario));
-                horariosContainer.appendChild(btn);
-            });
-            
-            // Configurações gerais
-            document.getElementById('intervaloMinutos').value = configHorarios.intervalo_minutos;
-            document.getElementById('maxAgendamentos').value = configHorarios.max_agendamentos_dia;
-            
-            // Datas bloqueadas
-            const datasBloqueadasList = document.getElementById('datasBloqueadasList');
-            datasBloqueadasList.innerHTML = '';
-            
-            configHorarios.datas_bloqueadas.forEach(data => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between items-center p-2 bg-white/5 rounded';
-                div.innerHTML = `
-                    <span>${formatData(data)}</span>
-                    <button class="text-red-400 hover:text-red-300" onclick="removerDataBloqueada('${data}')">
-                        <i data-feather="x" class="w-4 h-4"></i>
-                    </button>
-                `;
-                datasBloqueadasList.appendChild(div);
-            });
-            
-            feather.replace();
-        }
         
         // ---------------- CALENDÁRIO ----------------
         function gerarCalendario() {
@@ -1510,6 +1515,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
