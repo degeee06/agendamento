@@ -453,26 +453,27 @@ async function init() {
             configSection.style.display = 'block';
             calendarSection.style.display = 'block';
             
-            // ✅ CORREÇÃO: EXIBIR AS TABS QUANDO AUTENTICADO
+            // ✅ CORREÇÃO: EXIBIR TODAS AS SEÇÕES QUANDO AUTENTICADO
             document.getElementById('filtersSection').style.display = 'block';
             document.getElementById('diasTabs').style.display = 'block';
             meusAgendamentos.style.display = 'block';
             
-            // ✅ CORREÇÃO: Carregar dados em sequência com tratamento de erro
             await carregarConfiguracoes().catch(err => {
                 console.error('Erro ao carregar configurações:', err);
-                // Não impede o carregamento dos agendamentos
             });
             
             await listarAgendamentos().catch(err => {
                 console.error('Erro ao carregar agendamentos:', err);
             });
             
-            initTabsDias();
             gerarCalendario();
+            
+            // ✅ CORREÇÃO: INICIALIZAR TABS NA INICIALIZAÇÃO
+            initTabsDias();
+            
             console.log('✅ Sistema admin inicializado com sucesso');
         } else {
-            // Usuário não autenticado - ocultar tabs também
+            // Usuário não autenticado - mostrar login
             loginSection.style.display = 'block';
             logoutBtn.style.display = 'none';
             configSection.style.display = 'none';
@@ -482,6 +483,8 @@ async function init() {
             document.getElementById('filtersSection').style.display = 'none';
             document.getElementById('diasTabs').style.display = 'none';
             meusAgendamentos.style.display = 'none';
+            
+            console.log('🔒 Aguardando autenticação...');
         }
     } catch (error) {
         console.error('❌ Erro crítico na inicialização:', error);
@@ -490,6 +493,9 @@ async function init() {
         logoutBtn.style.display = 'none';
         configSection.style.display = 'none';
         calendarSection.style.display = 'none';
+        document.getElementById('filtersSection').style.display = 'none';
+        document.getElementById('diasTabs').style.display = 'none';
+        meusAgendamentos.style.display = 'none';
     }
     
     adicionarEventListeners();
@@ -1550,6 +1556,7 @@ window.removerDataBloqueada = function(data) {
     </script>
 </body>
 </html>
+
 
 
 
