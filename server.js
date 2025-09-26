@@ -477,13 +477,11 @@ app.get("/api/verificar-data/:cliente", async (req, res) => {
 
 // ========== ROTAS PROTEGIDAS (COM AUTENTICAÇÃO) ==========
 
-// Aplicar middleware de autenticação para todas as rotas abaixo
-app.use(authMiddleware);
 
 // ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
 
 // Obter configurações
-app.get("/admin/config/:cliente", async (req, res) => {
+app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
@@ -502,7 +500,7 @@ app.get("/api/dias-semana", (req, res) => {
 });
 
 // Atualizar configurações
-app.put("/admin/config/:cliente", async (req, res) => {
+app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
@@ -536,7 +534,7 @@ app.put("/admin/config/:cliente", async (req, res) => {
 });
 
 // Configurações específicas por data
-app.get("/admin/config/:cliente/datas", async (req, res) => {
+app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
     const { startDate, endDate } = req.query;
@@ -563,7 +561,7 @@ app.get("/admin/config/:cliente/datas", async (req, res) => {
 });
 
 // Adicionar/atualizar configuração específica de data
-app.post("/admin/config/:cliente/datas", async (req, res) => {
+app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
@@ -594,7 +592,7 @@ app.post("/admin/config/:cliente/datas", async (req, res) => {
 
 // ---------------- ROTAS EXISTENTES (MANTIDAS) ----------------
 
-app.get("/agendamentos/:cliente?", async (req, res) => {
+app.get("/agendamentapp.get("/agendamentos/:cliente?", authMiddleware, async (req, res) => {
   try {
     let cliente = req.params.cliente;
 
@@ -879,7 +877,7 @@ app.post("/webhook", async (req, res) => {
 });
 
 // ---------------- Agendar ----------------
-app.post("/agendar/:cliente", async (req, res) => {
+app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   try {
     const cliente = req.params.cliente;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
@@ -938,7 +936,7 @@ app.post("/agendar/:cliente", async (req, res) => {
 });
 
 // ---------------- Confirmar / Cancelar / Reagendar ----------------
-app.post("/agendamentos/:cliente/confirmar/:id", async (req,res)=>{
+app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
   try {
     const { cliente, id } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
@@ -966,7 +964,7 @@ app.post("/agendamentos/:cliente/confirmar/:id", async (req,res)=>{
   }
 });
 
-app.post("/agendamentos/:cliente/cancelar/:id", async (req,res)=>{
+app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=>{
   try {
     const { cliente, id } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
@@ -994,7 +992,7 @@ app.post("/agendamentos/:cliente/cancelar/:id", async (req,res)=>{
   }
 });
 
-app.post("/agendamentos/:cliente/reagendar/:id", async (req,res)=>{
+app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)=>{
   try {
     const { cliente, id } = req.params;
     const { novaData, novoHorario } = req.body;
@@ -1071,3 +1069,4 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
