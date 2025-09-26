@@ -350,61 +350,75 @@ const DIAS_SEMANA = [
 // ---------------- FUNÇÕES PARA CONFIGURAÇÃO ----------------
 
 // ---------------- Obter configurações de horários CORRIGIDA ----------------
-// ---------------- Obter configurações de horários CORRIGIDA ----------------
 async function getConfigHorarios(clienteId) {
   try {
+    console.log(`🔍 Buscando configurações no banco para: ${clienteId}`);
+    
     const { data, error } = await supabase
       .from("config_horarios")
       .select("*")
       .eq("cliente_id", clienteId)
-      .single();
+      .maybeSingle();  // 🔧 CORREÇÃO: Usar maybeSingle
 
-    if (error || !data) {
-      console.log('ℹ️ Configuração não encontrada, usando padrão');
-      return {
-        dias_semana: [1, 2, 3, 4, 5],
-        horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-        intervalo_minutos: 60,
-        max_agendamentos_dia: 10,
-        datas_bloqueadas: [],
-        dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
-      };
+    if (error) {
+      console.log('❌ Erro na query:', error);
+      return criarConfiguracaoPadrao();
     }
 
-    // 🔧 CORREÇÃO CRÍTICA: Converter strings para números
+    if (!data) {
+      console.log('ℹ️ Nenhuma configuração encontrada para cliente:', clienteId);
+      return criarConfiguracaoPadrao();
+    }
+
+    // 🔧 CORREÇÃO CRÍTICA: Log detalhado dos dados BRUTOS do banco
+    console.log('✅ Dados BRUTOS do banco:', {
+      id: data.id,
+      cliente_id: data.cliente_id,
+      dias_semana: data.dias_semana,
+      horarios_disponiveis: data.horarios_disponiveis,
+      datas_bloqueadas: data.datas_bloqueadas,
+      datas_bloqueadas_count: data.datas_bloqueadas ? data.datas_bloqueadas.length : 0
+    });
+
+    // 🔧 CORREÇÃO: Converter strings para números
     let dias_semana = data.dias_semana;
-    if (Array.isArray(dias_semana) && dias_semana.length > 0 && typeof dias_semana[0] === 'string') {
-      dias_semana = dias_semana.map(dia => parseInt(dia));
-      console.log('🔧 Dias da semana convertidos:', dias_semana);
+    if (Array.isArray(dias_semana) && dias_semana.length > 0) {
+      if (typeof dias_semana[0] === 'string') {
+        dias_semana = dias_semana.map(dia => parseInt(dia));
+        console.log('🔧 Dias convertidos para número:', dias_semana);
+      }
+    } else {
+      dias_semana = [1, 2, 3, 4, 5];
     }
 
-    // 🔧 CORREÇÃO: Formatar horários (remover segundos se existirem)
+    // 🔧 CORREÇÃO: Formatar horários
     let horarios_disponiveis = data.horarios_disponiveis || [];
     if (Array.isArray(horarios_disponiveis) && horarios_disponiveis.length > 0) {
       horarios_disponiveis = horarios_disponiveis.map(horario => {
-        if (horario.includes(':')) {
-          // Se tem segundos (09:00:00), remove os segundos
-          const parts = horario.split(':');
-          return parts.slice(0, 2).join(':');
+        if (typeof horario === 'string') {
+          // Remove segundos se existirem (09:00:00 → 09:00)
+          return horario.split(':').slice(0, 2).join(':');
         }
         return horario;
       });
+    } else {
+      horarios_disponiveis = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"];
     }
 
-    // 🔧 CORREÇÃO: Garantir que datas_bloqueadas seja um array válido
+    // 🔧 CORREÇÃO: Garantir array de datas bloqueadas
     let datas_bloqueadas = data.datas_bloqueadas || [];
     if (!Array.isArray(datas_bloqueadas)) {
       datas_bloqueadas = [];
     }
 
-    console.log('📦 Configuração FINAL carregada:', {
+    console.log('🎯 Configuração FINAL processada:', {
       dias_semana: dias_semana,
       horarios_disponiveis: horarios_disponiveis,
       datas_bloqueadas: datas_bloqueadas,
-      quantidade_datas_bloqueadas: datas_bloqueadas.length
+      datas_bloqueadas_count: datas_bloqueadas.length
     });
 
-    const config = {
+    return {
       dias_semana: dias_semana,
       horarios_disponiveis: horarios_disponiveis,
       intervalo_minutos: data.intervalo_minutos || 60,
@@ -413,20 +427,47 @@ async function getConfigHorarios(clienteId) {
       dias_semana_info: DIAS_SEMANA.filter(dia => dias_semana.includes(dia.id))
     };
 
-    return config;
-
   } catch (error) {
-    console.error("Erro ao obter configurações de horários:", error);
-    return {
-      dias_semana: [1, 2, 3, 4, 5],
-      horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-      intervalo_minutos: 60,
-      max_agendamentos_dia: 10,
-      datas_bloqueadas: [],
-      dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
-    };
+    console.error("❌ Erro crítico ao obter configurações:", error);
+    return criarConfiguracaoPadrao();
   }
 }
+
+// 🔧 FUNÇÃO AUXILIAR: Criar configuração padrão
+function criarConfiguracaoPadrao() {
+  console.log('🔄 Usando configuração padrão');
+  return {
+    dias_semana: [1, 2, 3, 4, 5],
+    horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
+    intervalo_minutos: 60,
+    max_agendamentos_dia: 10,
+    datas_bloqueadas: [],
+    dias_semana_info: DIAS_SEMANA.filter(dia => [1, 2, 3, 4, 5].includes(dia.id))
+  };
+}
+
+// 🔧 TESTE: Verificar conexão direta
+async function testeConexaoConfig() {
+  try {
+    console.log('🔍 TESTE DE CONEXÃO COM BANCO...');
+    
+    const { data, error } = await supabase
+      .from("config_horarios")
+      .select("id, cliente_id, datas_bloqueadas")
+      .eq("cliente_id", "cliente1");
+
+    console.log('📊 RESULTADO DO TESTE:');
+    console.log('Data:', data);
+    console.log('Error:', error);
+    console.log('Quantidade de registros:', data ? data.length : 0);
+    
+  } catch (error) {
+    console.error('❌ Erro no teste:', error);
+  }
+}
+
+// Execute no console do servidor para testar
+// testeConexaoConfig();
 
 // Obter configurações específicas por data
 async function getConfigDataEspecifica(clienteId, data) {
@@ -1222,6 +1263,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
