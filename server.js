@@ -477,6 +477,8 @@ app.get("/api/verificar-data/:cliente", async (req, res) => {
 
 // ========== ROTAS PROTEGIDAS (COM AUTENTICAÇÃO) ==========
 
+// Aplicar middleware de autenticação para todas as rotas abaixo
+app.use(authMiddleware);
 
 // ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
 
@@ -592,7 +594,7 @@ app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
 
 // ---------------- ROTAS EXISTENTES (MANTIDAS) ----------------
 
-app.get("/agendamentapp.get("/agendamentos/:cliente?", authMiddleware, async (req, res) => {
+app.get("/agendamentos/:cliente?", authMiddleware, async (req, res) => {
   try {
     let cliente = req.params.cliente;
 
@@ -1069,4 +1071,3 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
-
