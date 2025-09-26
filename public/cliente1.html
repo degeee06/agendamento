@@ -285,484 +285,466 @@
     <!-- Toast Container -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50"></div>
     
-   <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
-    
-    const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
-    
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    
-    let telefoneMask = null;
-    let pagamentoPendente = false;
-    let paymentCheckInterval = null;
-    let currentPaymentId = null;
-    let paymentExpiresAt = null;
-    let configCliente = null;
+    <script type="module">
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+        
+        const SUPABASE_URL = "https://otyxjcxxqwjotnuyrvmc.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXhqY3h4cXdqb3RudXlydm1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0MzU5MTQsImV4cCI6MjA3MzAxMTkxNH0.O6pWtKMQvsIQlOt7G6nIcDMMKoTJU-G-qpZiiE6Q3Hk";
+        
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let telefoneMask = null;
+        let pagamentoPendente = false;
+        let paymentCheckInterval = null;
+        let currentPaymentId = null;
+        let paymentExpiresAt = null;
+        
+        const form = document.getElementById('agendamentoForm');
+        const agendarText = document.getElementById("agendarText");
+        const agendarSpinner = document.getElementById("agendarSpinner");
+        const telefoneInput = document.getElementById("Telefone");
+        const dataInput = document.getElementById("Data");
+        const horarioInput = document.getElementById("Horario");
+        
+      const pathParts = window.location.pathname.split('/');
+let cliente = "cliente1"; // padrão
 
-    const form = document.getElementById('agendamentoForm');
-    const agendarText = document.getElementById("agendarText");
-    const agendarSpinner = document.getElementById("agendarSpinner");
-    const telefoneInput = document.getElementById("Telefone");
-    const dataInput = document.getElementById("Data");
-    const horarioInput = document.getElementById("Horario");
-    const nomeInput = document.getElementById("Nome");
-    
-    const pathParts = window.location.pathname.split('/');
-    let cliente = "cliente1";
-
-    if (pathParts[1] && pathParts[1] !== "cliente") {
-        cliente = pathParts[1];
-    } else if (pathParts[1] === "cliente" && pathParts[2]) {
-        cliente = pathParts[2];
-    } else {
-        const token = localStorage.getItem("userToken");
-        if (token) {
-            try {
-                const payload = JSON.parse(atob(token.split(".")[1]));
-                if (payload?.user_metadata?.cliente_id) {
-                    cliente = payload.user_metadata.cliente_id;
-                }
-            } catch (e) {
-                console.error("Erro ao decodificar token:", e);
-            }
-        }
-    }
-
-    console.log("Cliente definido:", cliente);
-    
-    // ---------------- TOASTS ----------------
-    let activeToasts = [];
-    
-    function showToast(message, type = "success") {
-        const colors = {
-            success: "bg-gradient-to-r from-green-500 to-teal-400",
-            error: "bg-gradient-to-r from-red-500 to-pink-500",
-            info: "bg-gradient-to-r from-blue-500 to-cyan-400",
-            warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
-        };
-        
-        const container = document.getElementById("toast-container");
-        
-        if (activeToasts.length >= 3) {
-            const oldest = activeToasts.shift();
-            oldest.remove();
-        }
-        
-        const toast = document.createElement("div");
-        toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
-        toast.innerHTML = `
-            <i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i>
-            <span>${message}</span>
-        `;
-        
-        container.appendChild(toast);
-        activeToasts.push(toast);
-        feather.replace();
-        
-        requestAnimationFrame(()=>{
-            toast.classList.remove("opacity-0","translate-x-5");
-            toast.classList.add("opacity-100","translate-x-0");
-        });
-        
-        setTimeout(()=>{
-            toast.classList.add("opacity-0","translate-x-5");
-            setTimeout(()=>{
-                toast.remove();
-                activeToasts=activeToasts.filter(t=>t!==toast);
-            },300);
-        },3000);
-    }
-
-    // ---------------- CARREGAR CONFIGURAÇÃO DO CLIENTE ----------------
-    async function carregarConfiguracaoCliente() {
+if (pathParts[1] && pathParts[1] !== "cliente") {
+    // URL /cliente1
+    cliente = pathParts[1];
+} else if (pathParts[1] === "cliente" && pathParts[2]) {
+    // URL /cliente/cliente1
+    cliente = pathParts[2];
+} else {
+    // tenta extrair do token
+    const token = localStorage.getItem("userToken");
+    if (token) {
         try {
-            const response = await fetch(`/api/config/${cliente}`);
-            if (response.ok) {
-                configCliente = await response.json();
-                console.log('✅ Configuração carregada:', configCliente);
-                aplicarConfiguracoesNoFormulario();
-            } else {
-                console.error('❌ Erro ao carregar configuração');
+            const payload = JSON.parse(atob(token.split(".")[1]));
+            if (payload?.user_metadata?.cliente_id) {
+                cliente = payload.user_metadata.cliente_id;
             }
-        } catch (error) {
-            console.error('❌ Erro:', error);
+        } catch (e) {
+            console.error("Erro ao decodificar token:", e);
         }
     }
+}
 
-    // ---------------- APLICAR CONFIGURAÇÕES NO FORMULÁRIO ----------------
-    function aplicarConfiguracoesNoFormulario() {
-        if (!configCliente) return;
+console.log("Cliente definido:", cliente);
+
         
-        const hoje = new Date().toISOString().split('T')[0];
-        dataInput.min = hoje;
-        
-        // Configurar eventos (apenas uma vez)
-        dataInput.addEventListener('change', function() {
-            validarDataSelecionada(this.value);
-        });
-        
-        horarioInput.addEventListener('focus', function() {
-            if (dataInput.value) {
-                carregarHorariosDisponiveis(dataInput.value);
+        // ---------------- INICIALIZAÇÃO ----------------
+        async function init() {
+            // Configurar máscara de telefone
+            if (telefoneInput) {
+                telefoneMask = IMask(telefoneInput, {
+                    mask: '(00) 00000-0000'
+                });
             }
-        });
-    }
-
-    // ---------------- VALIDAR DATA SELECIONADA ----------------
-    async function validarDataSelecionada(data) {
-        if (!configCliente) return false;
-        
-        try {
-            const response = await fetch(`/api/verificar-data/${cliente}?data=${data}`);
-            if (response.ok) {
-                const { disponivel, motivo } = await response.json();
-                
-                if (!disponivel) {
-                    showToast(`Data não disponível: ${motivo}`, 'error');
-                    dataInput.value = '';
-                    horarioInput.value = '';
-                    limparHorariosDisponiveis();
-                    return false;
-                }
-                
-                return true;
-            }
-        } catch (error) {
-            console.error('Erro ao validar data:', error);
-        }
-        
-        return true;
-    }
-
-    // ---------------- CARREGAR HORÁRIOS DISPONÍVEIS ----------------
-    async function carregarHorariosDisponiveis(data) {
-        if (!data || !configCliente) {
-            showToast('Selecione uma data primeiro', 'warning');
-            return;
-        }
-        
-        try {
-            showLoadingHorarios();
             
-            const response = await fetch(`/api/horarios-disponiveis/${cliente}?data=${data}`);
-            if (response.ok) {
-                const { horarios_disponiveis } = await response.json();
+            // Permitir selecionar a partir de hoje (incluindo hoje)
+            const hoje = new Date();
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1); // Data de ontem
+            
+            if (dataInput) {
+                dataInput.min = ontem.toISOString().split('T')[0]; // Permite desde ontem
+            }
+            
+            // Carregar configurações do Supabase
+            const config = await carregarConfiguracoesCliente();
+            if (config) {
+                aplicarConfiguracoesNoFormulario(config);
+            }
+        }
+        
+        // ---------------- TOASTS ----------------
+        let activeToasts = [];
+        
+        function showToast(message, type = "success") {
+            const colors = {
+                success: "bg-gradient-to-r from-green-500 to-teal-400",
+                error: "bg-gradient-to-r from-red-500 to-pink-500",
+                info: "bg-gradient-to-r from-blue-500 to-cyan-400",
+                warning: "bg-gradient-to-r from-yellow-500 to-amber-400"
+            };
+            
+            const container = document.getElementById("toast-container");
+            
+            if (activeToasts.length >= 3) {
+                const oldest = activeToasts.shift();
+                oldest.remove();
+            }
+            
+            const toast = document.createElement("div");
+            toast.className = `p-4 rounded-lg shadow-lg text-white font-medium ${colors[type] || colors.info} opacity-0 translate-x-5 transition-all duration-300 flex items-center gap-2`;
+            toast.innerHTML = `
+                <i data-feather="${type==="success"?"check-circle":type==="error"?"alert-circle":"info"}" class="w-5 h-5"></i>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            activeToasts.push(toast);
+            feather.replace();
+            
+            requestAnimationFrame(()=>{
+                toast.classList.remove("opacity-0","translate-x-5");
+                toast.classList.add("opacity-100","translate-x-0");
+            });
+            
+            setTimeout(()=>{
+                toast.classList.add("opacity-0","translate-x-5");
+                setTimeout(()=>{
+                    toast.remove();
+                    activeToasts=activeToasts.filter(t=>t!==toast);
+                },300);
+            },3000);
+        }
+
+
+
+// ---------------- AGENDAR COM PAGAMENTO PIX ----------------
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const formData=new FormData(form);
+            const dataToSend={};
+            formData.forEach((v,k)=>dataToSend[k]=v);
+
+            // Verifica campos obrigatórios
+            if(!dataToSend.Nome || !dataToSend.Email || !dataToSend.Telefone || !dataToSend.Data || !dataToSend.Horario) {
+                showToast("Preencha todos os campos", "warning");
+                return;
+            }
+
+            // Mostrar loading
+            agendarText.classList.add('hidden');
+            agendarSpinner.classList.remove('hidden');
+            form.querySelector('button[type="submit"]').disabled = true;
+            
+            try {
+    // Primeiro, criar o pagamento PIX - MERCADO PAGO
+    const valorEmReais = 0.01; // 1 centavo
+
+   const pagamentoResponse = await fetch('/create-pix', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+        amount: valorEmReais, // Valor EM REAIS para Mercado Pago
+        description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
+        email: dataToSend.Email,
+        nome: dataToSend.Nome,
+        telefone: dataToSend.Telefone,
+        data: dataToSend.Data,
+        horario: dataToSend.Horario,
+        cliente: cliente // já definido no path
+    })
+});
+
+    if (!pagamentoResponse.ok) {
+        const errorData = await pagamentoResponse.json();
+        throw new Error(errorData.error || 'Erro ao criar pagamento');
+    }
+
+    const pagamentoData = await pagamentoResponse.json();
+    currentPaymentId = pagamentoData.payment_id;
+    paymentExpiresAt = pagamentoData.expires_at;
+    
+    // Exibir QR Code e código PIX
+    let pixDiv = document.getElementById("pixArea");
+    if (!pixDiv) {
+        pixDiv = document.createElement("div");
+        pixDiv.id = "pixArea";
+        pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
+        form.appendChild(pixDiv);
+    }
+
+    pixDiv.innerHTML = `
+        <h3 class="text-center mb-3">Pagamento via PIX</h3>
+        <div class="text-center mb-4">
+            <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
+            <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
+        </div>
+                    <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
+                    <div class="mb-4">
+                        <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
+                        <div class="flex items-center gap-2">
+                            <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
+                            <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                <i data-feather="copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
+                    <div class="text-center">
+                        <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
+                            Já efetuei o pagamento
+                        </button>
+                    </div>
+                `;
                 
-                if (horarios_disponiveis.length === 0) {
-                    showToast('Não há horários disponíveis para esta data', 'warning');
-                    dataInput.value = '';
-                    horarioInput.value = '';
-                    limparHorariosDisponiveis();
+                feather.replace();
+                
+                // Iniciar contador de tempo
+                startPaymentTimer(paymentExpiresAt);
+                
+                // Configurar botão de copiar
+                document.getElementById('copyPixBtn').addEventListener('click', () => {
+                    const textarea = document.querySelector('#pixArea textarea');
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Código PIX copiado!', 'success');
+                });
+                
+                // Configurar verificação automática do pagamento a cada 10 segundos
+                const paymentStatusInterval = setInterval(async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (paymentConfirmed) {
+                        clearInterval(paymentStatusInterval);
+                    }
+                }, 10000);
+                
+                // Configurar botão de confirmação de pagamento
+                document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
+                    const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
+                    if (!paymentConfirmed) {
+                        showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
+                    }
+                });
+                
+                pagamentoPendente = true;
+                
+            } catch(err) { 
+                console.error(err); 
+                showToast("Erro ao processar pagamento","error"); 
+            } finally {
+                // Esconder loading
+                agendarText.classList.remove('hidden');
+                agendarSpinner.classList.add('hidden');
+                form.querySelector('button[type="submit"]').disabled = false;
+            }
+        });
+
+        
+        // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
+        function formatTimeRemaining(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        
+        function startPaymentTimer(expiresAt) {
+            // Limpar qualquer intervalo existente
+            if (paymentCheckInterval) {
+                clearInterval(paymentCheckInterval);
+            }
+            
+            const countdownElement = document.getElementById('countdownTimer');
+            
+            // Atualizar o contador a cada segundo
+            paymentCheckInterval = setInterval(async () => {
+                const now = new Date();
+                const expires = new Date(expiresAt);
+                const timeRemaining = Math.floor((expires - now) / 1000);
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(paymentCheckInterval);
+                    countdownElement.innerHTML = 'Tempo esgotado!';
+                    countdownElement.classList.add('countdown-warning');
+                    
+                    // Limpar a área de pagamento
+                    const pixDiv = document.getElementById("pixArea");
+                    if (pixDiv) {
+                        pixDiv.innerHTML = `
+                            <div class="text-center p-4 bg-red-900/20 rounded-lg">
+                                <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
+                                <p class="text-red-300">Tempo para pagamento esgotado.</p>
+                                <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
+                                    Tentar novamente
+                                </button>
+                            </div>
+                        `;
+                        feather.replace();
+                        
+                        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+                            form.dispatchEvent(new Event('submit'));
+                        });
+                    }
                     return;
                 }
                 
-                atualizarCampoHorario(horarios_disponiveis);
-            } else {
-                throw new Error('Erro ao carregar horários');
-            }
-        } catch (error) {
-            console.error('Erro ao carregar horários:', error);
-            showToast('Erro ao carregar horários disponíveis', 'error');
-        }
-    }
-
-    // ---------------- ATUALIZAR CAMPO DE HORÁRIO ----------------
-    function atualizarCampoHorario(horariosDisponiveis) {
-        horarioInput.value = '';
-        
-        let datalist = document.getElementById('horariosDisponiveis');
-        if (!datalist) {
-            datalist = document.createElement('datalist');
-            datalist.id = 'horariosDisponiveis';
-            document.body.appendChild(datalist);
-        }
-        
-        datalist.innerHTML = '';
-        horariosDisponiveis.forEach(horario => {
-            const option = document.createElement('option');
-            option.value = horario;
-            option.textContent = horario;
-            datalist.appendChild(option);
-        });
-        
-        horarioInput.setAttribute('list', 'horariosDisponiveis');
-        horarioInput.disabled = false;
-        horarioInput.placeholder = 'Selecione um horário';
-        
-        showToast(`Carregados ${horariosDisponiveis.length} horários disponíveis`, 'success');
-    }
-
-    // ---------------- LIMPAR HORÁRIOS DISPONÍVEIS ----------------
-    function limparHorariosDisponiveis() {
-        horarioInput.value = '';
-        horarioInput.removeAttribute('list');
-        horarioInput.disabled = true;
-        horarioInput.placeholder = 'Selecione uma data primeiro';
-        
-        const datalist = document.getElementById('horariosDisponiveis');
-        if (datalist) {
-            datalist.innerHTML = '';
-        }
-    }
-
-    // ---------------- MOSTRAR LOADING ----------------
-    function showLoadingHorarios() {
-        horarioInput.placeholder = 'Carregando horários...';
-        horarioInput.disabled = true;
-    }
-
-    // ---------------- VALIDAR AGENDAMENTO COMPLETO ----------------
-    function validarAgendamentoCompleto() {
-        if (!dataInput.value) {
-            showToast('Selecione uma data', 'warning');
-            return false;
-        }
-        
-        if (!horarioInput.value) {
-            showToast('Selecione um horário', 'warning');
-            return false;
-        }
-        
-        if (!nomeInput.value.trim()) {
-            showToast('Preencha o nome', 'warning');
-            return false;
-        }
-        
-        const horarioRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-        if (!horarioRegex.test(horarioInput.value)) {
-            showToast('Horário inválido. Use formato HH:MM', 'error');
-            return false;
-        }
-        
-        return true;
-    }
-
-    // ---------------- FUNÇÕES PARA CONTROLE DE TEMPO DO PIX ----------------
-    function formatTimeRemaining(seconds) {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-    
-    function startPaymentTimer(expiresAt) {
-        if (paymentCheckInterval) {
-            clearInterval(paymentCheckInterval);
-        }
-        
-        const countdownElement = document.getElementById('countdownTimer');
-        
-        paymentCheckInterval = setInterval(async () => {
-            const now = new Date();
-            const expires = new Date(expiresAt);
-            const timeRemaining = Math.floor((expires - now) / 1000);
-            
-            if (timeRemaining <= 0) {
-                clearInterval(paymentCheckInterval);
-                countdownElement.innerHTML = 'Tempo esgotado!';
-                countdownElement.classList.add('countdown-warning');
+                // Atualizar o contador
+                countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
                 
-                const pixDiv = document.getElementById("pixArea");
-                if (pixDiv) {
-                    pixDiv.innerHTML = `
-                        <div class="text-center p-4 bg-red-900/20 rounded-lg">
-                            <i data-feather="clock" class="w-12 h-12 text-red-500 mx-auto mb-3"></i>
-                            <p class="text-red-300">Tempo para pagamento esgotado.</p>
-                            <button id="retryPaymentBtn" class="mt-3 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                                Tentar novamente
-                            </button>
-                        </div>
-                    `;
-                    feather.replace();
-                    
-                    document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-                        form.dispatchEvent(new Event('submit'));
-                    });
+                // Adicionar efeito de aviso quando faltar menos de 1 minuto
+                if (timeRemaining < 60) {
+                    countdownElement.classList.add('countdown-warning');
+                } else {
+                    countdownElement.classList.remove('countdown-warning');
                 }
+            }, 1000);
+        }
+        
+       async function checkPaymentStatus(paymentId) {
+    try {
+        const statusResponse = await fetch(`/check-payment/${paymentId}`);
+        if (!statusResponse.ok) {
+            throw new Error('Erro ao verificar pagamento');
+        }
+
+        const statusData = await statusResponse.json();
+
+        if (statusData.status === 'approved') {
+            // Pagamento aprovado, parar de verificar
+            clearInterval(paymentCheckInterval);
+
+            showToast("Pagamento confirmado! Agendamento realizado com sucesso.", "success");
+            form.reset();
+
+            const pixDiv = document.getElementById("pixArea");
+            if (pixDiv) {
+                pixDiv.innerHTML = `
+                    <div class="text-center p-4 bg-green-900/20 rounded-lg">
+                        <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
+                        <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
+                    </div>
+                `;
+                feather.replace();
+            }
+            return true;
+        } else if (statusData.status === 'expired') {
+            // Pagamento expirado
+            clearInterval(paymentCheckInterval);
+            showToast("Tempo para pagamento expirado.", "error");
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.error("Erro ao verificar pagamento:", err);
+        return false;
+    }
+}
+
+      
+        
+        // ---------------- CARREGAR CONFIGURAÇÕES DO SUPABASE ----------------
+        async function carregarConfiguracoesCliente() {
+            try {
+                const response = await fetch(`/config/${cliente}`);
+                if (response.ok) {
+                    const config = await response.json();
+                    return config;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar configurações:', error);
+            }
+            return null;
+        }
+        
+        // ---------------- APLICAR CONFIGURAÇÕES NO FORMULÁRIO ----------------
+        function aplicarConfiguracoesNoFormulario(config) {
+            // Configurar os dias da semana permitidos
+            dataInput.addEventListener('change', function() {
+                validarDataSelecionada(this.value, config);
+            });
+            
+            // Configurar horários disponíveis
+            horarioInput.addEventListener('focus', function() {
+                carregarHorariosDisponiveis(dataInput.value, config);
+            });
+        }
+        
+        // ---------------- VALIDAR DATA SELECIONADA ----------------
+        function validarDataSelecionada(data, config) {
+            const dataObj = new Date(data);
+            const diaSemana = dataObj.getDay(); // 0=Domingo, 1=Segunda, etc.
+            
+            // Verificar se a data está bloqueada
+            if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
+                showToast('Esta data não está disponível para agendamento', 'error');
+                dataInput.value = '';
+                return false;
+            }
+            
+            // Verificar se o dia da semana está disponível
+            if (!config.dias_semana.includes(diaSemana)) {
+                showToast('Este dia da semana não está disponível para agendamento', 'error');
+                dataInput.value = '';
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // ---------------- CARREGAR HORÁRIOS DISPONÍVEIS ----------------
+        async function carregarHorariosDisponiveis(data, config) {
+            if (!data) {
+                showToast('Selecione uma data primeiro', 'warning');
+                horarioInput.value = '';
                 return;
             }
             
-            countdownElement.textContent = `Tempo restante: ${formatTimeRemaining(timeRemaining)}`;
-            
-            if (timeRemaining < 60) {
-                countdownElement.classList.add('countdown-warning');
-            } else {
-                countdownElement.classList.remove('countdown-warning');
-            }
-        }, 1000);
-    }
-    
-    async function checkPaymentStatus(paymentId) {
-        try {
-            const statusResponse = await fetch(`/check-payment/${paymentId}`);
-            if (!statusResponse.ok) {
-                throw new Error('Erro ao verificar pagamento');
-            }
-
-            const statusData = await statusResponse.json();
-
-            if (statusData.status === 'approved') {
-                clearInterval(paymentCheckInterval);
-
-                showToast("Pagamento confirmado! Agendamento realizado com sucesso.", "success");
-                form.reset();
-
-                const pixDiv = document.getElementById("pixArea");
-                if (pixDiv) {
-                    pixDiv.innerHTML = `
-                        <div class="text-center p-4 bg-green-900/20 rounded-lg">
-                            <i data-feather="check-circle" class="w-12 h-12 text-green-500 mx-auto mb-3"></i>
-                            <p class="text-green-300">Pagamento confirmado! Agendamento realizado.</p>
-                        </div>
-                    `;
-                    feather.replace();
+            try {
+                // Verificar quantos agendamentos já existem para esta data
+                const response = await fetch(`/agendamentos/${cliente}?data=${data}`);
+                if (response.ok) {
+                    const { agendamentos } = await response.json();
+                    const agendamentosDoDia = agendamentos.filter(a => a.data === data);
+                    
+                    // Filtrar horários disponíveis
+                    const horariosDisponiveis = config.horarios_disponiveis.filter(horario => {
+                        const horarioOcupado = agendamentosDoDia.some(a => a.horario === horario);
+                        return !horarioOcupado;
+                    });
+                    
+                    // Limitar pelo máximo de agendamentos por dia
+                    if (agendamentosDoDia.length >= config.max_agendamentos_dia) {
+                        showToast('Esta data já atingiu o limite máximo de agendamentos', 'error');
+                        dataInput.value = '';
+                        horarioInput.value = '';
+                        return;
+                    }
+                    
+                    // Atualizar o campo de horário com os horários disponíveis
+                    atualizarCampoHorario(horariosDisponiveis);
                 }
-                return true;
-            } else if (statusData.status === 'expired') {
-                clearInterval(paymentCheckInterval);
-                showToast("Tempo para pagamento expirado.", "error");
-                return true;
+            } catch (error) {
+                console.error('Erro ao carregar horários:', error);
             }
-            return false;
-        } catch (err) {
-            console.error("Erro ao verificar pagamento:", err);
-            return false;
-        }
-    }
-
-    // ---------------- AGENDAR COM PAGAMENTO PIX ----------------
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        if (!validarAgendamentoCompleto()) {
-            return;
         }
         
-        const formData = new FormData(form);
-        const dataToSend = {};
-        formData.forEach((v,k) => dataToSend[k] = v);
-
-        agendarText.classList.add('hidden');
-        agendarSpinner.classList.remove('hidden');
-        form.querySelector('button[type="submit"]').disabled = true;
-        
-        try {
-            const valorEmReais = 0.01;
-
-            const pagamentoResponse = await fetch('/create-pix', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    amount: valorEmReais,
-                    description: `Agendamento - ${dataToSend.Nome} - ${dataToSend.Data} ${dataToSend.Horario}`,
-                    email: dataToSend.Email,
-                    nome: dataToSend.Nome,
-                    telefone: dataToSend.Telefone,
-                    data: dataToSend.Data,
-                    horario: dataToSend.Horario,
-                    cliente: cliente
-                })
-            });
-
-            if (!pagamentoResponse.ok) {
-                const errorData = await pagamentoResponse.json();
-                throw new Error(errorData.error || 'Erro ao criar pagamento');
+        // ---------------- ATUALIZAR CAMPO DE HORÁRIO ----------------
+        function atualizarCampoHorario(horariosDisponiveis) {
+            // Criar datalist para sugestões de horários
+            let datalist = document.getElementById('horariosDisponiveis');
+            if (!datalist) {
+                datalist = document.createElement('datalist');
+                datalist.id = 'horariosDisponiveis';
+                document.body.appendChild(datalist);
             }
-
-            const pagamentoData = await pagamentoResponse.json();
-            currentPaymentId = pagamentoData.payment_id;
-            paymentExpiresAt = pagamentoData.expires_at;
-    
-            let pixDiv = document.getElementById("pixArea");
-            if (!pixDiv) {
-                pixDiv = document.createElement("div");
-                pixDiv.id = "pixArea";
-                pixDiv.className = 'mt-4 p-4 bg-white/10 rounded-lg';
-                form.appendChild(pixDiv);
-            }
-
-            pixDiv.innerHTML = `
-                <h3 class="text-center mb-3">Pagamento via PIX</h3>
-                <div class="text-center mb-4">
-                    <p class="text-lg font-semibold">Valor: R$ ${valorEmReais.toFixed(2).replace('.', ',')}</p>
-                    <p class="text-sm text-gray-300">Escaneie o QR Code ou copie o código PIX</p>
-                </div>
-                <img src="data:image/png;base64,${pagamentoData.qr_code_base64}" class="mx-auto mb-4 w-48 h-48"/>
-                <div class="mb-4">
-                    <p class="text-sm font-medium mb-1">Código PIX (copiar e colar):</p>
-                    <div class="flex items-center gap-2">
-                        <textarea readonly class="flex-1 p-2 bg-white/5 rounded text-sm" style="height:60px">${pagamentoData.qr_code}</textarea>
-                        <button id="copyPixBtn" class="p-2 bg-indigo-600 rounded hover:bg-indigo-700">
-                            <i data-feather="copy" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-                <div id="countdownTimer" class="countdown-timer">Tempo restante: ${formatTimeRemaining(Math.floor((new Date(paymentExpiresAt) - new Date()) / 1000))}</div>
-                <div class="text-center">
-                    <button id="confirmPaymentBtn" class="px-4 py-2 bg-green-600 rounded hover:bg-green-700">
-                        Já efetuei o pagamento
-                    </button>
-                </div>
-            `;
             
-            feather.replace();
+            // Limpar opções anteriores
+            datalist.innerHTML = '';
             
-            startPaymentTimer(paymentExpiresAt);
-            
-            document.getElementById('copyPixBtn').addEventListener('click', () => {
-                const textarea = document.querySelector('#pixArea textarea');
-                textarea.select();
-                document.execCommand('copy');
-                showToast('Código PIX copiado!', 'success');
+            // Adicionar novas opções
+            horariosDisponiveis.forEach(horario => {
+                const option = document.createElement('option');
+                option.value = horario;
+                datalist.appendChild(option);
             });
             
-            const paymentStatusInterval = setInterval(async () => {
-                const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                if (paymentConfirmed) {
-                    clearInterval(paymentStatusInterval);
-                }
-            }, 10000);
-            
-            document.getElementById('confirmPaymentBtn').addEventListener('click', async () => {
-                const paymentConfirmed = await checkPaymentStatus(currentPaymentId);
-                if (!paymentConfirmed) {
-                    showToast("Pagamento ainda não confirmado. Aguarde a confirmação.", "warning");
-                }
-            });
-            
-            pagamentoPendente = true;
-            
-        } catch(err) { 
-            console.error(err); 
-            showToast("Erro ao processar pagamento","error"); 
-        } finally {
-            agendarText.classList.remove('hidden');
-            agendarSpinner.classList.add('hidden');
-            form.querySelector('button[type="submit"]').disabled = false;
-        }
-    });
-
-    // ---------------- INIT ----------------
-    async function init() {
-        if (telefoneInput) {
-            telefoneMask = IMask(telefoneInput, {
-                mask: '(00) 00000-0000'
-            });
+            // Vincular datalist ao campo de horário
+            horarioInput.setAttribute('list', 'horariosDisponiveis');
         }
         
-        const hoje = new Date();
-        const ontem = new Date(hoje);
-        ontem.setDate(ontem.getDate() - 1);
+        // ---------------- INIT ----------------
+        AOS.init({
+            duration: 800,
+            easing: 'ease-out-quart',
+            once: true
+        });
         
-        if (dataInput) {
-            dataInput.min = ontem.toISOString().split('T')[0];
-        }
-        
-        await carregarConfiguracaoCliente();
-        
-        AOS.init({ duration: 800, easing: 'ease-out-quart', once: true });
         feather.replace();
-    }
-
-    init();
-</script>
+        init();
+    </script>
+</body>
+</html>
