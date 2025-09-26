@@ -104,15 +104,76 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
     await sheet.addRow({ id: rowId, ...updatedData });
   }
 }
+// Rota de debug para verificar tokens
+app.post("/debug-token", async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ error: "Token não fornecido" });
+    }
 
+    console.log('🔍 Debug token:', token);
+    
+    const { data, error } = await supabase.auth.getUser(token);
+    
+    if (error) {
+      return res.json({ 
+        valid: false, 
+        error: error.message,
+        details: error 
+      });
+    }
+    
+    res.json({
+      valid: true,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        user_metadata: data.user.user_metadata,
+        app_metadata: data.user.app_metadata
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
-  if (!token) return res.status(401).json({ msg: "Token não enviado" });
+  console.log('🔐 Token recebido:', token ? `${token.substring(0, 20)}...` : 'Nenhum token');
+  
+  if (!token) {
+    console.log('❌ Token não enviado');
+    return res.status(401).json({ msg: "Token não enviado" });
+  }
 
   try {
+    // Verifica se é um token de serviço/admin
+    if (token === process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.log('🔑 Token de serviço detectado - acesso admin concedido');
+      req.user = { 
+        id: 'service-role', 
+        email: 'admin@system.com',
+        user_metadata: { isAdmin: true, role: 'admin' }
+      };
+      req.clienteId = null;
+      req.isAdmin = true;
+      return next();
+    }
+
+    // Verificação padrão do token JWT
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
+    
+    if (error) {
+      console.error('❌ Erro na verificação do token:', error);
+      return res.status(401).json({ msg: "Token inválido", error: error.message });
+    }
+    
+    if (!data.user) {
+      console.log('❌ Usuário não encontrado no token');
+      return res.status(401).json({ msg: "Token inválido - usuário não encontrado" });
+    }
 
     req.user = data.user;
     req.clienteId = data.user.user_metadata?.cliente_id;
@@ -120,22 +181,19 @@ async function authMiddleware(req, res, next) {
     // CORREÇÃO: Verificar isAdmin corretamente
     req.isAdmin = data.user.user_metadata?.isAdmin === true || 
                  data.user.user_metadata?.role === "admin" || 
+                 data.user.app_metadata?.role === "admin" ||
                  false;
 
     console.log('🔐 Middleware - User:', data.user.email);
     console.log('🔐 Middleware - clienteId:', req.clienteId);
     console.log('🔐 Middleware - isAdmin:', req.isAdmin);
-    console.log('🔐 Middleware - Metadata:', data.user.user_metadata);
-
-    // Apenas usuários comuns precisam de cliente_id (admin pode não ter)
-    if (!req.clienteId && !req.isAdmin) {
-      return res.status(403).json({ msg: "Usuário sem cliente_id e não é admin" });
-    }
+    console.log('🔐 Middleware - User Metadata:', data.user.user_metadata);
+    console.log('🔐 Middleware - App Metadata:', data.user.app_metadata);
 
     next();
   } catch (error) {
-    console.error("Erro no middleware de auth:", error);
-    res.status(500).json({ msg: "Erro interno no servidor" });
+    console.error("❌ Erro no middleware de auth:", error);
+    res.status(500).json({ msg: "Erro interno no servidor", error: error.message });
   }
 }
 
@@ -482,11 +540,17 @@ app.use(authMiddleware);
 
 // ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
 
+// ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
+
 // Obter configurações
 app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    
+    // Admin pode acessar qualquer cliente, usuário normal só o próprio
+    if (!req.isAdmin && req.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Acesso negado" });
+    }
 
     const config = await getConfigHorarios(cliente);
     res.json(config);
@@ -496,16 +560,15 @@ app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-// Obter lista de dias da semana
-app.get("/api/dias-semana", (req, res) => {
-  res.json(DIAS_SEMANA);
-});
-
 // Atualizar configurações
 app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    
+    // Admin pode acessar qualquer cliente, usuário normal só o próprio
+    if (!req.isAdmin && req.clienteId !== cliente) {
+      return res.status(403).json({ msg: "Acesso negado" });
+    }
 
     const { dias_semana, horarios_disponiveis, intervalo_minutos, max_agendamentos_dia, datas_bloqueadas } = req.body;
 
@@ -534,7 +597,6 @@ app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 // Configurações específicas por data
 app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   try {
@@ -1071,3 +1133,4 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
