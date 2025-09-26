@@ -1137,6 +1137,39 @@ window.formatData = formatData;
                 showToast("Erro de conexão ao reagendar.", "error");
             }
         }
+
+
+
+        async function testarToken() {
+    const token = localStorage.getItem('userToken');
+    console.log('🔐 Token no localStorage:', token ? token.substring(0, 20) + '...' : 'NÃO EXISTE');
+    
+    if (!token) {
+        console.log('❌ Nenhum token encontrado');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/debug-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Resposta do Debug Token:', result);
+        
+    } catch (error) {
+        console.error('❌ Erro no teste:', error);
+        console.log('🔧 Dica: Verifique se a rota /debug-token foi implementada no backend');
+    }
+}
+
+
         
         // ========== FUNÇÕES GLOBAIS PARA OS BOTÕES ==========
         function adicionarEventListeners() {
@@ -1314,6 +1347,7 @@ window.formatData = formatData;
     </script>
 </body>
 </html>
+
 
 
 
