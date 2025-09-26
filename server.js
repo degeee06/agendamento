@@ -350,6 +350,7 @@ const DIAS_SEMANA = [
 // ---------------- FUNÇÕES PARA CONFIGURAÇÃO ----------------
 
 // Obter configurações de horários
+// ---------------- Obter configurações de horários CORRIGIDA ----------------
 async function getConfigHorarios(clienteId) {
   try {
     const { data, error } = await supabase
@@ -359,9 +360,9 @@ async function getConfigHorarios(clienteId) {
       .single();
 
     if (error || !data) {
-      // Retorna configuração padrão se não existir
+      console.log('ℹ️ Configuração não encontrada, usando padrão');
       return {
-        dias_semana: [1, 2, 3, 4, 5], // Segunda a Sexta
+        dias_semana: [1, 2, 3, 4, 5],
         horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
         intervalo_minutos: 60,
         max_agendamentos_dia: 10,
@@ -370,9 +371,50 @@ async function getConfigHorarios(clienteId) {
       };
     }
 
-    // Adiciona informações dos dias da semana
-    data.dias_semana_info = DIAS_SEMANA.filter(dia => data.dias_semana.includes(dia.id));
-    return data;
+    // 🔧 CORREÇÃO CRÍTICA: Converter strings para números
+    let dias_semana = data.dias_semana;
+    if (Array.isArray(dias_semana) && dias_semana.length > 0 && typeof dias_semana[0] === 'string') {
+      dias_semana = dias_semana.map(dia => parseInt(dia));
+      console.log('🔧 Dias da semana convertidos:', dias_semana);
+    }
+
+    // 🔧 CORREÇÃO: Formatar horários (remover segundos se existirem)
+    let horarios_disponiveis = data.horarios_disponiveis || [];
+    if (Array.isArray(horarios_disponiveis) && horarios_disponiveis.length > 0) {
+      horarios_disponiveis = horarios_disponiveis.map(horario => {
+        if (horario.includes(':')) {
+          // Se tem segundos (09:00:00), remove os segundos
+          const parts = horario.split(':');
+          return parts.slice(0, 2).join(':');
+        }
+        return horario;
+      });
+    }
+
+    // 🔧 CORREÇÃO: Garantir que datas_bloqueadas seja um array válido
+    let datas_bloqueadas = data.datas_bloqueadas || [];
+    if (!Array.isArray(datas_bloqueadas)) {
+      datas_bloqueadas = [];
+    }
+
+    console.log('📦 Configuração FINAL carregada:', {
+      dias_semana: dias_semana,
+      horarios_disponiveis: horarios_disponiveis,
+      datas_bloqueadas: datas_bloqueadas,
+      quantidade_datas_bloqueadas: datas_bloqueadas.length
+    });
+
+    const config = {
+      dias_semana: dias_semana,
+      horarios_disponiveis: horarios_disponiveis,
+      intervalo_minutos: data.intervalo_minutos || 60,
+      max_agendamentos_dia: data.max_agendamentos_dia || 10,
+      datas_bloqueadas: datas_bloqueadas,
+      dias_semana_info: DIAS_SEMANA.filter(dia => dias_semana.includes(dia.id))
+    };
+
+    return config;
+
   } catch (error) {
     console.error("Erro ao obter configurações de horários:", error);
     return {
@@ -385,7 +427,6 @@ async function getConfigHorarios(clienteId) {
     };
   }
 }
-
 // Obter configurações específicas por data
 async function getConfigDataEspecifica(clienteId, data) {
   try {
@@ -1183,6 +1224,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
