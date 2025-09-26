@@ -104,76 +104,15 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
     await sheet.addRow({ id: rowId, ...updatedData });
   }
 }
-// Rota de debug para verificar tokens
-app.post("/debug-token", async (req, res) => {
-  try {
-    const { token } = req.body;
-    
-    if (!token) {
-      return res.status(400).json({ error: "Token não fornecido" });
-    }
 
-    console.log('🔍 Debug token:', token);
-    
-    const { data, error } = await supabase.auth.getUser(token);
-    
-    if (error) {
-      return res.json({ 
-        valid: false, 
-        error: error.message,
-        details: error 
-      });
-    }
-    
-    res.json({
-      valid: true,
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        user_metadata: data.user.user_metadata,
-        app_metadata: data.user.app_metadata
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
-  console.log('🔐 Token recebido:', token ? `${token.substring(0, 20)}...` : 'Nenhum token');
-  
-  if (!token) {
-    console.log('❌ Token não enviado');
-    return res.status(401).json({ msg: "Token não enviado" });
-  }
+  if (!token) return res.status(401).json({ msg: "Token não enviado" });
 
   try {
-    // Verifica se é um token de serviço/admin
-    if (token === process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.log('🔑 Token de serviço detectado - acesso admin concedido');
-      req.user = { 
-        id: 'service-role', 
-        email: 'admin@system.com',
-        user_metadata: { isAdmin: true, role: 'admin' }
-      };
-      req.clienteId = null;
-      req.isAdmin = true;
-      return next();
-    }
-
-    // Verificação padrão do token JWT
     const { data, error } = await supabase.auth.getUser(token);
-    
-    if (error) {
-      console.error('❌ Erro na verificação do token:', error);
-      return res.status(401).json({ msg: "Token inválido", error: error.message });
-    }
-    
-    if (!data.user) {
-      console.log('❌ Usuário não encontrado no token');
-      return res.status(401).json({ msg: "Token inválido - usuário não encontrado" });
-    }
+    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
     req.user = data.user;
     req.clienteId = data.user.user_metadata?.cliente_id;
@@ -181,19 +120,22 @@ async function authMiddleware(req, res, next) {
     // CORREÇÃO: Verificar isAdmin corretamente
     req.isAdmin = data.user.user_metadata?.isAdmin === true || 
                  data.user.user_metadata?.role === "admin" || 
-                 data.user.app_metadata?.role === "admin" ||
                  false;
 
     console.log('🔐 Middleware - User:', data.user.email);
     console.log('🔐 Middleware - clienteId:', req.clienteId);
     console.log('🔐 Middleware - isAdmin:', req.isAdmin);
-    console.log('🔐 Middleware - User Metadata:', data.user.user_metadata);
-    console.log('🔐 Middleware - App Metadata:', data.user.app_metadata);
+    console.log('🔐 Middleware - Metadata:', data.user.user_metadata);
+
+    // Apenas usuários comuns precisam de cliente_id (admin pode não ter)
+    if (!req.clienteId && !req.isAdmin) {
+      return res.status(403).json({ msg: "Usuário sem cliente_id e não é admin" });
+    }
 
     next();
   } catch (error) {
-    console.error("❌ Erro no middleware de auth:", error);
-    res.status(500).json({ msg: "Erro interno no servidor", error: error.message });
+    console.error("Erro no middleware de auth:", error);
+    res.status(500).json({ msg: "Erro interno no servidor" });
   }
 }
 
@@ -447,110 +389,13 @@ async function getHorariosDisponiveis(clienteId, data) {
   }
 }
 
-// ========== ROTAS PÚBLICAS PARA CLIENTES (SEM AUTENTICAÇÃO) ==========
-
-// Serve o painel de admin (index.html)
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// Serve páginas de cliente dinamicamente
-app.get("/cliente/:cliente", (req, res) => {
-  const cliente = req.params.cliente;
-  const filePath = path.join(__dirname, "public", `${cliente}.html`);
-
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      res.status(404).send("Página do cliente não encontrada");
-    }
-  });
-});
-
-// Rota alternativa direta para cliente1.html
-app.get("/cliente1", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "cliente1.html"));
-});
-
-// Obter horários disponíveis para uma data (para cliente1.html) - PÚBLICA
-app.get("/api/horarios-disponiveis/:cliente", async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    const { data } = req.query;
-
-    if (!data) {
-      return res.status(400).json({ msg: "Data é obrigatória" });
-    }
-
-    const horarios = await getHorariosDisponiveis(cliente, data);
-    res.json({ horarios_disponiveis: horarios });
-  } catch (err) {
-    console.error("Erro ao obter horários disponíveis:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// Obter configuração completa do cliente - PÚBLICA
-app.get("/api/config/:cliente", async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    const config = await getConfigHorarios(cliente);
-    
-    res.json(config);
-  } catch (err) {
-    console.error("Erro ao obter configuração:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// Verificar se uma data está disponível - PÚBLICA
-app.get("/api/verificar-data/:cliente", async (req, res) => {
-  try {
-    const { cliente } = req.params;
-    const { data } = req.query;
-
-    if (!data) {
-      return res.status(400).json({ msg: "Data é obrigatória" });
-    }
-
-    const configGeral = await getConfigHorarios(cliente);
-    const configData = await getConfigDataEspecifica(cliente, data);
-    
-    const dataObj = new Date(data);
-    const diaSemana = dataObj.getDay();
-    
-    const disponivel = !configData?.bloqueada && 
-                      (configGeral.dias_semana.includes(diaSemana) || configData);
-    
-    res.json({ 
-      disponivel,
-      motivo: !disponivel ? 
-          (configData?.bloqueada ? "Data bloqueada" : "Dia da semana não disponível") : 
-          "Data disponível"
-    });
-  } catch (err) {
-    console.error("Erro ao verificar data:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// ========== ROTAS PROTEGIDAS (COM AUTENTICAÇÃO) ==========
-
-// Aplicar middleware de autenticação para todas as rotas abaixo
-app.use(authMiddleware);
-
-// ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
-
 // ---------------- ROTAS PARA CONFIGURAÇÃO (APENAS ADMIN) ----------------
 
 // Obter configurações
 app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    
-    // Admin pode acessar qualquer cliente, usuário normal só o próprio
-    if (!req.isAdmin && req.clienteId !== cliente) {
-      return res.status(403).json({ msg: "Acesso negado" });
-    }
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const config = await getConfigHorarios(cliente);
     res.json(config);
@@ -560,15 +405,16 @@ app.get("/admin/config/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
+// Obter lista de dias da semana
+app.get("/api/dias-semana", (req, res) => {
+  res.json(DIAS_SEMANA);
+});
+
 // Atualizar configurações
 app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
-    
-    // Admin pode acessar qualquer cliente, usuário normal só o próprio
-    if (!req.isAdmin && req.clienteId !== cliente) {
-      return res.status(403).json({ msg: "Acesso negado" });
-    }
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const { dias_semana, horarios_disponiveis, intervalo_minutos, max_agendamentos_dia, datas_bloqueadas } = req.body;
 
@@ -597,6 +443,7 @@ app.put("/admin/config/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 // Configurações específicas por data
 app.get("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   try {
@@ -653,6 +500,61 @@ app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
+// ---------------- ROTAS PÚBLICAS PARA CLIENTES ----------------
+
+// Obter horários disponíveis para uma data (para cliente1.html)
+app.get("/api/horarios-disponiveis/:cliente", async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    const { data } = req.query;
+
+    if (!data) {
+      return res.status(400).json({ msg: "Data é obrigatória" });
+    }
+
+    const horarios = await getHorariosDisponiveis(cliente, data);
+    res.json({ horarios_disponiveis: horarios });
+  } catch (err) {
+    console.error("Erro ao obter horários disponíveis:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Obter dias da semana disponíveis para um cliente
+app.get("/api/dias-disponiveis/:cliente", async (req, res) => {
+  try {
+    const { cliente } = req.params;
+    const config = await getConfigHorarios(cliente);
+    
+    res.json({ 
+      dias_semana: config.dias_semana,
+      dias_semana_info: config.dias_semana_info 
+    });
+  } catch (err) {
+    console.error("Erro ao obter dias disponíveis:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Serve o painel de admin (index.html)
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+
+// Serve páginas de cliente dinamicamente
+app.get("/cliente/:cliente", (req, res) => {
+  const cliente = req.params.cliente;
+  const filePath = path.join(__dirname, "public", `${cliente}.html`);
+
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      res.status(404).send("Página do cliente não encontrada");
+    }
+  });
+});
+
 
 // ---------------- ROTAS EXISTENTES (MANTIDAS) ----------------
 
@@ -726,6 +628,7 @@ app.get("/agendamentos/:cliente?", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 
 // ==== ROTA /create-pix COM EXPIRAÇÃO ====
 app.post("/create-pix", async (req, res) => {
@@ -1097,10 +1000,7 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
   }
 });
 
-// ========== CATCH-ALL NO FINAL ==========
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+
 
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
@@ -1133,4 +1033,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
+
+
 
