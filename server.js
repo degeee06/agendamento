@@ -595,6 +595,49 @@ app.post("/admin/config/:cliente/datas", authMiddleware, async (req, res) => {
   }
 });
 
+
+// ---------------- FUNÇÃO getHorariosDisponiveis (ADICIONE ISSO) ----------------
+async function getHorariosDisponiveis(clienteId, data) {
+  try {
+    const config = await getConfigHorarios(clienteId);
+    const configData = await getConfigDataEspecifica(clienteId, data);
+    
+    // Verificar se a data está bloqueada
+    if (configData?.bloqueada || (config.datas_bloqueadas && config.datas_bloqueadas.includes(data))) {
+      return [];
+    }
+
+    let horariosPermitidos = config.horarios_disponiveis || [];
+    
+    // Aplicar configurações específicas da data
+    if (configData) {
+      if (configData.horarios_disponiveis) {
+        horariosPermitidos = configData.horarios_disponiveis;
+      }
+      // Remover horários bloqueados
+      if (configData.horarios_bloqueados) {
+        horariosPermitidos = horariosPermitidos.filter(horario => 
+          !configData.horarios_bloqueados.includes(horario)
+        );
+      }
+    }
+
+    // Verificar quais horários estão disponíveis
+    const horariosDisponiveis = [];
+    
+    for (const horario of horariosPermitidos) {
+      const disponivel = await horarioDisponivel(clienteId, data, horario);
+      if (disponivel) {
+        horariosDisponiveis.push(horario);
+      }
+    }
+
+    return horariosDisponiveis;
+  } catch (error) {
+    console.error("Erro ao obter horários disponíveis:", error);
+    return [];
+  }
+}
 // ---------------- ROTAS PÚBLICAS PARA CLIENTES ----------------
 
 // Obter horários disponíveis para uma data (para cliente1.html)
@@ -1140,6 +1183,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
