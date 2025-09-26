@@ -445,14 +445,18 @@ async function getConfigDataEspecifica(clienteId, data) {
 }
 
 // ---------------- VERIFICAR DISPONIBILIDADE CORRIGIDA ----------------
+// ---------------- VERIFICAR DISPONIBILIDADE CORRIGIDA ----------------
 async function verificarDisponibilidade(clienteId, data, horario, ignoreId = null) {
   try {
     const config = await getConfigHorarios(clienteId);
     const configData = await getConfigDataEspecifica(clienteId, data);
     
-    console.log(`🔍 Verificando disponibilidade: ${data} ${horario} para ${clienteId}`);
-    console.log('📋 Config geral:', config.dias_semana, config.horarios_disponiveis, config.datas_bloqueadas);
-    console.log('📅 Config específica:', configData);
+    console.log(`🔍 VERIFICAÇÃO DETALHADA para: ${data} ${horario}`);
+    console.log('📋 Config geral:', {
+      datas_bloqueadas: config.datas_bloqueadas,
+      dias_semana: config.dias_semana,
+      horarios_permitidos: config.horarios_disponiveis
+    });
 
     // 1. Verificar se a data está bloqueada na configuração específica
     if (configData?.bloqueada) {
@@ -461,14 +465,23 @@ async function verificarDisponibilidade(clienteId, data, horario, ignoreId = nul
     }
 
     // 2. Verificar se a data está na lista de datas bloqueadas gerais
-    if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
-      console.log('❌ Data bloqueada na configuração geral');
-      return false;
+    if (config.datas_bloqueadas && config.datas_bloqueadas.length > 0) {
+      console.log('📊 Datas bloqueadas disponíveis:', config.datas_bloqueadas);
+      
+      // 🔧 CORREÇÃO: Comparação direta (já estão no formato YYYY-MM-DD)
+      if (config.datas_bloqueadas.includes(data)) {
+        console.log('❌ Data bloqueada na configuração geral');
+        return false;
+      }
     }
 
     // 3. Verificar dia da semana
     const dataObj = new Date(data + 'T00:00:00');
     const diaSemana = dataObj.getDay();
+    
+    console.log('📅 Dia da semana da data:', diaSemana);
+    console.log('📅 Dias permitidos:', config.dias_semana);
+    
     if (!config.dias_semana.includes(diaSemana)) {
       console.log(`❌ Dia da semana não permitido: ${diaSemana}`);
       return false;
@@ -488,35 +501,20 @@ async function verificarDisponibilidade(clienteId, data, horario, ignoreId = nul
       }
     }
 
+    console.log('⏰ Horário solicitado:', horario);
+    console.log('⏰ Horários permitidos:', horariosPermitidos);
+
     if (!horariosPermitidos.includes(horario)) {
       console.log(`❌ Horário não permitido: ${horario}`);
       return false;
     }
 
-    // 5. Verificar limite de agendamentos do dia
-    const maxAgendamentos = configData?.max_agendamentos || config.max_agendamentos_dia;
-    const { data: agendamentosDia, error } = await supabase
-      .from("agendamentos")
-      .select("id")
-      .eq("cliente", clienteId)
-      .eq("data", data)
-      .neq("status", "cancelado");
-
-    if (error) {
-      console.error('Erro ao buscar agendamentos:', error);
-      return false;
-    }
-
-    if (agendamentosDia && agendamentosDia.length >= maxAgendamentos) {
-      console.log(`❌ Limite de agendamentos atingido: ${agendamentosDia.length}/${maxAgendamentos}`);
-      return false;
-    }
-
-    // 6. Verificar se horário já está ocupado
+    // 5. Verificar se horário está disponível
     const disponivel = await horarioDisponivel(clienteId, data, horario, ignoreId);
     console.log(disponivel ? '✅ Horário disponível' : '❌ Horário ocupado');
     
     return disponivel;
+
   } catch (error) {
     console.error("❌ Erro na verificação de disponibilidade:", error);
     return false;
@@ -1223,6 +1221,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
