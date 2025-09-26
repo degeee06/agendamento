@@ -515,8 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
         console.log('📡 Carregando configurações...');
         
-        // ❌ SUBSTITUA ISTO:
-        // const response = await fetch(`/admin/config/${clienteId}`);
+      
         
         // ✅ POR ISTO:
         const response = await fetchWithAuth(`/admin/config/${clienteId}`);
@@ -638,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Carregar configuração específica da data
             try {
-                const response = await fetch(`/admin/config/${cliente}/datas?data=${data}&endDate=${data}`, {
+                const response = await fetchWithAuth(`/admin/config/${cliente}/datas?data=${data}&endDate=${data}`, {
                     headers: {
                         "Authorization": `Bearer ${userToken}`
                     }
@@ -1314,7 +1313,7 @@ logoutBtn.addEventListener('click', async () => {
     }
     
     try {
-        const response = await fetch('/debug-token', {
+       const response = await fetchWithAuth('/debug-token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token })
@@ -1377,7 +1376,7 @@ logoutBtn.addEventListener('click', async () => {
                     datas_bloqueadas: configHorarios?.datas_bloqueadas || []
                 };
                 
-                const response = await fetch(`/admin/config/${cliente}`, {
+                const response = await fetchWithAuth(`/admin/config/${cliente}`, {
                     method: 'PUT',
                     headers: {
                         "Authorization": `Bearer ${userToken}`,
@@ -1438,7 +1437,7 @@ logoutBtn.addEventListener('click', async () => {
                     horarios_disponiveis: horariosEspecificos.length > 0 ? horariosEspecificos : null
                 };
                 
-                const response = await fetch(`/admin/config/${cliente}/datas`, {
+                const response = await fetchWithAuth(`/admin/config/${cliente}/datas`, {
                     method: 'POST',
                     headers: {
                         "Authorization": `Bearer ${userToken}`,
@@ -1513,6 +1512,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
