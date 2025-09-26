@@ -1170,6 +1170,127 @@ window.formatData = formatData;
 }
 
 
+
+
+
+// 🔄 SISTEMA DE REFRESH DE TOKEN
+async function refreshAuthToken() {
+    try {
+        console.log('🔄 Tentando renovar token...');
+        
+        const currentToken = localStorage.getItem('userToken');
+        if (!currentToken) {
+            console.log('❌ Nenhum token para renovar');
+            return false;
+        }
+
+        // Tenta renovar o token com o Supabase
+        const { data, error } = await supabase.auth.refreshSession();
+        
+        if (error) {
+            console.log('❌ Erro ao renovar token:', error.message);
+            // Token não pode ser renovado - faz logout
+            logout();
+            return false;
+        }
+
+        if (data.session) {
+            // Atualiza o token no localStorage
+            localStorage.setItem('userToken', data.session.access_token);
+            console.log('✅ Token renovado com sucesso');
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('❌ Erro no refresh:', error);
+        return false;
+    }
+}
+
+// 🔄 INTERCEPTADOR DE REQUISIÇÕES - Automaticamente renova token quando expirado
+async function fetchWithAuth(url, options = {}) {
+    const token = localStorage.getItem('userToken');
+    
+    // Configura headers padrão
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    let response = await fetch(url, { ...options, headers });
+    
+    // Se token expirou, tenta renovar e repete a requisição
+    if (response.status === 401) {
+        console.log('🔄 Token expirado, tentando renovar...');
+        const refreshed = await refreshAuthToken();
+        
+        if (refreshed) {
+            // Repete a requisição com o novo token
+            const newToken = localStorage.getItem('userToken');
+            headers['Authorization'] = `Bearer ${newToken}`;
+            response = await fetch(url, { ...options, headers });
+        } else {
+            // Não conseguiu renovar - faz logout
+            logout();
+            throw new Error('Sessão expirada. Faça login novamente.');
+        }
+    }
+    
+    return response;
+}
+
+// 🔄 FUNÇÃO DE LOGOUT MELHORADA
+function logout() {
+    console.log('🚪 Fazendo logout...');
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userClienteId');
+    localStorage.removeItem('userIsAdmin');
+    
+    // Redireciona para login
+    window.location.href = '/login.html';
+}
+
+// 🔄 VERIFICAR AUTENTICAÇÃO AO CARREGAR A PÁGINA
+async function checkAuth() {
+    const token = localStorage.getItem('userToken');
+    
+    if (!token) {
+        console.log('❌ Usuário não autenticado');
+        window.location.href = '/login.html';
+        return false;
+    }
+
+    try {
+        // Testa o token atual
+        const response = await fetchWithAuth('/debug-token', {
+            method: 'POST',
+            body: JSON.stringify({ token })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Token inválido');
+        }
+        
+        const result = await response.json();
+        console.log('✅ Usuário autenticado:', result.user.email);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Erro de autenticação:', error);
+        logout();
+        return false;
+    }
+}
+
+
+
+
         
         // ========== FUNÇÕES GLOBAIS PARA OS BOTÕES ==========
         function adicionarEventListeners() {
@@ -1347,6 +1468,7 @@ window.formatData = formatData;
     </script>
 </body>
 </html>
+
 
 
 
