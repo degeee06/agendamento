@@ -438,7 +438,7 @@ function logout() {
 
 
         
-  // ---------------- INICIALIZAÇÃO (CORRIGIDA) ----------------
+
 // ---------------- INICIALIZAÇÃO (CORRIGIDA) ----------------
 async function init() {
     console.log('🚀 Inicializando sistema admin...');
@@ -491,30 +491,6 @@ async function init() {
     }
 
     adicionarEventListeners();
-}
-
-// 🔍 DEBUG: Verificar estado do login
-function debugAuthState() {
-    console.log('🔐 ESTADO DA AUTENTICAÇÃO:');
-    console.log('Token:', localStorage.getItem('userToken') ? 'EXISTE' : 'NÃO EXISTE');
-    console.log('Email:', localStorage.getItem('userEmail'));
-    console.log('Cliente ID:', localStorage.getItem('userClienteId'));
-    console.log('Is Admin:', localStorage.getItem('userIsAdmin'));
-    
-    // Testar token atual
-    const token = localStorage.getItem('userToken');
-    if (token) {
-        try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            console.log('Token payload:', {
-                email: payload.email,
-                exp: new Date(payload.exp * 1000),
-                expirado: Date.now() >= payload.exp * 1000
-            });
-        } catch (e) {
-            console.error('Erro ao decodificar token:', e);
-        }
-    }
 }
 
 // 🔍 DEBUG: Verificar estado do login
@@ -1530,6 +1506,7 @@ window.removerDataBloqueada = function(data) {
     </script>
 </body>
 </html>
+
 
 
 
