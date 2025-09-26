@@ -1365,41 +1365,65 @@ logoutBtn.addEventListener('click', async () => {
             btn.classList.toggle('active');
         };
         
-        window.salvarConfiguracoes = async function() {
-            try {
-                const diasSemana = Array.from(document.querySelectorAll('.dias-semana-btn.active'))
-                    .map(btn => parseInt(btn.dataset.dia));
-                const horarios = Array.from(document.querySelectorAll('#horariosConfig .horario-btn'))
-                    .map(btn => btn.textContent.trim().split(' ')[0]);
-                
-                const config = {
-                    dias_semana: diasSemana,
-                    horarios_disponiveis: horarios,
-                    intervalo_minutos: parseInt(document.getElementById('intervaloMinutos').value),
-                    max_agendamentos_dia: parseInt(document.getElementById('maxAgendamentos').value),
-                    datas_bloqueadas: configHorarios?.datas_bloqueadas || []
-                };
-                
-                const response = await fetchWithAuth(`/admin/config/${cliente}`, {
-                    method: 'PUT',
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(config)
-                });
-                
-                if (response.ok) {
-                    showToast('Configurações salvas com sucesso!', 'success');
-                    carregarConfiguracoes();
-                } else {
-                    throw new Error('Erro ao salvar configurações');
-                }
-            } catch (error) {
-                console.error('Erro:', error);
-                showToast('Erro ao salvar configurações', 'error');
-            }
+       // ---------------- SALVAR CONFIGURAÇÕES CORRIGIDA ----------------
+window.salvarConfiguracoes = async function() {
+    try {
+        // ✅ CORREÇÃO: Coletar dados CORRETAMENTE
+        const diasSemana = Array.from(document.querySelectorAll('.dias-semana-btn.active'))
+            .map(btn => parseInt(btn.dataset.dia));
+        
+        // ✅ CORREÇÃO: Coletar horários dos botões
+        const horarios = Array.from(document.querySelectorAll('#horariosConfig .horario-btn'))
+            .map(btn => btn.textContent.trim().split(' ')[0]);
+        
+        // ✅ CORREÇÃO: Se não tiver horários, usar padrão
+        if (horarios.length === 0) {
+            horarios.push('09:00', '10:00', '11:00', '14:00', '15:00', '16:00');
+            showToast('Usando horários padrão', 'info');
+        }
+        
+        // ✅ CORREÇÃO: Coletar datas bloqueadas
+        const datasBloqueadas = Array.from(document.querySelectorAll('#datasBloqueadasList .data-bloqueada-item'))
+            .map(item => item.dataset.data);
+        
+        console.log('💾 Salvando configurações:', {
+            dias_semana: diasSemana,
+            horarios_disponiveis: horarios,
+            datas_bloqueadas: datasBloqueadas
+        });
+
+        const config = {
+            dias_semana: diasSemana,
+            horarios_disponiveis: horarios,
+            intervalo_minutos: parseInt(document.getElementById('intervaloMinutos').value) || 60,
+            max_agendamentos_dia: parseInt(document.getElementById('maxAgendamentos').value) || 10,
+            datas_bloqueadas: datasBloqueadas
         };
+        
+        const response = await fetchWithAuth(`/admin/config/${cliente}`, {
+            method: 'PUT',
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Configurações salvas:', result);
+            showToast('Configurações salvas com sucesso!', 'success');
+            
+            // ✅ CORREÇÃO: Recarregar as configurações
+            await carregarConfiguracoes();
+        } else {
+            const error = await response.json();
+            throw new Error(error.msg || 'Erro ao salvar configurações');
+        }
+    } catch (error) {
+        console.error('❌ Erro ao salvar configurações:', error);
+        showToast('Erro ao salvar configurações: ' + error.message, 'error');
+    }
+};
         
         window.adicionarHorario = function() {
             const novoHorario = document.getElementById('novoHorario').value;
@@ -1414,53 +1438,45 @@ logoutBtn.addEventListener('click', async () => {
             }
         };
         
-        window.adicionarDataBloqueada = function() {
-            const data = document.getElementById('dataBloqueada').value;
-            if (!data) return;
-            
-            if (!configHorarios.datas_bloqueadas.includes(data)) {
-                configHorarios.datas_bloqueadas.push(data);
-                configHorarios.datas_bloqueadas.sort();
-                renderizarConfiguracoes();
-                document.getElementById('dataBloqueada').value = '';
-            }
-        };
-        
-        // Funções para Configuração de Datas Específicas
-        window.salvarConfiguracaoData = async function() {
-            if (!dataSelecionadaCalendario) return;
-            
-            try {
-                const horariosEspecificos = Array.from(document.querySelectorAll('#horariosEspecificos span'))
-                    .map(span => span.textContent);
-                    
-                const config = {
-                    data: dataSelecionadaCalendario,
-                    bloqueada: document.getElementById('dataBloqueadaCheck').checked,
-                    max_agendamentos: document.getElementById('maxAgendamentosData').value || null,
-                    horarios_disponiveis: horariosEspecificos.length > 0 ? horariosEspecificos : null
-                };
-                
-                const response = await fetchWithAuth(`/admin/config/${cliente}/datas`, {
-                    method: 'POST',
-                    headers: {
-                        "Authorization": `Bearer ${userToken}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(config)
-                });
-                
-                if (response.ok) {
-                    showToast('Configuração da data salva com sucesso!', 'success');
-                    gerarCalendario();
-                } else {
-                    throw new Error('Erro ao salvar configuração');
-                }
-            } catch (error) {
-                console.error('Erro:', error);
-                showToast('Erro ao salvar configuração da data', 'error');
-            }
-        };
+        // ---------------- ADICIONAR DATA BLOQUEADA CORRIGIDA ----------------
+window.adicionarDataBloqueada = function() {
+    const dataInput = document.getElementById('dataBloqueada');
+    const data = dataInput.value;
+    
+    if (!data) {
+        showToast('Selecione uma data', 'warning');
+        return;
+    }
+
+    const datasBloqueadasList = document.getElementById('datasBloqueadasList');
+    
+    // ✅ CORREÇÃO: Verificar se data já existe
+    const dataJaExiste = Array.from(datasBloqueadasList.querySelectorAll('.data-bloqueada-item'))
+        .some(item => item.dataset.data === data);
+    
+    if (dataJaExiste) {
+        showToast('Data já está bloqueada', 'warning');
+        return;
+    }
+
+    // ✅ CORREÇÃO: Criar item corretamente
+    const div = document.createElement('div');
+    div.className = 'data-bloqueada-item flex justify-between items-center p-2 bg-red-900/20 rounded';
+    div.dataset.data = data; // ✅ IMPORTANTE: Salvar data no dataset
+    
+    div.innerHTML = `
+        <span>${formatData(data)}</span>
+        <button class="text-red-400 hover:text-red-300" onclick="removerDataBloqueada('${data}')">
+            <i data-feather="x" class="w-4 h-4"></i>
+        </button>
+    `;
+    
+    datasBloqueadasList.appendChild(div);
+    dataInput.value = '';
+    feather.replace();
+    
+    showToast('Data adicionada à lista de bloqueio', 'success');
+};
         
         window.adicionarHorarioEspecifico = function() {
             const horario = document.getElementById('novoHorarioEspecifico').value;
@@ -1488,10 +1504,14 @@ logoutBtn.addEventListener('click', async () => {
             renderizarConfiguracoes();
         };
         
-        window.removerDataBloqueada = function(data) {
-            configHorarios.datas_bloqueadas = configHorarios.datas_bloqueadas.filter(d => d !== data);
-            renderizarConfiguracoes();
-        };
+       // ---------------- REMOVER DATA BLOQUEADA CORRIGIDA ----------------
+window.removerDataBloqueada = function(data) {
+    const item = document.querySelector(`[data-data="${data}"]`);
+    if (item) {
+        item.remove();
+        showToast('Data removida da lista de bloqueio', 'success');
+    }
+};
         
         window.removerHorarioEspecifico = function(horario) {
             const divs = document.querySelectorAll('#horariosEspecificos div');
@@ -1516,6 +1536,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
