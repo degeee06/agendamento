@@ -248,6 +248,7 @@ app.post("/debug-token", async (req, res) => {
 });
 
 // ---------------- Middleware Auth ATUALIZADO ----------------
+// ---------------- Middleware Auth SEGURO ----------------
 async function authMiddleware(req, res, next) {
     const token = req.headers["authorization"]?.split("Bearer ")[1];
     
@@ -259,34 +260,7 @@ async function authMiddleware(req, res, next) {
         const { data, error } = await supabase.auth.getUser(token);
         
         if (error) {
-            console.log('⚠️ Token inválido/Expirado:', error.message);
-            
-            // 🔧 EM DESENVOLVIMENTO: Permite continuar com token expirado para testes
-            if (process.env.NODE_ENV === 'development') {
-                console.log('🔓 Modo desenvolvimento: Ignorando token expirado');
-                
-                try {
-                    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-                    req.user = {
-                        id: payload.sub,
-                        email: payload.email,
-                        user_metadata: payload.user_metadata || {}
-                    };
-                    req.clienteId = payload.user_metadata?.cliente_id;
-                    req.isAdmin = payload.user_metadata?.isAdmin || payload.user_metadata?.role === 'admin';
-                    
-                    console.log('🔓 Desenvolvimento - User:', req.user.email);
-                    return next();
-                } catch (parseError) {
-                    console.error('❌ Não foi possível parsear token expirado');
-                    return res.status(401).json({ 
-                        msg: "Token inválido", 
-                        error: error.message,
-                        action: "refresh_login" 
-                    });
-                }
-            }
-            
+            console.log('❌ Token inválido/Expirado:', error.message);
             return res.status(401).json({ 
                 msg: "Token inválido", 
                 error: error.message,
@@ -307,6 +281,8 @@ async function authMiddleware(req, res, next) {
         res.status(500).json({ msg: "Erro interno no servidor" });
     }
 }
+
+
 // ==== FUNÇÃO PARA LIMPAR AGENDAMENTOS EXPIRADOS ====
 async function limparAgendamentosExpirados() {
   try {
@@ -428,30 +404,37 @@ async function getConfigDataEspecifica(clienteId, data) {
   }
 }
 
-// Verificar se horário está disponível considerando configurações
+// ---------------- VERIFICAR DISPONIBILIDADE CORRIGIDA ----------------
 async function verificarDisponibilidade(clienteId, data, horario, ignoreId = null) {
   try {
     const config = await getConfigHorarios(clienteId);
     const configData = await getConfigDataEspecifica(clienteId, data);
     
-    // Verificar se a data está bloqueada
+    console.log(`🔍 Verificando disponibilidade: ${data} ${horario} para ${clienteId}`);
+    console.log('📋 Config geral:', config.dias_semana, config.horarios_disponiveis, config.datas_bloqueadas);
+    console.log('📅 Config específica:', configData);
+
+    // 1. Verificar se a data está bloqueada na configuração específica
     if (configData?.bloqueada) {
+      console.log('❌ Data bloqueada na configuração específica');
       return false;
     }
 
-    // Verificar se a data está na lista de datas bloqueadas
+    // 2. Verificar se a data está na lista de datas bloqueadas gerais
     if (config.datas_bloqueadas && config.datas_bloqueadas.includes(data)) {
+      console.log('❌ Data bloqueada na configuração geral');
       return false;
     }
 
-    // Verificar dia da semana
-    const dataObj = new Date(data);
+    // 3. Verificar dia da semana
+    const dataObj = new Date(data + 'T00:00:00');
     const diaSemana = dataObj.getDay();
     if (!config.dias_semana.includes(diaSemana)) {
+      console.log(`❌ Dia da semana não permitido: ${diaSemana}`);
       return false;
     }
 
-    // Verificar horários disponíveis
+    // 4. Verificar horários disponíveis
     let horariosPermitidos = config.horarios_disponiveis || [];
     
     // Aplicar configurações específicas da data
@@ -460,74 +443,43 @@ async function verificarDisponibilidade(clienteId, data, horario, ignoreId = nul
         horariosPermitidos = configData.horarios_disponiveis;
       }
       if (configData.horarios_bloqueados && configData.horarios_bloqueados.includes(horario)) {
+        console.log('❌ Horário bloqueado na configuração específica');
         return false;
       }
     }
 
     if (!horariosPermitidos.includes(horario)) {
+      console.log(`❌ Horário não permitido: ${horario}`);
       return false;
     }
 
-    // Verificar limite de agendamentos do dia
+    // 5. Verificar limite de agendamentos do dia
     const maxAgendamentos = configData?.max_agendamentos || config.max_agendamentos_dia;
-    const { data: agendamentosDia } = await supabase
+    const { data: agendamentosDia, error } = await supabase
       .from("agendamentos")
       .select("id")
       .eq("cliente", clienteId)
       .eq("data", data)
       .neq("status", "cancelado");
 
-    if (agendamentosDia && agendamentosDia.length >= maxAgendamentos) {
+    if (error) {
+      console.error('Erro ao buscar agendamentos:', error);
       return false;
     }
 
-    return await horarioDisponivel(clienteId, data, horario, ignoreId);
+    if (agendamentosDia && agendamentosDia.length >= maxAgendamentos) {
+      console.log(`❌ Limite de agendamentos atingido: ${agendamentosDia.length}/${maxAgendamentos}`);
+      return false;
+    }
+
+    // 6. Verificar se horário já está ocupado
+    const disponivel = await horarioDisponivel(clienteId, data, horario, ignoreId);
+    console.log(disponivel ? '✅ Horário disponível' : '❌ Horário ocupado');
+    
+    return disponivel;
   } catch (error) {
-    console.error("Erro na verificação de disponibilidade:", error);
+    console.error("❌ Erro na verificação de disponibilidade:", error);
     return false;
-  }
-}
-
-// Obter horários disponíveis para uma data
-async function getHorariosDisponiveis(clienteId, data) {
-  try {
-    const config = await getConfigHorarios(clienteId);
-    const configData = await getConfigDataEspecifica(clienteId, data);
-    
-    // Verificar se a data está bloqueada
-    if (configData?.bloqueada || (config.datas_bloqueadas && config.datas_bloqueadas.includes(data))) {
-      return [];
-    }
-
-    let horariosPermitidos = config.horarios_disponiveis || [];
-    
-    // Aplicar configurações específicas da data
-    if (configData) {
-      if (configData.horarios_disponiveis) {
-        horariosPermitidos = configData.horarios_disponiveis;
-      }
-      // Remover horários bloqueados
-      if (configData.horarios_bloqueados) {
-        horariosPermitidos = horariosPermitidos.filter(horario => 
-          !configData.horarios_bloqueados.includes(horario)
-        );
-      }
-    }
-
-    // Verificar quais horários estão disponíveis
-    const horariosDisponiveis = [];
-    
-    for (const horario of horariosPermitidos) {
-      const disponivel = await horarioDisponivel(clienteId, data, horario);
-      if (disponivel) {
-        horariosDisponiveis.push(horario);
-      }
-    }
-
-    return horariosDisponiveis;
-  } catch (error) {
-    console.error("Erro ao obter horários disponíveis:", error);
-    return [];
   }
 }
 
@@ -772,7 +724,8 @@ app.get("/agendamentos/:cliente?", authMiddleware, async (req, res) => {
 });
 
 
-// ==== ROTA /create-pix COM EXPIRAÇÃO ====
+
+// ==== ROTA /create-pix COM VALIDAÇÃO ====
 app.post("/create-pix", async (req, res) => {
   const { amount, description, email, nome, telefone, data, horario, cliente } = req.body;
 
@@ -782,6 +735,12 @@ app.post("/create-pix", async (req, res) => {
   }
 
   try {
+    // ✅ VALIDAÇÃO CRÍTICA: Verificar se horário está disponível
+    const disponivel = await verificarDisponibilidade(cliente, data, horario);
+    if (!disponivel) {
+      return res.status(400).json({ error: "Horário indisponível para agendamento" });
+    }
+
     // ⏰ Calcula data de expiração (15 minutos)
     const dateOfExpiration = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
@@ -832,6 +791,10 @@ app.post("/create-pix", async (req, res) => {
 
     if (insertAgendamentoError) {
       console.error("Erro ao criar agendamento no Supabase:", insertAgendamentoError);
+      
+      // 🔄 Rollback: Remove o pagamento se o agendamento falhar
+      await supabase.from("pagamentos").delete().eq("id", result.id);
+      
       return res.status(500).json({ error: "Erro ao salvar agendamento" });
     }
 
@@ -1177,6 +1140,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
