@@ -350,105 +350,90 @@ const DIAS_SEMANA = [
 // ---------------- FUNÇÕES PARA CONFIGURAÇÃO ----------------
 
 // ---------------- Obter configurações de horários CORRIGIDA ----------------
-// ---------------- Obter configurações de horários CORRIGIDA ----------------
 async function getConfigHorarios(clienteId) {
   try {
-    console.log(`🔍 Buscando configurações para: ${clienteId}`);
+    console.log(`🔍 Buscando configurações no banco para: ${clienteId}`);
     
+    // 🔧 CORREÇÃO: Query mais simples e direta
     const { data, error } = await supabase
       .from("config_horarios")
       .select("*")
       .eq("cliente_id", clienteId)
-      .single();
+      .maybeSingle();  // 🔧 CORREÇÃO: Usar maybeSingle em vez de single
 
     if (error) {
-      console.log('❌ Erro ao buscar configurações:', error);
-      
-      // 🔧 CORREÇÃO: Verificar se é erro "não encontrado" ou outro erro
-      if (error.code === 'PGRST116') {
-        console.log('ℹ️ Configuração não encontrada, criando padrão...');
-        
-        // 🔧 CORREÇÃO: Criar configuração padrão no banco
-        const { data: novaConfig, error: insertError } = await supabase
-          .from("config_horarios")
-          .insert([
-            {
-              cliente_id: clienteId,
-              dias_semana: [1, 2, 3, 4, 5],
-              horarios_disponiveis: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"],
-              intervalo_minutos: 60,
-              max_agendamentos_dia: 10,
-              datas_bloqueadas: []
-            }
-          ])
-          .select()
-          .single();
-
-        if (insertError) {
-          console.log('❌ Erro ao criar configuração padrão:', insertError);
-        } else {
-          console.log('✅ Configuração padrão criada:', novaConfig);
-          // Retorna a configuração recém-criada
-          return processarConfiguracao(novaConfig);
-        }
-      }
-      
-      // Retorna padrão apenas em caso de erro crítico
+      console.log('❌ Erro na query:', error);
+      // 🔧 CORREÇÃO: Não criar configuração automaticamente, só retornar padrão
+      console.log('🔄 Retornando configuração padrão devido ao erro');
       return criarConfiguracaoPadrao();
     }
 
     if (!data) {
-      console.log('ℹ️ Nenhuma configuração encontrada');
+      console.log('ℹ️ Nenhuma configuração encontrada para cliente:', clienteId);
       return criarConfiguracaoPadrao();
     }
 
-    console.log('✅ Configuração encontrada no banco:', {
+    console.log('✅ Dados encontrados no banco:', {
       id: data.id,
       datas_bloqueadas: data.datas_bloqueadas,
-      quantidade: data.datas_bloqueadas ? data.datas_bloqueadas.length : 0
+      count_datas_bloqueadas: data.datas_bloqueadas ? data.datas_bloqueadas.length : 0,
+      count_horarios: data.horarios_disponiveis ? data.horarios_disponiveis.length : 0
     });
 
+    // 🔧 CORREÇÃO: Processamento mais simples
     return processarConfiguracao(data);
 
   } catch (error) {
-    console.error("❌ Erro crítico ao obter configurações:", error);
+    console.error("❌ Erro crítico:", error);
     return criarConfiguracaoPadrao();
   }
 }
 
-// 🔧 FUNÇÃO AUXILIAR: Processar configuração do banco
+// 🔧 FUNÇÃO AUXILIAR: Processar configuração do banco (SIMPLIFICADA)
 function processarConfiguracao(data) {
-  // 🔧 CORREÇÃO: Converter strings para números
+  // 🔧 CORREÇÃO: Log detalhado do que veio do banco
+  console.log('📦 Dados brutos do banco:', {
+    dias_semana: data.dias_semana,
+    horarios_disponiveis: data.horarios_disponiveis,
+    datas_bloqueadas: data.datas_bloqueadas
+  });
+
+  // 🔧 CORREÇÃO: Converter apenas se necessário
   let dias_semana = data.dias_semana;
-  if (Array.isArray(dias_semana) && dias_semana.length > 0 && typeof dias_semana[0] === 'string') {
-    dias_semana = dias_semana.map(dia => parseInt(dia));
-    console.log('🔧 Dias da semana convertidos:', dias_semana);
+  if (Array.isArray(dias_semana) && dias_semana.length > 0) {
+    if (typeof dias_semana[0] === 'string') {
+      dias_semana = dias_semana.map(dia => parseInt(dia));
+      console.log('🔧 Dias convertidos para número:', dias_semana);
+    }
+  } else {
+    dias_semana = [1, 2, 3, 4, 5];
   }
 
   // 🔧 CORREÇÃO: Formatar horários
   let horarios_disponiveis = data.horarios_disponiveis || [];
   if (Array.isArray(horarios_disponiveis) && horarios_disponiveis.length > 0) {
     horarios_disponiveis = horarios_disponiveis.map(horario => {
-      if (typeof horario === 'string' && horario.includes(':')) {
-        const parts = horario.split(':');
-        return parts.slice(0, 2).join(':');
+      if (typeof horario === 'string') {
+        // Remove segundos se existirem (09:00:00 → 09:00)
+        return horario.split(':').slice(0, 2).join(':');
       }
       return horario;
     });
+  } else {
+    horarios_disponiveis = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"];
   }
 
-  // 🔧 CORREÇÃO: Garantir arrays válidos
+  // 🔧 CORREÇÃO: Garantir array de datas bloqueadas
   let datas_bloqueadas = data.datas_bloqueadas || [];
   if (!Array.isArray(datas_bloqueadas)) {
     datas_bloqueadas = [];
   }
 
-  console.log('📦 Configuração PROCESSADA:', {
-    cliente_id: data.cliente_id,
+  console.log('🎯 Configuração final processada:', {
     dias_semana: dias_semana,
-    horarios_count: horarios_disponiveis.length,
+    horarios_disponiveis: horarios_disponiveis,
     datas_bloqueadas: datas_bloqueadas,
-    datas_bloqueadas_count: datas_bloqueadas.length
+    count_datas_bloqueadas: datas_bloqueadas.length
   });
 
   return {
@@ -1269,6 +1254,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
