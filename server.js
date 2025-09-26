@@ -105,6 +105,85 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
+// ---------------- ROTA DEBUG TOKEN ----------------
+app.post("/debug-token", async (req, res) => {
+    try {
+        const { token } = req.body;
+        
+        if (!token) {
+            return res.status(400).json({ 
+                error: "Token não fornecido",
+                action: "provide_token" 
+            });
+        }
+
+        console.log('🔍 Debug token recebido:', token.substring(0, 20) + '...');
+
+        // 🔧 Usa a mesma lógica do seu middleware de auth
+        const { data, error } = await supabase.auth.getUser(token);
+        
+        if (error) {
+            console.log('❌ Token inválido:', error.message);
+            
+            // Tenta decodificar o token mesmo expirado (apenas para debug)
+            try {
+                const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                
+                return res.json({
+                    valid: false,
+                    error: error.message,
+                    decoded: {
+                        email: payload.email,
+                        user_id: payload.sub,
+                        cliente_id: payload.user_metadata?.cliente_id,
+                        isAdmin: payload.user_metadata?.isAdmin || payload.user_metadata?.role === 'admin',
+                        exp: payload.exp,
+                        expiracao: new Date(payload.exp * 1000).toLocaleString('pt-BR'),
+                        expirado: Date.now() >= payload.exp * 1000
+                    },
+                    message: "Token inválido ou expirado",
+                    action: "refresh_login"
+                });
+            } catch (parseError) {
+                return res.status(401).json({
+                    valid: false,
+                    error: "Token malformado",
+                    message: "Não foi possível decodificar o token"
+                });
+            }
+        }
+
+        // Token válido
+        const user = data.user;
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        
+        res.json({
+            valid: true,
+            user: {
+                id: user.id,
+                email: user.email,
+                cliente_id: user.user_metadata?.cliente_id,
+                isAdmin: user.user_metadata?.isAdmin || user.user_metadata?.role === 'admin',
+                email_verified: user.email_confirmed_at !== null
+            },
+            token_info: {
+                exp: payload.exp,
+                expiracao: new Date(payload.exp * 1000).toLocaleString('pt-BR'),
+                expirado: Date.now() >= payload.exp * 1000,
+                issued_at: new Date(payload.iat * 1000).toLocaleString('pt-BR')
+            },
+            message: "Token válido"
+        });
+
+    } catch (error) {
+        console.error("❌ Erro no debug-token:", error);
+        res.status(500).json({ 
+            error: "Erro interno no servidor",
+            details: error.message 
+        });
+    }
+});
+
 // ---------------- Middleware Auth ----------------
 // ---------------- Middleware Auth ATUALIZADO ----------------
 async function authMiddleware(req, res, next) {
@@ -1002,6 +1081,8 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)
 
 
 
+
+
 // ==== INICIALIZAR LIMPEZA AUTOMÁTICA ====
 // Executar a cada 5 minutos (300000 ms)
 setInterval(limparAgendamentosExpirados, 5 * 60 * 1000);
@@ -1033,6 +1114,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
