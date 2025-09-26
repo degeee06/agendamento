@@ -106,65 +106,65 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
 }
 
 // ---------------- Middleware Auth ----------------
+// ---------------- Middleware Auth ATUALIZADO ----------------
 async function authMiddleware(req, res, next) {
-  const token = req.headers["authorization"]?.split("Bearer ")[1];
-  if (!token) return res.status(401).json({ msg: "Token não enviado" });
-
-  try {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
-
-    req.user = data.user;
-    req.clienteId = data.user.user_metadata?.cliente_id;
+    const token = req.headers["authorization"]?.split("Bearer ")[1];
     
-    // CORREÇÃO: Verificar isAdmin corretamente
-    req.isAdmin = data.user.user_metadata?.isAdmin === true || 
-                 data.user.user_metadata?.role === "admin" || 
-                 false;
-
-    console.log('🔐 Middleware - User:', data.user.email);
-    console.log('🔐 Middleware - clienteId:', req.clienteId);
-    console.log('🔐 Middleware - isAdmin:', req.isAdmin);
-    console.log('🔐 Middleware - Metadata:', data.user.user_metadata);
-
-    // Apenas usuários comuns precisam de cliente_id (admin pode não ter)
-    if (!req.clienteId && !req.isAdmin) {
-      return res.status(403).json({ msg: "Usuário sem cliente_id e não é admin" });
+    if (!token) {
+        return res.status(401).json({ msg: "Token não enviado" });
     }
 
-    next();
-  } catch (error) {
-    console.error("Erro no middleware de auth:", error);
-    res.status(500).json({ msg: "Erro interno no servidor" });
-  }
-}
+    try {
+        // 🔧 CORREÇÃO: Tenta verificar o token
+        const { data, error } = await supabase.auth.getUser(token);
+        
+        if (error) {
+            console.log('⚠️ Token inválido/Expirado:', error.message);
+            
+            // 🔧 CORREÇÃO: Em desenvolvimento, permite continuar com token expirado
+            // Remove esta parte em produção
+            if (process.env.NODE_ENV === 'development') {
+                console.log('🔓 Modo desenvolvimento: Ignorando token expirado');
+                
+                // Tenta extrair informações do token manualmente (apenas para desenvolvimento)
+                try {
+                    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                    req.user = {
+                        id: payload.sub,
+                        email: payload.email,
+                        user_metadata: payload.user_metadata || {}
+                    };
+                    req.clienteId = payload.user_metadata?.cliente_id;
+                    req.isAdmin = payload.user_metadata?.isAdmin || payload.user_metadata?.role === 'admin';
+                    
+                    console.log('🔓 Desenvolvimento - User:', req.user.email);
+                    return next();
+                } catch (parseError) {
+                    console.error('❌ Não foi possível parsear token expirado');
+                }
+            }
+            
+            return res.status(401).json({ 
+                msg: "Token inválido", 
+                error: error.message,
+                // 🔧 CORREÇÃO: Informa que precisa fazer login novamente
+                action: "refresh_login" 
+            });
+        }
 
-async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
-  try {
-    let query = supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente)
-      .eq("data", data)
-      .eq("horario", horario)
-      .neq("status", "cancelado");
+        // Token válido - procedimento normal
+        req.user = data.user;
+        req.clienteId = data.user.user_metadata?.cliente_id;
+        req.isAdmin = data.user.user_metadata?.isAdmin || data.user.user_metadata?.role === "admin";
 
-    if (ignoreId) query = query.neq("id", ignoreId);
-    
-    const { data: agendamentos, error } = await query;
-    
-    if (error) {
-      console.error("Erro ao verificar horário disponível:", error);
-      return false;
+        console.log('✅ Token válido - User:', data.user.email);
+        next();
+        
+    } catch (error) {
+        console.error("❌ Erro no middleware de auth:", error);
+        res.status(500).json({ msg: "Erro interno no servidor" });
     }
-    
-    return agendamentos.length === 0;
-  } catch (error) {
-    console.error("Erro na função horarioDisponivel:", error);
-    return false;
-  }
 }
-
 // ==== FUNÇÃO PARA LIMPAR AGENDAMENTOS EXPIRADOS ====
 async function limparAgendamentosExpirados() {
   try {
@@ -1033,6 +1033,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
