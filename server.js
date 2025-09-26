@@ -184,7 +184,6 @@ app.post("/debug-token", async (req, res) => {
     }
 });
 
-// ---------------- Middleware Auth ----------------
 // ---------------- Middleware Auth ATUALIZADO ----------------
 async function authMiddleware(req, res, next) {
     const token = req.headers["authorization"]?.split("Bearer ")[1];
@@ -194,18 +193,15 @@ async function authMiddleware(req, res, next) {
     }
 
     try {
-        // 🔧 CORREÇÃO: Tenta verificar o token
         const { data, error } = await supabase.auth.getUser(token);
         
         if (error) {
             console.log('⚠️ Token inválido/Expirado:', error.message);
             
-            // 🔧 CORREÇÃO: Em desenvolvimento, permite continuar com token expirado
-            // Remove esta parte em produção
+            // 🔧 EM DESENVOLVIMENTO: Permite continuar com token expirado para testes
             if (process.env.NODE_ENV === 'development') {
                 console.log('🔓 Modo desenvolvimento: Ignorando token expirado');
                 
-                // Tenta extrair informações do token manualmente (apenas para desenvolvimento)
                 try {
                     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
                     req.user = {
@@ -220,13 +216,17 @@ async function authMiddleware(req, res, next) {
                     return next();
                 } catch (parseError) {
                     console.error('❌ Não foi possível parsear token expirado');
+                    return res.status(401).json({ 
+                        msg: "Token inválido", 
+                        error: error.message,
+                        action: "refresh_login" 
+                    });
                 }
             }
             
             return res.status(401).json({ 
                 msg: "Token inválido", 
                 error: error.message,
-                // 🔧 CORREÇÃO: Informa que precisa fazer login novamente
                 action: "refresh_login" 
             });
         }
@@ -1114,6 +1114,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
