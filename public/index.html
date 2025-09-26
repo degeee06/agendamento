@@ -323,23 +323,34 @@ window.formatData = formatData;
 
 
 // 🔄 VERIFICAR AUTENTICAÇÃO
+// 🔄 VERIFICAR AUTENTICAÇÃO (ADMIN)
 async function checkAuth() {
     const token = localStorage.getItem('userToken');
     
     if (!token) {
         console.log('❌ Nenhum token encontrado');
+        window.location.href = '/login.html';
         return false;
     }
 
     try {
         // Testa o token atual
-        const response = await fetchWithAuth('/debug-token', {
+        const response = await fetch('/debug-token', {
             method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({ token })
         });
         
         if (!response.ok) {
-            throw new Error('Token inválido');
+            // Token inválido - tenta renovar
+            const refreshed = await refreshAuthToken();
+            if (!refreshed) {
+                throw new Error('Não foi possível renovar o token');
+            }
+            return true;
         }
         
         const result = await response.json();
@@ -348,7 +359,7 @@ async function checkAuth() {
         
     } catch (error) {
         console.error('❌ Erro de autenticação:', error);
-        // Não faz logout automático aqui - deixa a init() decidir
+        logout();
         return false;
     }
 }
@@ -432,28 +443,29 @@ function logout() {
 
         
     // ---------------- INICIALIZAÇÃO ----------------
+// ---------------- INICIALIZAÇÃO ----------------
 async function init() {
-    console.log('🚀 Inicializando sistema...');
+    console.log('🚀 Inicializando sistema admin...');
     
     // Verificar autenticação
     const isAuthenticated = await checkAuth();
     
     if (isAuthenticated) {
-        // Usuário autenticado - mostrar conteúdo
+        // ✅ CORREÇÃO: Carregar dados SE usuário autenticado
         userToken = localStorage.getItem('userToken');
         loginSection.style.display = 'none';
         logoutBtn.style.display = 'flex';
         configSection.style.display = 'block';
         calendarSection.style.display = 'block';
         
-        // Carregar dados
+        // ✅ CORREÇÃO: Carregar configurações e agendamentos
         await carregarConfiguracoes();
         await listarAgendamentos();
         gerarCalendario();
         
-        console.log('✅ Sistema inicializado com sucesso');
+        console.log('✅ Sistema admin inicializado com sucesso');
     } else {
-        // Usuário não autenticado - mostrar login
+        // Usuário não autenticado
         loginSection.style.display = 'block';
         logoutBtn.style.display = 'none';
         configSection.style.display = 'none';
@@ -461,7 +473,6 @@ async function init() {
         console.log('🔒 Aguardando autenticação...');
     }
     
-    // Adicionar event listeners (sempre adiciona, independente da auth)
     adicionarEventListeners();
 }
 
@@ -511,13 +522,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // ---------------- CONFIGURAÇÕES DE HORÁRIOS ----------------
-     async function carregarConfiguracoes() {
+     // ---------------- CARREGAR CONFIGURAÇÕES ----------------
+async function carregarConfiguracoes() {
     try {
         console.log('📡 Carregando configurações...');
         
-      
+        // ✅ CORREÇÃO: Obter clienteId do localStorage ou do usuário
+        const clienteId = localStorage.getItem('userClienteId') || 'cliente1';
+        console.log('🔧 Cliente ID:', clienteId);
         
-        // ✅ POR ISTO:
         const response = await fetchWithAuth(`/admin/config/${clienteId}`);
         
         if (!response.ok) {
@@ -527,10 +540,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const data = await response.json();
         console.log('✅ Configurações carregadas:', data);
         
-        // ... resto do seu código ...
+        // Preencher os campos do formulário
+        document.getElementById('diasSemana').value = data.dias_semana.join(',');
+        document.getElementById('horariosDisponiveis').value = data.horarios_disponiveis.join(',');
+        document.getElementById('intervaloMinutos').value = data.intervalo_minutos;
+        document.getElementById('maxAgendamentos').value = data.max_agendamentos_dia;
+        document.getElementById('datasBloqueadas').value = data.datas_bloqueadas.join(',');
         
     } catch (error) {
         console.error('❌ Erro ao carregar configurações:', error);
+        showToast('Erro ao carregar configurações', 'error');
     }
 }
         
@@ -918,59 +937,38 @@ document.addEventListener('DOMContentLoaded', function() {
             modal.classList.remove("hidden");
         }
         
-      async function listarAgendamentos(){
-    if(!userToken) return;
-    
-    try{
-        // DETERMINAR SE É ADMIN OU CLIENTE PELA URL ATUAL
-        const isAdmin = !window.location.pathname.includes('/cliente/');
+     // ---------------- LISTAR AGENDAMENTOS ----------------
+async function listarAgendamentos() {
+    try {
+        const isAdmin = localStorage.getItem('userIsAdmin') === 'true';
+        console.log('👑 Modo admin:', isAdmin);
         
-        let url;
-        if (isAdmin) {
-            // ADMIN: busca TODOS os agendamentos (sem parâmetro cliente)
-            url = '/agendamentos';
-            console.log('👑 Admin buscando TODOS os agendamentos');
-        } else {
-            // CLIENTE: busca apenas os agendamentos do cliente específico
-            const clienteFromPath = window.location.pathname.split('/').pop();
-            url = `/agendamentos/${clienteFromPath}`;
-            console.log('👤 Cliente buscando agendamentos:', clienteFromPath);
+        let url = '/agendamentos';
+        
+        // Se não for admin, busca apenas do próprio cliente
+        if (!isAdmin) {
+            const clienteId = localStorage.getItem('userClienteId');
+            if (clienteId) {
+                url = `/agendamentos/${clienteId}`;
+            }
         }
         
         console.log('🔍 Buscando agendamentos na URL:', url);
         
-        const res = await fetch(url, {
-            headers: {
-                "Authorization": `Bearer ${userToken}`
-            }
-        });
+        const response = await fetchWithAuth(url);
         
-        console.log('📡 Resposta da API:', res.status, res.statusText);
-        
-        if (res.ok) {
-            const data = await res.json();
-            console.log('✅ Dados recebidos:', data);
-            
-            agendamentosCache = data.agendamentos || [];
-            console.log('📊 Agendamentos no cache:', agendamentosCache.length);
-            
-            // DEBUG: Mostrar os agendamentos recebidos
-            if (agendamentosCache.length > 0) {
-                console.log('📋 Detalhes dos agendamentos:', agendamentosCache);
-            }
-            
-            meusAgendamentos.style.display = 'block';
-            document.getElementById('filtersSection').style.display = 'block';
-            document.getElementById('diasTabs').style.display = 'flex';
-            
-            initTabsDias();
-            renderAgendamentos();
-        } else {
-            const errorText = await res.text();
-            console.error('❌ Erro na resposta:', errorText);
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
         }
-    } catch(e){
-        console.error("❌ Erro ao listar agendamentos:", e);
+        
+        const data = await response.json();
+        console.log('✅ Agendamentos carregados:', data.agendamentos?.length || 0);
+        
+        exibirAgendamentos(data.agendamentos || []);
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar agendamentos:', error);
+        showToast('Erro ao carregar agendamentos', 'error');
     }
 }
        // ---------------- LOGIN ----------------
@@ -1512,6 +1510,7 @@ logoutBtn.addEventListener('click', async () => {
     </script>
 </body>
 </html>
+
 
 
 
