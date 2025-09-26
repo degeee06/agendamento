@@ -443,7 +443,6 @@ async function init() {
     console.log('🚀 Inicializando sistema admin...');
     
     try {
-        // Verificar autenticação
         const isAuthenticated = await checkAuth();
         
         if (isAuthenticated) {
@@ -453,6 +452,11 @@ async function init() {
             logoutBtn.style.display = 'flex';
             configSection.style.display = 'block';
             calendarSection.style.display = 'block';
+            
+            // ✅ CORREÇÃO: EXIBIR AS TABS QUANDO AUTENTICADO
+            document.getElementById('filtersSection').style.display = 'block';
+            document.getElementById('diasTabs').style.display = 'block';
+            meusAgendamentos.style.display = 'block';
             
             // ✅ CORREÇÃO: Carregar dados em sequência com tratamento de erro
             await carregarConfiguracoes().catch(err => {
@@ -468,12 +472,16 @@ async function init() {
             gerarCalendario();
             console.log('✅ Sistema admin inicializado com sucesso');
         } else {
-            // Usuário não autenticado - mostrar login
+            // Usuário não autenticado - ocultar tabs também
             loginSection.style.display = 'block';
             logoutBtn.style.display = 'none';
             configSection.style.display = 'none';
             calendarSection.style.display = 'none';
-            console.log('🔒 Aguardando autenticação...');
+            
+            // ✅ CORREÇÃO: OCULTAR TABS QUANDO NÃO AUTENTICADO
+            document.getElementById('filtersSection').style.display = 'none';
+            document.getElementById('diasTabs').style.display = 'none';
+            meusAgendamentos.style.display = 'none';
         }
     } catch (error) {
         console.error('❌ Erro crítico na inicialização:', error);
@@ -975,7 +983,7 @@ renderAgendamentos();
         showToast('Erro ao carregar agendamentos', 'error');
     }
 }
-       // ---------------- LOGIN ----------------
+      // ---------------- LOGIN ----------------
 loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value;
     const senha = document.getElementById('senha').value;
@@ -1018,16 +1026,24 @@ loginBtn.addEventListener('click', async () => {
             role: data.user.user_metadata?.role
         });
         
-        // ✅ ATUALIZAR A INTERFACE
+        // ✅ ATUALIZAR A INTERFACE (CORREÇÃO: EXIBIR TODAS AS SEÇÕES)
         loginSection.style.display = 'none';
         logoutBtn.style.display = 'flex';
         configSection.style.display = 'block';
         calendarSection.style.display = 'block';
         
+        // ✅ CORREÇÃO: EXIBIR AS TABS E SEÇÕES DE AGENDAMENTOS
+        document.getElementById('filtersSection').style.display = 'block';
+        document.getElementById('diasTabs').style.display = 'block';
+        meusAgendamentos.style.display = 'block';
+        
         // ✅ CARREGAR DADOS (AGORA COM fetchWithAuth)
         await carregarConfiguracoes();
         await listarAgendamentos();
         gerarCalendario();
+        
+        // ✅ CORREÇÃO: INICIALIZAR AS TABS APÓS LOGIN
+        initTabsDias();
         
         showToast("Login realizado com sucesso!", "success");
         
@@ -1534,6 +1550,7 @@ window.removerDataBloqueada = function(data) {
     </script>
 </body>
 </html>
+
 
 
 
