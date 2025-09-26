@@ -349,7 +349,6 @@ const DIAS_SEMANA = [
 
 // ---------------- FUNÇÕES PARA CONFIGURAÇÃO ----------------
 
-// Obter configurações de horários
 // ---------------- Obter configurações de horários CORRIGIDA ----------------
 async function getConfigHorarios(clienteId) {
   try {
@@ -1224,6 +1223,7 @@ app.listen(PORT, () => {
     console.warn("⚠️ Google Sheets não está configurado");
   }
 });
+
 
 
 
