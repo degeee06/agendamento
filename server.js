@@ -253,54 +253,39 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const dataAgendamento = new Date(`${dataNormalizada}T${horarioNormalizado}`);
     const agora = new Date();
     if (dataAgendamento < agora) {
-      console.log('❌ Tentativa de agendar no passado:', dataAgendamento);
       return res.status(400).json({ msg: "Não é possível agendar para datas/horários passados" });
     }
 
-    // Verifica limite de agendamentos por dia
-    const { data: agendamentosHoje, error: errorLimite } = await supabase
+    // VERIFICA DISPONIBILIDADE NO SUPABASE (CORRETO)
+    const livre = await horarioDisponivel(cliente, dataNormalizada, horarioNormalizado);
+    
+    if (!livre) {
+      console.log('❌ Horário indisponível no Supabase');
+      return res.status(400).json({ msg: "Horário indisponível. Por favor, escolha outro horário." });
+    }
+
+    // Verifica limite de agendamentos por dia (NO SUPABASE)
+    const { data: agendamentosHoje } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("email", Email)
       .eq("data", dataNormalizada)
       .neq("status", "cancelado");
 
-    if (errorLimite) {
-      console.error('❌ Erro ao verificar limite:', errorLimite);
-      return res.status(500).json({ msg: "Erro ao verificar limite de agendamentos" });
-    }
-
     if (agendamentosHoje && agendamentosHoje.length >= 3) {
-      console.log('❌ Limite atingido para:', Email, 'Agendamentos hoje:', agendamentosHoje.length);
       return res.status(400).json({ msg: "Limite de 3 agendamentos por dia atingido" });
     }
 
-    // Checa disponibilidade do horário
-    const livre = await horarioDisponivel(cliente, dataNormalizada, horarioNormalizado);
-    
-    if (!livre) {
-      console.log('❌ Horário indisponível:', { dataNormalizada, horarioNormalizado });
-      return res.status(400).json({ msg: "Horário indisponível. Por favor, escolha outro horário." });
-    }
+    // Remove agendamento cancelado no mesmo horário (SUPABASE)
+    await supabase
+      .from("agendamentos")
+      .delete()
+      .eq("cliente", cliente)
+      .eq("data", dataNormalizada)
+      .eq("horario", horarioNormalizado)
+      .eq("status", "cancelado");
 
-    // Remove agendamento cancelado no mesmo horário (se existir)
-    try {
-      const { error: deleteError } = await supabase
-        .from("agendamentos")
-        .delete()
-        .eq("cliente", cliente)
-        .eq("data", dataNormalizada)
-        .eq("horario", horarioNormalizado)
-        .eq("status", "cancelado");
-
-      if (deleteError) {
-        console.log('⚠️ Não foi possível limpar agendamentos cancelados:', deleteError);
-      }
-    } catch (cleanupError) {
-      console.log('⚠️ Erro na limpeza de cancelados (pode ignorar):', cleanupError);
-    }
-
-    // Insere novo agendamento
+    // INSERE NO SUPABASE (FONTE PRINCIPAL)
     const dadosAgendamento = {
       nome: Nome,
       email: Email,
@@ -311,28 +296,10 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     const agendamento = await executarAgendamentoSeguro(cliente, dadosAgendamento);
 
-    // Salva no Google Sheets (opcional - não quebra se falhar)
-    try {
-      const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0] || await doc.addSheet({ headerValues: Object.keys(agendamento) });
-      
-      await ensureDynamicHeaders(sheet, Object.keys(agendamento));
-      
-      // Prepara os dados para a planilha
-      const rowData = {};
-      Object.keys(agendamento).forEach(key => {
-        const value = agendamento[key];
-        rowData[key] = (value && typeof value === 'object') ? JSON.stringify(value) : value;
-      });
-      
-      await sheet.addRow(rowData);
-      console.log('✅ Agendamento salvo no Google Sheets');
-    } catch (sheetsError) {
-      console.error('⚠️ Erro ao salvar no Google Sheets (agendamento foi criado no Supabase):', sheetsError.message);
-      // Não quebra o fluxo - apenas loga o erro
-    }
+    // Google Sheets OPCIONAL (não afeta o fluxo principal)
+    await salvarNoGoogleSheets(cliente, agendamento);
 
-    console.log('✅ Agendamento criado com sucesso ID:', agendamento.id);
+    console.log('✅ Agendamento criado com sucesso no Supabase ID:', agendamento.id);
     
     res.json({ 
       msg: "Agendamento realizado com sucesso!", 
@@ -341,55 +308,13 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("💥 Erro no agendamento:", err);
     
-    if (err.message.includes("Horário ocupado por:")) {
+    if (err.message.includes("Horário ocupado")) {
       return res.status(400).json({ msg: err.message });
-    }
-    
-    if (err.message.includes("Erro no banco de dados")) {
-      return res.status(500).json({ msg: "Erro interno no banco de dados" });
     }
     
     res.status(500).json({ msg: "Erro interno no servidor" });
   }
 });
-
-// ---------------- Debug: Ver Agendamentos ----------------
-app.get("/debug/agendamentos/:cliente", authMiddleware, async (req, res) => {
-  try {
-    const cliente = req.params.cliente;
-    const { data, horario } = req.query;
-
-    let query = supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", cliente);
-
-    if (data) {
-      query = query.eq("data", normalizarData(data));
-    }
-    if (horario) {
-      query = query.eq("horario", normalizarHorario(horario));
-    }
-
-    const { data: agendamentos, error } = await query;
-
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
-
-    res.json({ 
-      cliente, 
-      data, 
-      horario, 
-      total: agendamentos.length, 
-      agendamentos 
-    });
-  } catch (err) {
-    console.error("Erro no debug:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ---------------- Reagendar Corrigido ----------------
 app.post("/reagendar/:cliente/:id", authMiddleware, async (req, res) => {
   try {
@@ -587,6 +512,7 @@ app.get("/disponibilidade/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
 
