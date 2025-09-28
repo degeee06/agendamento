@@ -87,21 +87,27 @@ function normalizarHorario(horario) {
   return horario;
 }
 
-// ---------------- Disponibilidade Melhorada ----------------
+// ---------------- Disponibilidade Corrigida ----------------
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   try {
     const dataNormalizada = normalizarData(data);
     const horarioNormalizado = normalizarHorario(horario);
 
-    console.log('Verificando disponibilidade:', { cliente, dataNormalizada, horarioNormalizado, ignoreId });
+    console.log('🔍 Verificando disponibilidade:', { 
+      cliente, 
+      data: dataNormalizada, 
+      horario: horarioNormalizado, 
+      ignoreId 
+    });
 
+    // Query mais específica para agendamentos ativos
     let query = supabase
       .from("agendamentos")
-      .select("id, status")
+      .select("id, status, nome, email")
       .eq("cliente", cliente)
       .eq("data", dataNormalizada)
       .eq("horario", horarioNormalizado)
-      .neq("status", "cancelado");
+      .in("status", ["pendente", "confirmado"]); // Apenas status ativos
 
     if (ignoreId) {
       query = query.neq("id", ignoreId);
@@ -110,43 +116,67 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
     const { data: agendamentos, error } = await query;
     
     if (error) {
-      console.error('Erro ao verificar disponibilidade:', error);
+      console.error('❌ Erro ao verificar disponibilidade:', error);
       throw error;
     }
 
     const disponivel = agendamentos.length === 0;
-    console.log('Resultado disponibilidade:', { disponivel, agendamentosEncontrados: agendamentos.length });
+    
+    console.log('📊 Resultado disponibilidade:', { 
+      disponivel, 
+      agendamentosEncontrados: agendamentos.length,
+      agendamentos: agendamentos 
+    });
     
     return disponivel;
   } catch (error) {
-    console.error('Erro na função horarioDisponivel:', error);
+    console.error('💥 Erro na função horarioDisponivel:', error);
     throw error;
   }
 }
 
-// ---------------- Transação Segura para Agendamento ----------------
+// ---------------- Transação Segura Corrigida ----------------
 async function executarAgendamentoSeguro(cliente, dadosAgendamento) {
   try {
+    console.log('💾 Tentando inserir agendamento:', { cliente, ...dadosAgendamento });
+
     const { data, error } = await supabase
       .from("agendamentos")
       .insert([{
         ...dadosAgendamento,
         cliente,
-        status: "confirmado", // Agora todos são confirmados automaticamente
-        confirmado: true
+        status: "confirmado",
+        confirmado: true,
+        created_at: new Date().toISOString()
       }])
       .select()
       .single();
 
     if (error) {
+      console.error('❌ Erro ao inserir agendamento:', error);
+      
+      // Se for erro de duplicação, verifica qual agendamento está causando o conflito
       if (error.code === '23505') {
-        throw new Error("Horário já ocupado por outro agendamento");
+        const { data: conflito } = await supabase
+          .from("agendamentos")
+          .select("id, status, nome, created_at")
+          .eq("cliente", cliente)
+          .eq("data", dadosAgendamento.data)
+          .eq("horario", dadosAgendamento.horario)
+          .neq("status", "cancelado")
+          .single();
+
+        if (conflito) {
+          throw new Error(`Horário ocupado por: ${conflito.nome} (Status: ${conflito.status})`);
+        }
       }
-      throw error;
+      throw new Error(`Erro no banco de dados: ${error.message}`);
     }
 
+    console.log('✅ Agendamento inserido com sucesso:', data.id);
     return data;
   } catch (error) {
+    console.error('💥 Erro na função executarAgendamentoSeguro:', error);
     throw error;
   }
 }
@@ -176,38 +206,66 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const dataNormalizada = normalizarData(Data);
     const horarioNormalizado = normalizarHorario(Horario);
 
+    console.log('📅 Novo agendamento solicitado:', {
+      cliente,
+      Nome, 
+      Email, 
+      Data: dataNormalizada, 
+      Horario: horarioNormalizado
+    });
+
     // Verifica se a data não é no passado
     const dataAgendamento = new Date(`${dataNormalizada}T${horarioNormalizado}`);
-    if (dataAgendamento < new Date()) {
+    const agora = new Date();
+    if (dataAgendamento < agora) {
+      console.log('❌ Tentativa de agendar no passado:', dataAgendamento);
       return res.status(400).json({ msg: "Não é possível agendar para datas/horários passados" });
     }
 
-  // Verifica limite de agendamentos por dia (para todos os usuários)
-const { data: agendamentosHoje } = await supabase
-  .from("agendamentos")
-  .select("*")
-  .eq("email", Email)
-  .eq("data", dataNormalizada)
-  .neq("status", "cancelado");
-
-// Define um limite geral (ex: 3 agendamentos por dia por email)
-if (agendamentosHoje.length >= 3) {
-  return res.status(400).json({ msg: "Limite de 3 agendamentos por dia atingido" });
-}
-    // Checa disponibilidade do horário
-    const livre = await horarioDisponivel(cliente, dataNormalizada, horarioNormalizado);
-    if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
-
-    // Remove agendamento cancelado no mesmo horário (se existir)
-    await supabase
+    // Verifica limite de agendamentos por dia
+    const { data: agendamentosHoje, error: errorLimite } = await supabase
       .from("agendamentos")
-      .delete()
-      .eq("cliente", cliente)
+      .select("*")
+      .eq("email", Email)
       .eq("data", dataNormalizada)
-      .eq("horario", horarioNormalizado)
-      .eq("status", "cancelado");
+      .neq("status", "cancelado");
 
-    // Insere novo agendamento com transação segura
+    if (errorLimite) {
+      console.error('❌ Erro ao verificar limite:', errorLimite);
+      return res.status(500).json({ msg: "Erro ao verificar limite de agendamentos" });
+    }
+
+    if (agendamentosHoje.length >= 3) {
+      console.log('❌ Limite atingido para:', Email, 'Agendamentos hoje:', agendamentosHoje.length);
+      return res.status(400).json({ msg: "Limite de 3 agendamentos por dia atingido" });
+    }
+
+    // Checa disponibilidade do horário (MAIS IMPORTANTE)
+    const livre = await horarioDisponivel(cliente, dataNormalizada, horarioNormalizado);
+    
+    if (!livre) {
+      console.log('❌ Horário indisponível:', { dataNormalizada, horarioNormalizado });
+      return res.status(400).json({ msg: "Horário indisponível. Por favor, escolha outro horário." });
+    }
+
+    // Remove agendamento cancelado no mesmo horário (se existir) - OPICIONAL
+    try {
+      const { error: deleteError } = await supabase
+        .from("agendamentos")
+        .delete()
+        .eq("cliente", cliente)
+        .eq("data", dataNormalizada)
+        .eq("horario", horarioNormalizado)
+        .eq("status", "cancelado");
+
+      if (deleteError) {
+        console.log('⚠️ Não foi possível limpar agendamentos cancelados:', deleteError);
+      }
+    } catch (cleanupError) {
+      console.log('⚠️ Erro na limpeza de cancelados (pode ignorar):', cleanupError);
+    }
+
+    // Insere novo agendamento
     const dadosAgendamento = {
       nome: Nome,
       email: Email,
@@ -218,26 +276,72 @@ if (agendamentosHoje.length >= 3) {
 
     const agendamento = await executarAgendamentoSeguro(cliente, dadosAgendamento);
 
-   
-
     // Salva no Google Sheets
-    const doc = await accessSpreadsheet(cliente);
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(agendamento));
-    await sheet.addRow(agendamento);
+    try {
+      const doc = await accessSpreadsheet(cliente);
+      const sheet = doc.sheetsByIndex[0];
+      await ensureDynamicHeaders(sheet, Object.keys(agendamento));
+      await sheet.addRow(agendamento);
+      console.log('📊 Agendamento salvo no Google Sheets');
+    } catch (sheetsError) {
+      console.error('⚠️ Erro ao salvar no Google Sheets (agendamento foi criado):', sheetsError);
+    }
 
-    res.json({ 
-  msg: "Agendamento realizado com sucesso!", 
-  agendamento: agendamento
-});
-  } catch (err) {
-    console.error("Erro no agendamento:", err);
+    console.log('✅ Agendamento criado com sucesso ID:', agendamento.id);
     
-    if (err.message === "Horário já ocupado por outro agendamento") {
-      return res.status(400).json({ msg: "Horário indisponível. Tente outro horário." });
+    res.json({ 
+      msg: "Agendamento realizado com sucesso!", 
+      agendamento: agendamento
+    });
+  } catch (err) {
+    console.error("💥 Erro no agendamento:", err);
+    
+    if (err.message.includes("Horário ocupado por:")) {
+      return res.status(400).json({ msg: err.message });
+    }
+    
+    if (err.message.includes("Erro no banco de dados")) {
+      return res.status(500).json({ msg: "Erro interno no banco de dados" });
     }
     
     res.status(500).json({ msg: "Erro interno no servidor" });
+  }
+});
+
+// ---------------- Debug: Ver Agendamentos ----------------
+app.get("/debug/agendamentos/:cliente", authMiddleware, async (req, res) => {
+  try {
+    const cliente = req.params.cliente;
+    const { data, horario } = req.query;
+
+    let query = supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente);
+
+    if (data) {
+      query = query.eq("data", normalizarData(data));
+    }
+    if (horario) {
+      query = query.eq("horario", normalizarHorario(horario));
+    }
+
+    const { data: agendamentos, error } = await query;
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ 
+      cliente, 
+      data, 
+      horario, 
+      total: agendamentos.length, 
+      agendamentos 
+    });
+  } catch (err) {
+    console.error("Erro no debug:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -438,4 +542,5 @@ app.get("/disponibilidade/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
