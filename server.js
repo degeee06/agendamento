@@ -54,21 +54,56 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ---------------- Google Sheets ----------------
+// ---------------- Google Sheets Corrigido ----------------
 async function accessSpreadsheet(cliente) {
-  const SPREADSHEET_ID = planilhasClientes[cliente];
-  const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
-  await doc.useServiceAccountAuth(creds);
-  await doc.loadInfo();
-  return doc;
+  try {
+    const SPREADSHEET_ID = planilhasClientes[cliente];
+    
+    if (!SPREADSHEET_ID) {
+      throw new Error(`ID da planilha não encontrado para o cliente: ${cliente}`);
+    }
+
+    console.log('📊 Acessando planilha:', { cliente, SPREADSHEET_ID });
+    
+    const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
+    
+    // Método correto de autenticação para a versão mais recente
+    await doc.useServiceAccountAuth({
+      client_email: creds.client_email,
+      private_key: creds.private_key,
+    });
+    
+    await doc.loadInfo(); // Carrega informações da planilha
+    
+    console.log('✅ Planilha carregada:', doc.title);
+    return doc;
+  } catch (error) {
+    console.error('❌ Erro ao acessar planilha:', error);
+    throw new Error(`Falha ao acessar Google Sheets: ${error.message}`);
+  }
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
-  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
-  const currentHeaders = sheet.headerValues || [];
-  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
-  if (headersToAdd.length > 0) {
-    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
+  try {
+    // Tenta carregar os headers existentes
+    await sheet.loadHeaderRow().catch(async () => {
+      // Se não existir header, cria um novo
+      console.log('📋 Criando novo header row:', newKeys);
+      await sheet.setHeaderRow(newKeys);
+    });
+    
+    const currentHeaders = sheet.headerValues || [];
+    const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+    
+    if (headersToAdd.length > 0) {
+      console.log('📋 Adicionando novos headers:', headersToAdd);
+      await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
+    }
+    
+    console.log('✅ Headers verificados/atualizados');
+  } catch (error) {
+    console.error('❌ Erro ao garantir headers:', error);
+    throw error;
   }
 }
 
@@ -235,12 +270,12 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       return res.status(500).json({ msg: "Erro ao verificar limite de agendamentos" });
     }
 
-    if (agendamentosHoje.length >= 3) {
+    if (agendamentosHoje && agendamentosHoje.length >= 3) {
       console.log('❌ Limite atingido para:', Email, 'Agendamentos hoje:', agendamentosHoje.length);
       return res.status(400).json({ msg: "Limite de 3 agendamentos por dia atingido" });
     }
 
-    // Checa disponibilidade do horário (MAIS IMPORTANTE)
+    // Checa disponibilidade do horário
     const livre = await horarioDisponivel(cliente, dataNormalizada, horarioNormalizado);
     
     if (!livre) {
@@ -248,7 +283,7 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: "Horário indisponível. Por favor, escolha outro horário." });
     }
 
-    // Remove agendamento cancelado no mesmo horário (se existir) - OPICIONAL
+    // Remove agendamento cancelado no mesmo horário (se existir)
     try {
       const { error: deleteError } = await supabase
         .from("agendamentos")
@@ -276,15 +311,25 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
 
     const agendamento = await executarAgendamentoSeguro(cliente, dadosAgendamento);
 
-    // Salva no Google Sheets
+    // Salva no Google Sheets (opcional - não quebra se falhar)
     try {
       const doc = await accessSpreadsheet(cliente);
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByIndex[0] || await doc.addSheet({ headerValues: Object.keys(agendamento) });
+      
       await ensureDynamicHeaders(sheet, Object.keys(agendamento));
-      await sheet.addRow(agendamento);
-      console.log('📊 Agendamento salvo no Google Sheets');
+      
+      // Prepara os dados para a planilha
+      const rowData = {};
+      Object.keys(agendamento).forEach(key => {
+        const value = agendamento[key];
+        rowData[key] = (value && typeof value === 'object') ? JSON.stringify(value) : value;
+      });
+      
+      await sheet.addRow(rowData);
+      console.log('✅ Agendamento salvo no Google Sheets');
     } catch (sheetsError) {
-      console.error('⚠️ Erro ao salvar no Google Sheets (agendamento foi criado):', sheetsError);
+      console.error('⚠️ Erro ao salvar no Google Sheets (agendamento foi criado no Supabase):', sheetsError.message);
+      // Não quebra o fluxo - apenas loga o erro
     }
 
     console.log('✅ Agendamento criado com sucesso ID:', agendamento.id);
@@ -542,5 +587,6 @@ app.get("/disponibilidade/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
 
 
