@@ -4,16 +4,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { createClient } from "@supabase/supabase-js";
-import pkg from "mercadopago"; 
-const mercadopago = pkg;
 
-mercadopago.configurations.setAccessToken(process.env.MP_ACCESS_TOKEN);
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 
-// ---------------- MercadoPago ----------------
-mercadopago.configurations.setAccessToken(process.env.MP_ACCESS_TOKEN);
+
 
 // ---------------- Supabase ----------------
 const supabase = createClient(
@@ -128,28 +125,30 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
 }
 
 // ---------------- Transação Segura para Agendamento ----------------
-async function executarAgendamentoSeguro(cliente, dadosAgendamento, isPremium = false) {
-  // Use uma transação para evitar race conditions
-  const { data, error } = await supabase
-    .from("agendamentos")
-    .insert([{
-      ...dadosAgendamento,
-      cliente,
-      status: isPremium ? "confirmado" : "pendente",
-      confirmado: isPremium
-    }])
-    .select()
-    .single();
+async function executarAgendamentoSeguro(cliente, dadosAgendamento) {
+  try {
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        ...dadosAgendamento,
+        cliente,
+        status: "confirmado", // Agora todos são confirmados automaticamente
+        confirmado: true
+      }])
+      .select()
+      .single();
 
-  if (error) {
-    // Verifica se é erro de constraint única
-    if (error.code === '23505') {
-      throw new Error("Horário já ocupado por outro agendamento");
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error("Horário já ocupado por outro agendamento");
+      }
+      throw error;
     }
+
+    return data;
+  } catch (error) {
     throw error;
   }
-
-  return data;
 }
 
 // ---------------- Rotas ----------------
@@ -161,65 +160,7 @@ app.get("/:cliente", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ---------------- Webhook MercadoPago ----------------
-app.post("/webhook/mercadopago", async (req, res) => {
-  try {
-    const payment = req.body;
-    const { id, status, payer } = payment;
 
-    // Atualiza ou insere pagamento
-    await supabase.from("pagamentos").upsert([{
-      id,
-      email: payer.email,
-      amount: payment.transaction_amount,
-      status,
-      valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
-    }]);
-
-    // Se pagamento aprovado, confirma agendamento automaticamente
-    if (status === "approved") {
-      const { data: agendamento } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", payer.email)
-        .eq("status", "pendente")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (agendamento) {
-        const { data: updated } = await supabase
-          .from("agendamentos")
-          .update({ status: "confirmado", confirmado: true, payment_id: id })
-          .eq("id", agendamento.id)
-          .select()
-          .single();
-
-        // Atualiza Google Sheets
-        if (updated) {
-          const doc = await accessSpreadsheet(agendamento.cliente);
-          const sheet = doc.sheetsByIndex[0];
-          await ensureDynamicHeaders(sheet, Object.keys(updated));
-          const rows = await sheet.getRows();
-          const row = rows.find(r => r.id == updated.id);
-          if (row) {
-            row.status = "confirmado";
-            row.confirmado = true;
-            row.payment_id = id;
-            await row.save();
-          } else {
-            await sheet.addRow(updated);
-          }
-        }
-      }
-    }
-
-    res.status(200).send("OK");
-  } catch (err) {
-    console.error("Erro webhook MP:", err);
-    res.status(500).send("Erro interno");
-  }
-});
 
 // ---------------- Agendar Corrigido ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
@@ -241,31 +182,18 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: "Não é possível agendar para datas/horários passados" });
     }
 
-    // Verifica pagamento ativo
-    const { data: pagamento } = await supabase
-      .from("pagamentos")
-      .select("*")
-      .eq("email", Email)
-      .eq("status", "approved")
-      .gte("valid_until", new Date())
-      .single();
+  // Verifica limite de agendamentos por dia (para todos os usuários)
+const { data: agendamentosHoje } = await supabase
+  .from("agendamentos")
+  .select("*")
+  .eq("email", Email)
+  .eq("data", dataNormalizada)
+  .neq("status", "cancelado");
 
-    const isPremium = !!pagamento;
-
-    // Limite para free
-    if (!isPremium) {
-      const { data: agendamentosHoje } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", Email)
-        .eq("data", dataNormalizada)
-        .neq("status", "cancelado");
-
-      if (agendamentosHoje.length >= 3) {
-        return res.status(400).json({ msg: "Limite de 3 agendamentos por dia para plano free" });
-      }
-    }
-
+// Define um limite geral (ex: 3 agendamentos por dia por email)
+if (agendamentosHoje.length >= 3) {
+  return res.status(400).json({ msg: "Limite de 3 agendamentos por dia atingido" });
+}
     // Checa disponibilidade do horário
     const livre = await horarioDisponivel(cliente, dataNormalizada, horarioNormalizado);
     if (!livre) return res.status(400).json({ msg: "Horário indisponível" });
@@ -288,27 +216,9 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       horario: horarioNormalizado
     };
 
-    const agendamento = await executarAgendamentoSeguro(cliente, dadosAgendamento, isPremium);
+    const agendamento = await executarAgendamentoSeguro(cliente, dadosAgendamento);
 
-    // Cria pagamento real via MercadoPago (1 centavo para teste)
-    if (!isPremium) {
-      const pagamentoMP = await mercadopago.payment.create({
-        transaction_amount: 0.01, // valor real, altere para produção
-        description: `Agendamento ${agendamento.id} - ${Nome}`,
-        payment_method_id: "pix", // pode trocar para "card" ou "boleto"
-        payer: { email: Email }
-      });
-
-      await supabase
-        .from("pagamentos")
-        .upsert([{
-          id: pagamentoMP.body.id,
-          email: Email,
-          amount: pagamentoMP.body.transaction_amount,
-          status: pagamentoMP.body.status,
-          valid_until: new Date(Date.now() + 24 * 60 * 60 * 1000)
-        }]);
-    }
+   
 
     // Salva no Google Sheets
     const doc = await accessSpreadsheet(cliente);
@@ -317,10 +227,9 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     await sheet.addRow(agendamento);
 
     res.json({ 
-      msg: "Agendamento realizado com sucesso!", 
-      agendamento: agendamento,
-      premium: isPremium 
-    });
+  msg: "Agendamento realizado com sucesso!", 
+  agendamento: agendamento
+});
   } catch (err) {
     console.error("Erro no agendamento:", err);
     
@@ -529,3 +438,4 @@ app.get("/disponibilidade/:cliente", authMiddleware, async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
