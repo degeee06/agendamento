@@ -1,27 +1,37 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
 // ---------------- Config ----------------
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
 
 const app = express();
-app.use(cors());
+
+// Configuração CORS para permitir frontend no Netlify
+app.use(cors({
+  origin: function(origin, callback) {
+    // Permite requests sem origin (como mobile apps) ou de domínios específicos
+    const allowedOrigins = [
+      'frontrender.netlify.app', // Substitua pelo seu domínio Netlify
+      'http://localhost:3000', // Para desenvolvimento local
+    ];
+    
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-
-
 
 let creds;
 try {
@@ -70,10 +80,6 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-
-
-
-
 // ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
@@ -87,7 +93,6 @@ async function authMiddleware(req, res, next) {
   if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
   next();
 }
-
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   let query = supabase
@@ -103,33 +108,28 @@ async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
   return agendamentos.length === 0;
 }
 
-// ---------------- Rotas ----------------
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
-app.get("/:cliente", async (req, res) => {
-  const cliente = req.params.cliente;
-  const { data, error } = await supabase.from("clientes").select("id").eq("id", cliente).single();
-  if (error || !data) return res.status(404).send("Cliente não encontrado");
-  res.sendFile(path.join(__dirname, "public/index.html"));
+// ---------------- Health Check ----------------
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "OK", 
+    message: "Backend rodando no GitHub",
+    timestamp: new Date().toISOString()
+  });
 });
 
+// ---------------- Rotas de Agendamentos ----------------
 app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
   try {
     const { cliente } = req.params;
     if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
 
     const { data, error } = await supabase
-    .from("agendamentos")
-    .update({ 
-      data: novaData, 
-      horario: novoHorario,
-      status: "pendente",      // 🔥 VOLTA PARA PENDENTE
-      confirmado: false        // 🔥 VOLTA PARA NÃO CONFIRMADO
-    })
-    .eq("id", id)
-    .eq("cliente", userClienteId)
-    .select()
-    .single();
-    
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", cliente)
+      .order("data", { ascending: true })
+      .order("horario", { ascending: true });
+
     if (error) throw error;
     res.json({ agendamentos: data });
   } catch (err) {
@@ -137,7 +137,6 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 
 // ---------------- Agendar ----------------
 app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
@@ -152,8 +151,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
-
-
     // Limpeza de agendamentos cancelados (opcional)
     await supabase
       .from("agendamentos")
@@ -162,12 +159,6 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
       .eq("data", dataNormalizada)
       .eq("horario", Horario)
       .eq("status", "cancelado");
-
-    // Debug: log dos dados que vão ser inseridos
-    console.log({
-      cliente, Nome, Email, Telefone, Data, Horario,
-      dataNormalizada, emailNormalizado
-    });
 
     // Inserção sem checagem de horário disponível
     const { data: novoAgendamento, error } = await supabase
@@ -179,8 +170,8 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
         telefone: Telefone,
         data: dataNormalizada,
         horario: Horario,
-        status: "pendente",   // sempre pendente
-        confirmado: false,    // sempre falso
+        status: "pendente",
+        confirmado: false,
       }])
       .select()
       .single();
@@ -201,53 +192,82 @@ app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
   }
 });
 
-
 // ---------------- Confirmar / Cancelar / Reagendar ----------------
-app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req,res)=>{
-  const { cliente, id } = req.params;
-  if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-  const { data } = await supabase.from("agendamentos")
-    .update({confirmado:true,status:"confirmado"})
-    .eq("id",id).eq("cliente",cliente).select().single();
-  const doc = await accessSpreadsheet(cliente);
-  await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-  res.json({msg:"Agendamento confirmado", agendamento:data});
+app.post("/agendamentos/:cliente/confirmar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ confirmado: true, status: "confirmado" })
+      .eq("id", id).eq("cliente", cliente).select().single();
+    
+    if (error) throw error;
+
+    const doc = await accessSpreadsheet(cliente);
+    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    res.json({ msg: "Agendamento confirmado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao confirmar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
 });
 
-app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req,res)=>{
-  const { cliente, id } = req.params;
-  if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-  const { data } = await supabase.from("agendamentos")
-    .update({status:"cancelado", confirmado:false})
-    .eq("id",id).eq("cliente",cliente).select().single();
-  const doc = await accessSpreadsheet(cliente);
-  await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-  res.json({msg:"Agendamento cancelado", agendamento:data});
+app.post("/agendamentos/:cliente/cancelar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ status: "cancelado", confirmado: false })
+      .eq("id", id).eq("cliente", cliente).select().single();
+    
+    if (error) throw error;
+
+    const doc = await accessSpreadsheet(cliente);
+    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    res.json({ msg: "Agendamento cancelado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao cancelar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
 });
 
-app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req,res)=>{
-  const { cliente, id } = req.params;
-  const { novaData, novoHorario } = req.body;
-  if (!novaData || !novoHorario) return res.status(400).json({msg:"Data e horário obrigatórios"});
-  if (req.clienteId !== cliente) return res.status(403).json({msg:"Acesso negado"});
-  const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
-  if(!disponivel) return res.status(400).json({msg:"Horário indisponível"});
-  const { data } = await supabase.from("agendamentos")
-    .update({data:novaData, horario:novoHorario})
-    .eq("id",id).eq("cliente",cliente).select().single();
-  const doc = await accessSpreadsheet(cliente);
-  await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-  res.json({msg:"Agendamento reagendado com sucesso", agendamento:data});
+app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { cliente, id } = req.params;
+    const { novaData, novoHorario } = req.body;
+    if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
+    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
+    
+    const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
+    if (!disponivel) return res.status(400).json({ msg: "Horário indisponível" });
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ data: novaData, horario: novoHorario })
+      .eq("id", id).eq("cliente", cliente).select().single();
+    
+    if (error) throw error;
+
+    const doc = await accessSpreadsheet(cliente);
+    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao reagendar:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Error Handling ----------------
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ msg: "Algo deu errado!" });
+});
+
+// Rota 404 para endpoints não encontrados
+app.use("*", (req, res) => {
+  res.status(404).json({ msg: "Endpoint não encontrado" });
 });
 
 // ---------------- Servidor ----------------
-app.listen(PORT,()=>console.log(`Servidor rodando na porta ${PORT}`));
-
-
-
-
-
-
-
-
-
+app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
