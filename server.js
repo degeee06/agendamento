@@ -179,16 +179,26 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
     }
 
     // 🔥 SALVA NO METADATA DO USUÁRIO
-    console.log('🔧 Salvando spreadsheet_id no metadata:', finalSpreadsheetId);
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: { spreadsheet_id: finalSpreadsheetId }
-    });
+   // 🔥 CORREÇÃO: Use a Admin API para atualizar o usuário sem sessão
+console.log('🔧 Salvando spreadsheet_id no metadata:', finalSpreadsheetId);
 
-    if (updateError) {
-      console.error('❌ Erro ao atualizar usuário:', updateError);
-      throw updateError;
-    }
+// Use o user ID do req.user para atualizar via Admin API
+const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(
+  req.user.id,
+  { 
+    user_metadata: { 
+      ...req.user.user_metadata, // Mantém os metadata existentes
+      spreadsheet_id: finalSpreadsheetId 
+    } 
+  }
+);
 
+if (updateError) {
+  console.error('❌ Erro ao atualizar usuário:', updateError);
+  throw updateError;
+}
+
+console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
     console.log('✅ Sheets configurado com sucesso para:', userEmail);
     
     res.json({ 
@@ -424,6 +434,7 @@ app.use("*", (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Backend rodando na porta ${PORT} - Sheets por usuário`));
+
 
 
 
