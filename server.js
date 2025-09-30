@@ -171,8 +171,8 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- CONFIRMAR AGENDAMENTO ----------------
-app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
+// ---------------- ROTAS COMPATÍVEIS COM FRONTEND ANTIGO ----------------
+app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userEmail = req.user.email;
@@ -180,14 +180,13 @@ app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-      .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
+      .eq("email", userEmail)
       .select()
       .single();
     
     if (error) throw error;
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Atualiza Google Sheet
     try {
       const doc = await accessSpreadsheet();
       await updateRowInSheet(doc.sheetsByIndex[0], id, data);
@@ -202,8 +201,7 @@ app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- CANCELAR AGENDAMENTO ----------------
-app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
+app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userEmail = req.user.email;
@@ -211,14 +209,13 @@ app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-      .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
+      .eq("email", userEmail)
       .select()
       .single();
     
     if (error) throw error;
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Atualiza Google Sheet
     try {
       const doc = await accessSpreadsheet();
       await updateRowInSheet(doc.sheetsByIndex[0], id, data);
@@ -233,8 +230,7 @@ app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// ---------------- REAGENDAR AGENDAMENTO ----------------
-app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
+app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { novaData, novoHorario } = req.body;
@@ -242,7 +238,6 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
     
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
     
-    // 🔥 CORREÇÃO: Remove verificação de horário disponível
     const { data, error } = await supabase.from("agendamentos")
       .update({ 
         data: novaData, 
@@ -251,12 +246,11 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
         confirmado: false
       })
       .eq("id", id)
-      .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
+      .eq("email", userEmail)
       .select()
       .single();
     
     if (error) {
-      // 🔥 TRATA ERRO DE DUPLICIDADE ESPECIFICAMENTE
       if (error.code === '23505') {
         return res.status(400).json({ 
           msg: "Você já possui um agendamento para esta nova data e horário" 
@@ -266,7 +260,6 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
     }
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Atualiza Google Sheet
     try {
       const doc = await accessSpreadsheet();
       await updateRowInSheet(doc.sheetsByIndex[0], id, data);
@@ -294,3 +287,4 @@ app.use("*", (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
+
