@@ -8,24 +8,13 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 
-// Configuração CORS para permitir frontend no Netlify - CORRIGIDO
+// Configuração CORS SIMPLIFICADA - Use esta
 app.use(cors({
-  origin: function(origin, callback) {
-    // Permite requests sem origin (como mobile apps) ou de domínios específicos
-    const allowedOrigins = [
-      'https://frontrender.netlify.app', // 🔥 ADICIONE HTTPS
-      'http://localhost:3000', // Para desenvolvimento local
-      'http://localhost:5173' // Vite dev server
-    ];
-    
-    // Permite requests sem origin (mobile apps, etc) OU de domínios permitidos
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log('Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: [
+    'https://frontrender.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
   credentials: true
 }));
 
@@ -274,4 +263,5 @@ app.use("*", (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
+
 
