@@ -37,8 +37,12 @@ try {
 
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet() {
-  // Usa um spreadsheet fixo para todos
-  const spreadsheetId = process.env.DEFAULT_SPREADSHEET_ID || "seu_spreadsheet_id_aqui";
+  // 🔥 CORREÇÃO: Use apenas UM spreadsheet fixo para todos
+  const spreadsheetId = process.env.DEFAULT_SPREADSHEET_ID;
+  if (!spreadsheetId) {
+    throw new Error("DEFAULT_SPREADSHEET_ID não configurado");
+  }
+  
   const doc = new GoogleSpreadsheet(spreadsheetId);
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
@@ -99,7 +103,6 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .select("*")
       .eq("email", userEmail)
-      .eq("cliente", "default")
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
@@ -122,23 +125,14 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
-    // Limpeza de agendamentos cancelados (opcional)
-    await supabase
-      .from("agendamentos")
-      .delete()
-      .eq("email", userEmail)
-      .eq("cliente", "default")
-      .eq("data", dataNormalizada)
-      .eq("horario", Horario)
-      .eq("status", "cancelado");
-
-    // 🔥 CORREÇÃO: Adiciona 'default' como cliente
+    // 🔥 CORREÇÃO: Remove verificação de duplicidade (deixa a constraint tratar)
+    // 🔥 CORREÇÃO: Usa userEmail ao invés de email do body para segurança
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
-        cliente: "default", // 🔥 ADICIONE ESTA LINHA
+        cliente: userEmail, // 🔥 USA EMAIL COMO CLIENTE
         nome: Nome,
-        email: userEmail,
+        email: userEmail,   // 🔥 USA EMAIL DO USUÁRIO LOGADO
         telefone: Telefone,
         data: dataNormalizada,
         horario: Horario,
@@ -148,19 +142,32 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // 🔥 TRATA ERRO DE DUPLICIDADE ESPECIFICAMENTE
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          msg: "Você já possui um agendamento para esta data e horário" 
+        });
+      }
+      throw error;
+    }
 
     // Atualiza Google Sheet
-    const doc = await accessSpreadsheet();
-    const sheet = doc.sheetsByIndex[0];
-    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-    await sheet.addRow(novoAgendamento);
+    try {
+      const doc = await accessSpreadsheet();
+      const sheet = doc.sheetsByIndex[0];
+      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+      await sheet.addRow(novoAgendamento);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+      // Não falha o agendamento por erro no Sheets
+    }
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
   } catch (err) {
     console.error("Erro no /agendar:", err);
-    res.status(500).json({ msg: "Erro interno" });
+    res.status(500).json({ msg: "Erro interno no servidor" });
   }
 });
 
@@ -173,16 +180,21 @@ app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-      .eq("email", userEmail)
-      .eq("cliente", "default") // 🔥 ADICIONE ESTA LINHA
+      .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
       .select()
       .single();
     
     if (error) throw error;
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    const doc = await accessSpreadsheet();
-    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    // Atualiza Google Sheet
+    try {
+      const doc = await accessSpreadsheet();
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
     res.json({ msg: "Agendamento confirmado", agendamento: data });
   } catch (err) {
     console.error("Erro ao confirmar agendamento:", err);
@@ -199,16 +211,21 @@ app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-      .eq("email", userEmail)
-      .eq("cliente", "default") // 🔥 ADICIONE ESTA LINHA
+      .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
       .select()
       .single();
     
     if (error) throw error;
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    const doc = await accessSpreadsheet();
-    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    // Atualiza Google Sheet
+    try {
+      const doc = await accessSpreadsheet();
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
     res.json({ msg: "Agendamento cancelado", agendamento: data });
   } catch (err) {
     console.error("Erro ao cancelar agendamento:", err);
@@ -225,7 +242,7 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
     
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
     
-    // ✅ SEM verificação de horário disponível
+    // 🔥 CORREÇÃO: Remove verificação de horário disponível
     const { data, error } = await supabase.from("agendamentos")
       .update({ 
         data: novaData, 
@@ -234,16 +251,29 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
         confirmado: false
       })
       .eq("id", id)
-      .eq("email", userEmail)
-      .eq("cliente", "default") // 🔥 ADICIONE ESTA LINHA
+      .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      // 🔥 TRATA ERRO DE DUPLICIDADE ESPECIFICAMENTE
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          msg: "Você já possui um agendamento para esta nova data e horário" 
+        });
+      }
+      throw error;
+    }
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    const doc = await accessSpreadsheet();
-    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    // Atualiza Google Sheet
+    try {
+      const doc = await accessSpreadsheet();
+      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
     res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
   } catch (err) {
     console.error("Erro ao reagendar:", err);
