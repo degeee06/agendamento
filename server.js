@@ -254,7 +254,9 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 ROTAS COMPATÍVEIS COM FRONTEND ANTIGO
+
+
+// 🔥 CORREÇÃO: Rota confirmar - passe userMetadata
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -271,7 +273,8 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessUserSpreadsheet(userEmail);
+      // 🔥 CORREÇÃO: Adicione req.user.user_metadata
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
       }
@@ -286,37 +289,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
   }
 });
 
-
-// ---------------- ROTAS COMPATÍVEIS COM FRONTEND ANTIGO ----------------
-app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userEmail = req.user.email;
-    
-    const { data, error } = await supabase.from("agendamentos")
-      .update({ confirmado: true, status: "confirmado" })
-      .eq("id", id)
-      .eq("email", userEmail)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
-
-    try {
-      const doc = await accessUserSpreadsheet(userEmail);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
-
-    res.json({ msg: "Agendamento confirmado", agendamento: data });
-  } catch (err) {
-    console.error("Erro ao confirmar agendamento:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
+// 🔥 CORREÇÃO: Rota cancelar - passe userMetadata
 app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -333,8 +306,11 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessUserSpreadsheet(userEmail);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      // 🔥 CORREÇÃO: Adicione req.user.user_metadata
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -346,6 +322,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
   }
 });
 
+// 🔥 CORREÇÃO: Rota reagendar - passe userMetadata
 app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -377,8 +354,11 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessUserSpreadsheet(userEmail);
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      // 🔥 CORREÇÃO: Adicione req.user.user_metadata
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
@@ -401,5 +381,6 @@ app.use("*", (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Backend rodando na porta ${PORT} - Sheets por usuário`));
+
 
 
