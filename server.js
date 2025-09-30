@@ -138,10 +138,6 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
-    // Verifica se horário está disponível
-    const disponivel = await horarioDisponivel(userEmail, dataNormalizada, Horario);
-    if (!disponivel) return res.status(400).json({ msg: "Horário indisponível" });
-
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -294,3 +290,4 @@ app.use("*", (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
+
