@@ -3,12 +3,9 @@ import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
-// ---------------- Config ----------------
 const PORT = process.env.PORT || 3000;
-
 const app = express();
 
-// Configuração CORS SIMPLIFICADA - Use esta
 app.use(cors({
   origin: [
     'https://frontrender.netlify.app',
@@ -35,18 +32,55 @@ try {
   process.exit(1);
 }
 
-// ---------------- Google Sheets ----------------
-async function accessSpreadsheet() {
-  // 🔥 CORREÇÃO: Use apenas UM spreadsheet fixo para todos
-  const spreadsheetId = process.env.DEFAULT_SPREADSHEET_ID;
-  if (!spreadsheetId) {
-    throw new Error("DEFAULT_SPREADSHEET_ID não configurado");
+// ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
+async function accessUserSpreadsheet(userEmail) {
+  try {
+    // 🔥 PEGA SPREADSHEET ID DO METADATA DO USUÁRIO
+    const { data: userData, error } = await supabase.auth.admin.getUserByEmail(userEmail);
+    if (error) throw error;
+    
+    const spreadsheetId = userData.user.user_metadata?.spreadsheet_id;
+    
+    if (!spreadsheetId) {
+      console.log(`📝 Usuário ${userEmail} não configurou Sheets`);
+      return null;
+    }
+    
+    const doc = new GoogleSpreadsheet(spreadsheetId);
+    await doc.useServiceAccountAuth(creds);
+    await doc.loadInfo();
+    
+    console.log(`✅ Acessando planilha do usuário: ${userEmail}`);
+    return doc;
+  } catch (error) {
+    console.error(`❌ Erro ao acessar planilha do usuário ${userEmail}:`, error.message);
+    return null;
   }
-  
-  const doc = new GoogleSpreadsheet(spreadsheetId);
-  await doc.useServiceAccountAuth(creds);
-  await doc.loadInfo();
-  return doc;
+}
+
+// 🔥 NOVA FUNÇÃO: CRIAR PLANILHA AUTOMÁTICA
+async function createSpreadsheetForUser(userEmail, userName) {
+  try {
+    const doc = new GoogleSpreadsheet();
+    await doc.useServiceAccountAuth(creds);
+    
+    await doc.createNewSpreadsheetDocument({
+      title: `Agendamentos - ${userName || userEmail}`,
+    });
+    
+    // Configura cabeçalhos padrão
+    const sheet = doc.sheetsByIndex[0];
+    await sheet.setHeaderRow([
+      'id', 'cliente', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em'
+    ]);
+    
+    console.log(`📊 Nova planilha criada para ${userEmail}: ${doc.spreadsheetId}`);
+    return doc.spreadsheetId;
+    
+  } catch (error) {
+    console.error("Erro ao criar planilha:", error);
+    throw error;
+  }
 }
 
 async function ensureDynamicHeaders(sheet, newKeys) {
@@ -59,6 +93,8 @@ async function ensureDynamicHeaders(sheet, newKeys) {
 }
 
 async function updateRowInSheet(sheet, rowId, updatedData) {
+  if (!sheet) return;
+  
   await sheet.loadHeaderRow();
   const rows = await sheet.getRows();
   const row = rows.find(r => r.id === rowId);
@@ -73,7 +109,7 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-// ---------------- Middleware Auth ----------------
+// ---------------- MIDDLEWARE AUTH ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -82,19 +118,72 @@ async function authMiddleware(req, res, next) {
   if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
   req.user = data.user;
-  next(); // ✅ SEM verificação de cliente_id
+  next();
 }
 
-// ---------------- Health Check ----------------
+// ---------------- HEALTH CHECK ----------------
 app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Backend rodando no GitHub",
+    message: "Backend rodando com Sheets por usuário",
     timestamp: new Date().toISOString()
   });
 });
 
-// ---------------- LISTAR AGENDAMENTOS ----------------
+// 🔥 NOVA ROTA: CONFIGURAR GOOGLE SHEETS
+app.post("/configurar-sheets", authMiddleware, async (req, res) => {
+  try {
+    const { spreadsheetId, criarAutomatico } = req.body;
+    const userEmail = req.user.email;
+    
+    let finalSpreadsheetId = spreadsheetId;
+
+    // 🔥 SE USUÁRIO QUISER CRIAR PLANILHA AUTOMÁTICA
+    if (criarAutomatico) {
+      finalSpreadsheetId = await createSpreadsheetForUser(userEmail, req.user.user_metadata?.name);
+    }
+
+    if (!finalSpreadsheetId) {
+      return res.status(400).json({ msg: "Spreadsheet ID é obrigatório" });
+    }
+
+    // 🔥 SALVA NO METADATA DO USUÁRIO
+    const { error } = await supabase.auth.updateUser({
+      data: { spreadsheet_id: finalSpreadsheetId }
+    });
+
+    if (error) throw error;
+
+    res.json({ 
+      msg: criarAutomatico ? "Planilha criada e configurada com sucesso!" : "Spreadsheet configurado com sucesso!",
+      spreadsheetId: finalSpreadsheetId
+    });
+
+  } catch (err) {
+    console.error("Erro ao configurar sheets:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 NOVA ROTA: VERIFICAR CONFIGURAÇÃO
+app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { data: userData } = await supabase.auth.admin.getUserByEmail(userEmail);
+    
+    const config = {
+      temSheetsConfigurado: !!userData.user.user_metadata?.spreadsheet_id,
+      spreadsheetId: userData.user.user_metadata?.spreadsheet_id
+    };
+    
+    res.json(config);
+  } catch (err) {
+    console.error("Erro ao verificar configuração:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- ROTAS DE AGENDAMENTOS (ATUALIZADAS) ----------------
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
@@ -110,6 +199,93 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
     res.json({ agendamentos: data });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+app.post("/agendar", authMiddleware, async (req, res) => {
+  try {
+    const { Nome, Email, Telefone, Data, Horario } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario)
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+
+    const userEmail = req.user.email;
+    const emailNormalizado = Email.toLowerCase().trim();
+    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
+
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: userEmail,
+        nome: Nome,
+        email: userEmail,
+        telefone: Telefone,
+        data: dataNormalizada,
+        horario: Horario,
+        status: "pendente",
+        confirmado: false,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          msg: "Você já possui um agendamento para esta data e horário" 
+        });
+      }
+      throw error;
+    }
+
+    // 🔥 ATUALIZA SHEETS DO USUÁRIO (SE CONFIGURADO)
+    try {
+      const doc = await accessUserSpreadsheet(userEmail);
+      if (doc) {
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+        console.log(`✅ Agendamento salvo na planilha do usuário ${userEmail}`);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+
+  } catch (err) {
+    console.error("Erro no /agendar:", err);
+    res.status(500).json({ msg: "Erro interno no servidor" });
+  }
+});
+
+// 🔥 ROTAS COMPATÍVEIS COM FRONTEND ANTIGO
+app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user.email;
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ confirmado: true, status: "confirmado" })
+      .eq("id", id)
+      .eq("email", userEmail)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    try {
+      const doc = await accessUserSpreadsheet(userEmail);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    res.json({ msg: "Agendamento confirmado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao confirmar agendamento:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
@@ -280,11 +456,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ msg: "Algo deu errado!" });
 });
 
-// Rota 404 para endpoints não encontrados
 app.use("*", (req, res) => {
   res.status(404).json({ msg: "Endpoint não encontrado" });
 });
 
-// ---------------- Servidor ----------------
-app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
-
+app.listen(PORT, () => console.log(`🚀 Backend rodando na porta ${PORT} - Sheets por usuário`));
