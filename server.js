@@ -55,28 +55,44 @@ async function accessUserSpreadsheet(userEmail, userMetadata) {
   }
 }
 
-// 🔥 NOVA FUNÇÃO: CRIAR PLANILHA AUTOMÁTICA
+// 🔥 CORREÇÃO: Função createSpreadsheetForUser atualizada
 async function createSpreadsheetForUser(userEmail, userName) {
   try {
+    console.log('🔧 Iniciando criação de planilha para:', userEmail);
+    
     const doc = new GoogleSpreadsheet();
     await doc.useServiceAccountAuth(creds);
     
+    // Cria a planilha
     await doc.createNewSpreadsheetDocument({
-      title: `Agendamentos - ${userName || userEmail}`,
+      title: `Agendamentos - ${userName || userEmail}`.substring(0, 100), // Limita tamanho do título
     });
+    
+    console.log('📊 Planilha criada, ID:', doc.spreadsheetId);
     
     // Configura cabeçalhos padrão
     const sheet = doc.sheetsByIndex[0];
     await sheet.setHeaderRow([
-      'id', 'cliente', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em'
+      'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em'
     ]);
+    
+    // 🔥 ADICIONE: Compartilha a planilha com o email do usuário (se disponível)
+    try {
+      await doc.shareWithEmail(userEmail, {
+        role: 'writer',
+        emailMessage: 'Planilha de agendamentos compartilhada com você!'
+      });
+      console.log('✅ Planilha compartilhada com:', userEmail);
+    } catch (shareError) {
+      console.warn('⚠️ Não foi possível compartilhar a planilha:', shareError.message);
+    }
     
     console.log(`📊 Nova planilha criada para ${userEmail}: ${doc.spreadsheetId}`);
     return doc.spreadsheetId;
     
   } catch (error) {
-    console.error("Erro ao criar planilha:", error);
-    throw error;
+    console.error("❌ Erro ao criar planilha:", error);
+    throw new Error(`Falha ao criar planilha: ${error.message}`);
   }
 }
 
@@ -127,38 +143,65 @@ app.get("/health", (req, res) => {
   });
 });
 
-// 🔥 NOVA ROTA: CONFIGURAR GOOGLE SHEETS
+// 🔥 CORREÇÃO: Rota configurar-sheets com melhor tratamento de erro
 app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   try {
     const { spreadsheetId, criarAutomatico } = req.body;
     const userEmail = req.user.email;
     
+    console.log('🔧 Configurando Sheets para:', userEmail, { spreadsheetId, criarAutomatico });
+    
     let finalSpreadsheetId = spreadsheetId;
 
     // 🔥 SE USUÁRIO QUISER CRIAR PLANILHA AUTOMÁTICA
     if (criarAutomatico) {
+      console.log('🔧 Criando planilha automática para:', userEmail);
       finalSpreadsheetId = await createSpreadsheetForUser(userEmail, req.user.user_metadata?.name);
+      console.log('✅ Planilha criada com ID:', finalSpreadsheetId);
     }
 
     if (!finalSpreadsheetId) {
       return res.status(400).json({ msg: "Spreadsheet ID é obrigatório" });
     }
 
+    // 🔥 VERIFICA SE A PLANILHA É ACESSÍVEL ANTES DE SALVAR
+    try {
+      console.log('🔧 Verificando acesso à planilha:', finalSpreadsheetId);
+      const doc = new GoogleSpreadsheet(finalSpreadsheetId);
+      await doc.useServiceAccountAuth(creds);
+      await doc.loadInfo();
+      console.log('✅ Planilha acessível:', doc.title);
+    } catch (accessError) {
+      console.error('❌ Erro ao acessar planilha:', accessError.message);
+      return res.status(400).json({ 
+        msg: "Não foi possível acessar a planilha. Verifique o ID e as permissões." 
+      });
+    }
+
     // 🔥 SALVA NO METADATA DO USUÁRIO
-    const { error } = await supabase.auth.updateUser({
+    console.log('🔧 Salvando spreadsheet_id no metadata:', finalSpreadsheetId);
+    const { error: updateError } = await supabase.auth.updateUser({
       data: { spreadsheet_id: finalSpreadsheetId }
     });
 
-    if (error) throw error;
+    if (updateError) {
+      console.error('❌ Erro ao atualizar usuário:', updateError);
+      throw updateError;
+    }
 
+    console.log('✅ Sheets configurado com sucesso para:', userEmail);
+    
     res.json({ 
-      msg: criarAutomatico ? "Planilha criada e configurada com sucesso!" : "Spreadsheet configurado com sucesso!",
+      msg: criarAutomatico ? "✅ Planilha criada e configurada com sucesso!" : "✅ Spreadsheet configurado com sucesso!",
       spreadsheetId: finalSpreadsheetId
     });
 
   } catch (err) {
-    console.error("Erro ao configurar sheets:", err);
-    res.status(500).json({ msg: "Erro interno" });
+    console.error("❌ Erro ao configurar sheets:", err);
+    res.status(500).json({ 
+      msg: "Erro interno do servidor",
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
@@ -381,6 +424,7 @@ app.use("*", (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Backend rodando na porta ${PORT} - Sheets por usuário`));
+
 
 
 
