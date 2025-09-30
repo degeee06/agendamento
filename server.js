@@ -33,13 +33,10 @@ try {
 }
 
 // ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
-async function accessUserSpreadsheet(userEmail) {
+async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
-    // 🔥 PEGA SPREADSHEET ID DO METADATA DO USUÁRIO
-    const { data: userData, error } = await supabase.auth.admin.getUserByEmail(userEmail);
-    if (error) throw error;
-    
-    const spreadsheetId = userData.user.user_metadata?.spreadsheet_id;
+    // 🔥 CORREÇÃO: Pega spreadsheet_id do metadata passado como parâmetro
+    const spreadsheetId = userMetadata?.spreadsheet_id;
     
     if (!spreadsheetId) {
       console.log(`📝 Usuário ${userEmail} não configurou Sheets`);
@@ -165,24 +162,22 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 NOVA ROTA: VERIFICAR CONFIGURAÇÃO
+// 🔥 CORREÇÃO: Rota configuracao-sheets
 app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   try {
-    const userEmail = req.user.email;
-    const { data: userData } = await supabase.auth.admin.getUserByEmail(userEmail);
-    
     const config = {
-      temSheetsConfigurado: !!userData.user.user_metadata?.spreadsheet_id,
-      spreadsheetId: userData.user.user_metadata?.spreadsheet_id
+      temSheetsConfigurado: !!req.user.user_metadata?.spreadsheet_id,
+      spreadsheetId: req.user.user_metadata?.spreadsheet_id
     };
     
+    console.log(`📊 Configuração do usuário ${req.user.email}:`, config);
     res.json(config);
+    
   } catch (err) {
     console.error("Erro ao verificar configuração:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 // ---------------- ROTAS DE AGENDAMENTOS (ATUALIZADAS) ----------------
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
@@ -239,8 +234,8 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     }
 
     // 🔥 CORREÇÃO: Use accessUserSpreadsheet() em vez de accessSpreadsheet()
-    try {
-      const doc = await accessUserSpreadsheet(userEmail);
+   try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
         await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
@@ -406,4 +401,5 @@ app.use("*", (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Backend rodando na porta ${PORT} - Sheets por usuário`));
+
 
