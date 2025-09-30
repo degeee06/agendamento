@@ -99,6 +99,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .select("*")
       .eq("email", userEmail)
+      .eq("cliente", "default")
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
@@ -126,14 +127,16 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       .from("agendamentos")
       .delete()
       .eq("email", userEmail)
+      .eq("cliente", "default")
       .eq("data", dataNormalizada)
       .eq("horario", Horario)
       .eq("status", "cancelado");
 
-    // Inserção sem checagem de horário disponível
+    // 🔥 CORREÇÃO: Adiciona 'default' como cliente
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
+        cliente: "default", // 🔥 ADICIONE ESTA LINHA
         nome: Nome,
         email: userEmail,
         telefone: Telefone,
@@ -171,6 +174,7 @@ app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
       .eq("email", userEmail)
+      .eq("cliente", "default") // 🔥 ADICIONE ESTA LINHA
       .select()
       .single();
     
@@ -196,6 +200,7 @@ app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
       .eq("email", userEmail)
+      .eq("cliente", "default") // 🔥 ADICIONE ESTA LINHA
       .select()
       .single();
     
@@ -230,6 +235,7 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
       })
       .eq("id", id)
       .eq("email", userEmail)
+      .eq("cliente", "default") // 🔥 ADICIONE ESTA LINHA
       .select()
       .single();
     
