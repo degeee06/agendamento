@@ -237,8 +237,14 @@ app.post("/agendamentos/:cliente/reagendar/:id", authMiddleware, async (req, res
     const disponivel = await horarioDisponivel(cliente, novaData, novoHorario, id);
     if (!disponivel) return res.status(400).json({ msg: "Horário indisponível" });
     
+    // 🔥 CORREÇÃO: Reseta status para "pendente" e confirmado para false
     const { data, error } = await supabase.from("agendamentos")
-      .update({ data: novaData, horario: novoHorario })
+      .update({ 
+        data: novaData, 
+        horario: novoHorario,
+        status: "pendente",      // 🔥 VOLTA PARA PENDENTE
+        confirmado: false        // 🔥 VOLTA PARA NÃO CONFIRMADO
+      })
       .eq("id", id).eq("cliente", cliente).select().single();
     
     if (error) throw error;
@@ -265,6 +271,7 @@ app.use("*", (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
+
 
 
 
