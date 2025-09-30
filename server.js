@@ -74,7 +74,7 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-// ---------------- Middleware Auth ----------------
+// ---------------- Middleware Auth CORRIGIDO ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -83,8 +83,11 @@ async function authMiddleware(req, res, next) {
   if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
   req.user = data.user;
-  req.clienteId = data.user.user_metadata.cliente_id;
-  if (!req.clienteId) return res.status(403).json({ msg: "Usuário sem cliente_id" });
+  
+  // 🔥 USA O CLIENTE DA URL SEMPRE
+  req.clienteId = req.params.cliente;
+  
+  if (!req.clienteId) return res.status(403).json({ msg: "Cliente não especificado na URL" });
   next();
 }
 
@@ -271,6 +274,7 @@ app.use("*", (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
+
 
 
 
