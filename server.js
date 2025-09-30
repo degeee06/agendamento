@@ -74,7 +74,7 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-// ---------------- Middleware Auth CORRIGIDO ----------------
+// ---------------- Middleware Auth SIMPLIFICADO ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -83,12 +83,7 @@ async function authMiddleware(req, res, next) {
   if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
   req.user = data.user;
-  
-  // 🔥 USA O CLIENTE DA URL SEMPRE
-  req.clienteId = req.params.cliente;
-  
-  if (!req.clienteId) return res.status(403).json({ msg: "Cliente não especificado na URL" });
-  next();
+  next(); // 🔥 SEM verificação de cliente_id
 }
 
 async function horarioDisponivel(cliente, data, horario, ignoreId = null) {
@@ -115,15 +110,15 @@ app.get("/health", (req, res) => {
 });
 
 // ---------------- Rotas de Agendamentos ----------------
-app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
+app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
-    const { cliente } = req.params;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
+    // 🔥 USA O EMAIL DO USUÁRIO como identificador
+    const userEmail = req.user.email;
+    
     const { data, error } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("cliente", cliente)
+      .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
@@ -136,34 +131,25 @@ app.get("/agendamentos/:cliente", authMiddleware, async (req, res) => {
 });
 
 // ---------------- Agendar ----------------
-app.post("/agendar/:cliente", authMiddleware, async (req, res) => {
+// ---------------- Agendar ----------------
+app.post("/agendar", authMiddleware, async (req, res) => {
   try {
-    const cliente = req.params.cliente;
-    if (req.clienteId !== cliente) return res.status(403).json({ msg: "Acesso negado" });
-
     const { Nome, Email, Telefone, Data, Horario } = req.body;
     if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
+    // 🔥 USA O EMAIL DO USUÁRIO LOGADO
+    const userEmail = req.user.email;
+    
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
-    // Limpeza de agendamentos cancelados (opcional)
-    await supabase
-      .from("agendamentos")
-      .delete()
-      .eq("cliente", cliente)
-      .eq("data", dataNormalizada)
-      .eq("horario", Horario)
-      .eq("status", "cancelado");
-
-    // Inserção sem checagem de horário disponível
+    // ... resto do código igual, mas SEM o campo "cliente"
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
-        cliente,
         nome: Nome,
-        email: emailNormalizado,
+        email: userEmail, // 🔥 USA O EMAIL DO USUÁRIO
         telefone: Telefone,
         data: dataNormalizada,
         horario: Horario,
@@ -274,6 +260,7 @@ app.use("*", (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
+
 
 
 
