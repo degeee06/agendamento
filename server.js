@@ -37,10 +37,8 @@ try {
 
 // ---------------- Google Sheets ----------------
 async function accessSpreadsheet() {
-  // 🔥 REMOVE clienteId - usa um spreadsheet fixo ou lógica diferente
-  const spreadsheetId = process.env.DEFAULT_SPREADSHEET_ID; // Configure esta variável
-  if (!spreadsheetId) throw new Error("Spreadsheet ID não configurado");
-
+  // Usa um spreadsheet fixo para todos
+  const spreadsheetId = process.env.DEFAULT_SPREADSHEET_ID || "seu_spreadsheet_id_aqui";
   const doc = new GoogleSpreadsheet(spreadsheetId);
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
@@ -71,7 +69,7 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-// ---------------- Middleware Auth SIMPLIFICADO ----------------
+// ---------------- Middleware Auth ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -80,22 +78,7 @@ async function authMiddleware(req, res, next) {
   if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
   req.user = data.user;
-  next(); // 🔥 SEM verificação de cliente_id
-}
-
-// 🔥 NOVA FUNÇÃO: Verifica horário disponível por EMAIL
-async function horarioDisponivel(userEmail, data, horario, ignoreId = null) {
-  let query = supabase
-    .from("agendamentos")
-    .select("*")
-    .eq("email", userEmail) // 🔥 FILTRA POR EMAIL
-    .eq("data", data)
-    .eq("horario", horario)
-    .neq("status", "cancelado");
-
-  if (ignoreId) query = query.neq("id", ignoreId);
-  const { data: agendamentos } = await query;
-  return agendamentos.length === 0;
+  next(); // ✅ SEM verificação de cliente_id
 }
 
 // ---------------- Health Check ----------------
@@ -138,6 +121,16 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const emailNormalizado = Email.toLowerCase().trim();
     const dataNormalizada = new Date(Data).toISOString().split("T")[0];
 
+    // Limpeza de agendamentos cancelados (opcional)
+    await supabase
+      .from("agendamentos")
+      .delete()
+      .eq("email", userEmail)
+      .eq("data", dataNormalizada)
+      .eq("horario", Horario)
+      .eq("status", "cancelado");
+
+    // Inserção sem checagem de horário disponível
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -154,16 +147,11 @@ app.post("/agendar", authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
-    // Atualiza Google Sheet (opcional - se ainda quiser usar)
-    try {
-      const doc = await accessSpreadsheet();
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-      await sheet.addRow(novoAgendamento);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-      // Não quebra o fluxo se der erro no Sheets
-    }
+    // Atualiza Google Sheet
+    const doc = await accessSpreadsheet();
+    const sheet = doc.sheetsByIndex[0];
+    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+    await sheet.addRow(novoAgendamento);
 
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
@@ -182,21 +170,15 @@ app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-      .eq("email", userEmail) // 🔥 Só atualiza se for do usuário
+      .eq("email", userEmail)
       .select()
       .single();
     
     if (error) throw error;
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Atualiza Google Sheet (opcional)
-    try {
-      const doc = await accessSpreadsheet();
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
-
+    const doc = await accessSpreadsheet();
+    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     res.json({ msg: "Agendamento confirmado", agendamento: data });
   } catch (err) {
     console.error("Erro ao confirmar agendamento:", err);
@@ -213,21 +195,15 @@ app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-      .eq("email", userEmail) // 🔥 Só atualiza se for do usuário
+      .eq("email", userEmail)
       .select()
       .single();
     
     if (error) throw error;
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Atualiza Google Sheet (opcional)
-    try {
-      const doc = await accessSpreadsheet();
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
-
+    const doc = await accessSpreadsheet();
+    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     res.json({ msg: "Agendamento cancelado", agendamento: data });
   } catch (err) {
     console.error("Erro ao cancelar agendamento:", err);
@@ -244,9 +220,7 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
     
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
     
-    const disponivel = await horarioDisponivel(userEmail, novaData, novoHorario, id);
-    if (!disponivel) return res.status(400).json({ msg: "Horário indisponível" });
-    
+    // ✅ SEM verificação de horário disponível
     const { data, error } = await supabase.from("agendamentos")
       .update({ 
         data: novaData, 
@@ -255,21 +229,15 @@ app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
         confirmado: false
       })
       .eq("id", id)
-      .eq("email", userEmail) // 🔥 Só atualiza se for do usuário
+      .eq("email", userEmail)
       .select()
       .single();
     
     if (error) throw error;
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
-    // Atualiza Google Sheet (opcional)
-    try {
-      const doc = await accessSpreadsheet();
-      await updateRowInSheet(doc.sheetsByIndex[0], id, data);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
-
+    const doc = await accessSpreadsheet();
+    await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
   } catch (err) {
     console.error("Erro ao reagendar:", err);
@@ -290,4 +258,3 @@ app.use("*", (req, res) => {
 
 // ---------------- Servidor ----------------
 app.listen(PORT, () => console.log(`Backend API rodando na porta ${PORT}`));
-
