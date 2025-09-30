@@ -203,6 +203,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------- AGENDAR ----------------
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -237,7 +238,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       throw error;
     }
 
-    // 🔥 ATUALIZA SHEETS DO USUÁRIO (SE CONFIGURADO)
+    // 🔥 CORREÇÃO: Use accessUserSpreadsheet() em vez de accessSpreadsheet()
     try {
       const doc = await accessUserSpreadsheet(userEmail);
       if (doc) {
@@ -290,62 +291,6 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
   }
 });
 
-// ---------------- AGENDAR ----------------
-app.post("/agendar", authMiddleware, async (req, res) => {
-  try {
-    const { Nome, Email, Telefone, Data, Horario } = req.body;
-    if (!Nome || !Email || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
-
-    const userEmail = req.user.email;
-    const emailNormalizado = Email.toLowerCase().trim();
-    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
-
-    // 🔥 CORREÇÃO: Remove verificação de duplicidade (deixa a constraint tratar)
-    // 🔥 CORREÇÃO: Usa userEmail ao invés de email do body para segurança
-    const { data: novoAgendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente: userEmail, // 🔥 USA EMAIL COMO CLIENTE
-        nome: Nome,
-        email: userEmail,   // 🔥 USA EMAIL DO USUÁRIO LOGADO
-        telefone: Telefone,
-        data: dataNormalizada,
-        horario: Horario,
-        status: "pendente",
-        confirmado: false,
-      }])
-      .select()
-      .single();
-
-    if (error) {
-      // 🔥 TRATA ERRO DE DUPLICIDADE ESPECIFICAMENTE
-      if (error.code === '23505') {
-        return res.status(400).json({ 
-          msg: "Você já possui um agendamento para esta data e horário" 
-        });
-      }
-      throw error;
-    }
-
-    // Atualiza Google Sheet
-    try {
-      const doc = await accessSpreadsheet();
-      const sheet = doc.sheetsByIndex[0];
-      await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-      await sheet.addRow(novoAgendamento);
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-      // Não falha o agendamento por erro no Sheets
-    }
-
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
-
-  } catch (err) {
-    console.error("Erro no /agendar:", err);
-    res.status(500).json({ msg: "Erro interno no servidor" });
-  }
-});
 
 // ---------------- ROTAS COMPATÍVEIS COM FRONTEND ANTIGO ----------------
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
@@ -364,7 +309,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessSpreadsheet();
+      const doc = await accessUserSpreadsheet(userEmail);
       await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -393,7 +338,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessSpreadsheet();
+      const doc = await accessUserSpreadsheet(userEmail);
       await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -437,7 +382,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessSpreadsheet();
+      const doc = await accessUserSpreadsheet(userEmail);
       await updateRowInSheet(doc.sheetsByIndex[0], id, data);
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -461,3 +406,4 @@ app.use("*", (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Backend rodando na porta ${PORT} - Sheets por usuário`));
+
