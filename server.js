@@ -5,9 +5,36 @@ import { GoogleSpreadsheet } from "google-spreadsheet";
 
 const PORT = process.env.PORT || 3000;
 const app = express();
+// ==================== CORS CONFIGURADO CORRETAMENTE ====================
+app.use(cors({
+  origin: [
+    'https://frontrender-iota.vercel.app',
+    'https://frontrender.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://localhost:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Allow-Headers'
+  ],
+  exposedHeaders: ['Content-Length', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 hours
+}));
 
-// ==================== CACHE SIMPLES E FUNCIONAL ====================
-const cache = new Map();
+// Handle preflight requests for ALL routes
+app.options('*', cors());
+
+// 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
+app.use(express.json());
 
 const cacheManager = {
   set(key, value, ttl = 2 * 60 * 1000) {
@@ -432,19 +459,6 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
   }
 });
 
-// ==================== CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
-app.use(cors({
-  origin: [
-    'https://frontrender-iota.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-app.use(express.json());
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -903,6 +917,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
