@@ -36,6 +36,10 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
+// ==================== CACHE SIMPLES E FUNCIONAL ====================
+const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
+
+
 const cacheManager = {
   set(key, value, ttl = 2 * 60 * 1000) {
     cache.set(key, {
@@ -917,6 +921,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
