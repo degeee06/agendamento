@@ -51,7 +51,7 @@ const cacheManager = {
   }
 };
 
-// ==================== TEU CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
+// ==================== CONFIGURAÇÃO INICIAL ====================
 app.use(cors({
   origin: [
     'https://frontrender-iota.vercel.app',   // Vercel
@@ -62,7 +62,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-
 
 app.use(express.json());
 
@@ -186,7 +185,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Novo endpoint para warm-up (para o teu ping)
 app.get("/warmup", async (req, res) => {
   try {
     const { data, error } = await supabase.from('agendamentos').select('count').limit(1);
@@ -205,7 +203,7 @@ app.get("/warmup", async (req, res) => {
   }
 });
 
-// ==================== ROTAS COM CACHE CORRIGIDAS ====================
+// ==================== ROTAS CORRIGIDAS (SEM :email NOS PARÂMETROS) ====================
 
 // 🔥 AGENDAMENTOS COM CACHE
 app.get("/agendamentos", authMiddleware, async (req, res) => {
@@ -383,8 +381,10 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 CONFIRMAR COM INVALIDAÇÃO DE CACHE
-app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
+// ==================== ROTAS CORRIGIDAS (SEM PARÂMETRO :email) ====================
+
+// 🔥 CONFIRMAR COM INVALIDAÇÃO DE CACHE - ROTA CORRIGIDA
+app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userEmail = req.user.email;
@@ -418,8 +418,8 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
   }
 });
 
-// 🔥 CANCELAR COM INVALIDAÇÃO DE CACHE
-app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
+// 🔥 CANCELAR COM INVALIDAÇÃO DE CACHE - ROTA CORRIGIDA
+app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userEmail = req.user.email;
@@ -453,8 +453,8 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
   }
 });
 
-// 🔥 REAGENDAR COM INVALIDAÇÃO DE CACHE
-app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) => {
+// 🔥 REAGENDAR COM INVALIDAÇÃO DE CACHE - ROTA CORRIGIDA
+app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { novaData, novoHorario } = req.body;
@@ -514,13 +514,10 @@ app.use("*", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend otimizado rodando na porta ${PORT}`);
+  console.log(`🚀 Backend CORRIGIDO rodando na porta ${PORT}`);
   console.log('✅ Cache em memória ativo');
   console.log('✅ Health checks otimizados');
+  console.log('✅ Rotas corrigidas (sem parâmetro :email conflitante)');
   console.log('📊 Use /health para status leve');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
-
-
