@@ -1,11 +1,23 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
+import helmet from "helmet";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
 const PORT = process.env.PORT || 3000;
 const app = express();
 
+// ==================== NOVAS OTIMIZAÇÕES ====================
+// 1. Compression para reduzir bandwidth
+app.use(compression());
+
+// 2. Helmet para segurança
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// 3. CORS configurado
 app.use(cors({
   origin: [
     'https://frontrender.netlify.app',
@@ -19,6 +31,53 @@ app.use(cors({
 
 app.use(express.json());
 
+// ==================== CACHE EM MEMÓRIA ====================
+class CacheManager {
+  constructor() {
+    this.cache = new Map();
+    this.defaultTTL = 2 * 60 * 1000; // 2 minutos
+  }
+
+  set(key, value, ttl = this.defaultTTL) {
+    this.cache.set(key, {
+      value,
+      expiry: Date.now() + ttl
+    });
+  }
+
+  get(key) {
+    const item = this.cache.get(key);
+    if (!item) return null;
+    
+    if (Date.now() > item.expiry) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return item.value;
+  }
+
+  async getOrSet(key, fetchFn, ttl = this.defaultTTL) {
+    const cached = this.get(key);
+    if (cached) {
+      console.log('📦 Cache hit:', key);
+      return cached;
+    }
+
+    console.log('🔄 Cache miss:', key);
+    const value = await fetchFn();
+    this.set(key, value, ttl);
+    return value;
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+const cache = new CacheManager();
+
+// ==================== CONEXÕES ====================
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -32,10 +91,42 @@ try {
   process.exit(1);
 }
 
-// ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
+// ==================== PRÉ-CARREGAMENTO ====================
+console.log('🔄 Pré-carregando recursos...');
+
+// ==================== HEALTH CHECKS OTIMIZADOS ====================
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "OK", 
+    message: "Backend rodando com Sheets por usuário",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Novo endpoint para warm-up (usado pelo ping)
+app.get("/warmup", async (req, res) => {
+  try {
+    // Simula uma operação leve para manter a instância ativa
+    const { data, error } = await supabase.from('agendamentos').select('count').limit(1);
+    
+    res.json({ 
+      status: "WARM", 
+      timestamp: new Date().toISOString(),
+      supabase: error ? "offline" : "online"
+    });
+  } catch (error) {
+    res.json({ 
+      status: "COLD", 
+      timestamp: new Date().toISOString(),
+      error: error.message 
+    });
+  }
+});
+
+// ==================== GOOGLE SHEETS POR USUÁRIO ====================
 async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
-    // 🔥 CORREÇÃO: Pega spreadsheet_id do metadata passado como parâmetro
     const spreadsheetId = userMetadata?.spreadsheet_id;
     
     if (!spreadsheetId) {
@@ -55,7 +146,6 @@ async function accessUserSpreadsheet(userEmail, userMetadata) {
   }
 }
 
-// 🔥 CORREÇÃO: Função createSpreadsheetForUser atualizada
 async function createSpreadsheetForUser(userEmail, userName) {
   try {
     console.log('🔧 Iniciando criação de planilha para:', userEmail);
@@ -63,20 +153,17 @@ async function createSpreadsheetForUser(userEmail, userName) {
     const doc = new GoogleSpreadsheet();
     await doc.useServiceAccountAuth(creds);
     
-    // Cria a planilha
     await doc.createNewSpreadsheetDocument({
-      title: `Agendamentos - ${userName || userEmail}`.substring(0, 100), // Limita tamanho do título
+      title: `Agendamentos - ${userName || userEmail}`.substring(0, 100),
     });
     
     console.log('📊 Planilha criada, ID:', doc.spreadsheetId);
     
-    // Configura cabeçalhos padrão
     const sheet = doc.sheetsByIndex[0];
     await sheet.setHeaderRow([
       'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em'
     ]);
     
-    // 🔥 ADICIONE: Compartilha a planilha com o email do usuário (se disponível)
     try {
       await doc.shareWithEmail(userEmail, {
         role: 'writer',
@@ -122,7 +209,7 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-// ---------------- MIDDLEWARE AUTH ----------------
+// ==================== MIDDLEWARE AUTH ====================
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -134,16 +221,58 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ---------------- HEALTH CHECK ----------------
-app.get("/health", (req, res) => {
-  res.json({ 
-    status: "OK", 
-    message: "Backend rodando com Sheets por usuário",
-    timestamp: new Date().toISOString()
-  });
+// ==================== ROTAS COM CACHE ====================
+
+// 🔥 AGENDAMENTOS COM CACHE
+app.get("/agendamentos", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
+    
+    const agendamentos = await cache.getOrSet(cacheKey, async () => {
+      console.log('🔄 Buscando agendamentos do DB para:', userEmail);
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
+
+      if (error) throw error;
+      return data;
+    });
+
+    res.json({ agendamentos });
+  } catch (err) {
+    console.error("Erro ao listar agendamentos:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
 });
 
-// 🔥 CORREÇÃO: Rota configurar-sheets com melhor tratamento de erro
+// 🔥 CONFIGURAÇÃO SHEETS COM CACHE
+app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `config_${userEmail}`;
+    
+    const config = await cache.getOrSet(cacheKey, async () => {
+      return {
+        temSheetsConfigurado: !!req.user.user_metadata?.spreadsheet_id,
+        spreadsheetId: req.user.user_metadata?.spreadsheet_id
+      };
+    }, 5 * 60 * 1000); // 5 minutos cache
+    
+    console.log(`📊 Configuração do usuário ${userEmail}:`, config);
+    res.json(config);
+    
+  } catch (err) {
+    console.error("Erro ao verificar configuração:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ==================== ROTAS ORIGINAIS (COM INVALIDAÇÃO DE CACHE) ====================
+
 app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   try {
     const { spreadsheetId, criarAutomatico } = req.body;
@@ -153,7 +282,6 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
     
     let finalSpreadsheetId = spreadsheetId;
 
-    // 🔥 SE USUÁRIO QUISER CRIAR PLANILHA AUTOMÁTICA
     if (criarAutomatico) {
       console.log('🔧 Criando planilha automática para:', userEmail);
       finalSpreadsheetId = await createSpreadsheetForUser(userEmail, req.user.user_metadata?.name);
@@ -164,7 +292,6 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: "Spreadsheet ID é obrigatório" });
     }
 
-    // 🔥 VERIFICA SE A PLANILHA É ACESSÍVEL ANTES DE SALVAR
     try {
       console.log('🔧 Verificando acesso à planilha:', finalSpreadsheetId);
       const doc = new GoogleSpreadsheet(finalSpreadsheetId);
@@ -178,27 +305,27 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
       });
     }
 
-    // 🔥 SALVA NO METADATA DO USUÁRIO
-   // 🔥 CORREÇÃO: Use a Admin API para atualizar o usuário sem sessão
-console.log('🔧 Salvando spreadsheet_id no metadata:', finalSpreadsheetId);
+    const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(
+      req.user.id,
+      { 
+        user_metadata: { 
+          ...req.user.user_metadata,
+          spreadsheet_id: finalSpreadsheetId 
+        } 
+      }
+    );
 
-// Use o user ID do req.user para atualizar via Admin API
-const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(
-  req.user.id,
-  { 
-    user_metadata: { 
-      ...req.user.user_metadata, // Mantém os metadata existentes
-      spreadsheet_id: finalSpreadsheetId 
-    } 
-  }
-);
+    if (updateError) {
+      console.error('❌ Erro ao atualizar usuário:', updateError);
+      throw updateError;
+    }
 
-if (updateError) {
-  console.error('❌ Erro ao atualizar usuário:', updateError);
-  throw updateError;
-}
-
-console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
+    console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
+    
+    // 🔥 INVALIDA CACHE
+    cache.delete(`config_${userEmail}`);
+    cache.delete(`agendamentos_${userEmail}`);
+    
     console.log('✅ Sheets configurado com sucesso para:', userEmail);
     
     res.json({ 
@@ -215,43 +342,7 @@ console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
   }
 });
 
-// 🔥 CORREÇÃO: Rota configuracao-sheets
-app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
-  try {
-    const config = {
-      temSheetsConfigurado: !!req.user.user_metadata?.spreadsheet_id,
-      spreadsheetId: req.user.user_metadata?.spreadsheet_id
-    };
-    
-    console.log(`📊 Configuração do usuário ${req.user.email}:`, config);
-    res.json(config);
-    
-  } catch (err) {
-    console.error("Erro ao verificar configuração:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-// ---------------- ROTAS DE AGENDAMENTOS (ATUALIZADAS) ----------------
-app.get("/agendamentos", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("email", userEmail)
-      .order("data", { ascending: true })
-      .order("horario", { ascending: true });
-
-    if (error) throw error;
-    res.json({ agendamentos: data });
-  } catch (err) {
-    console.error("Erro ao listar agendamentos:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// ---------------- AGENDAR ----------------
+// 🔥 AGENDAR COM INVALIDAÇÃO DE CACHE
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -286,8 +377,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       throw error;
     }
 
-    // 🔥 CORREÇÃO: Use accessUserSpreadsheet() em vez de accessSpreadsheet()
-   try {
+    try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
@@ -299,6 +389,9 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
+    // 🔥 INVALIDA CACHE
+    cache.delete(`agendamentos_${userEmail}`);
+    
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
   } catch (err) {
@@ -307,9 +400,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   }
 });
 
-
-
-// 🔥 CORREÇÃO: Rota confirmar - passe userMetadata
+// 🔥 CONFIRMAR COM INVALIDAÇÃO DE CACHE
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -326,7 +417,6 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      // 🔥 CORREÇÃO: Adicione req.user.user_metadata
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
@@ -335,6 +425,9 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
+    // 🔥 INVALIDA CACHE
+    cache.delete(`agendamentos_${userEmail}`);
+    
     res.json({ msg: "Agendamento confirmado", agendamento: data });
   } catch (err) {
     console.error("Erro ao confirmar agendamento:", err);
@@ -342,7 +435,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
   }
 });
 
-// 🔥 CORREÇÃO: Rota cancelar - passe userMetadata
+// 🔥 CANCELAR COM INVALIDAÇÃO DE CACHE
 app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -359,7 +452,6 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      // 🔥 CORREÇÃO: Adicione req.user.user_metadata
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
@@ -368,6 +460,9 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
+    // 🔥 INVALIDA CACHE
+    cache.delete(`agendamentos_${userEmail}`);
+    
     res.json({ msg: "Agendamento cancelado", agendamento: data });
   } catch (err) {
     console.error("Erro ao cancelar agendamento:", err);
@@ -375,7 +470,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
   }
 });
 
-// 🔥 CORREÇÃO: Rota reagendar - passe userMetadata
+// 🔥 REAGENDAR COM INVALIDAÇÃO DE CACHE
 app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -407,7 +502,6 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      // 🔥 CORREÇÃO: Adicione req.user.user_metadata
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
@@ -416,6 +510,9 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
+    // 🔥 INVALIDA CACHE
+    cache.delete(`agendamentos_${userEmail}`);
+    
     res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
   } catch (err) {
     console.error("Erro ao reagendar:", err);
@@ -423,7 +520,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
   }
 });
 
-// ---------------- Error Handling ----------------
+// ==================== ERROR HANDLING ====================
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ msg: "Algo deu errado!" });
@@ -433,9 +530,12 @@ app.use("*", (req, res) => {
   res.status(404).json({ msg: "Endpoint não encontrado" });
 });
 
-app.listen(PORT, () => console.log(`🚀 Backend rodando na porta ${PORT} - Sheets por usuário`));
-
-
-
-
-
+// ==================== INICIALIZAÇÃO ====================
+app.listen(PORT, () => {
+  console.log(`🚀 Backend otimizado rodando na porta ${PORT}`);
+  console.log('✅ Compression ativado');
+  console.log('✅ Cache em memória ativo');
+  console.log('✅ Health checks otimizados');
+  console.log('📊 Use /health para status leve');
+  console.log('🔥 Use /warmup para manter instância ativa');
+});
