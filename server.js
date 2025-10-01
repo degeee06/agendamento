@@ -86,14 +86,24 @@ const cacheManager = {
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
+// Configuração dos modelos
+const MODELOS_IA = {
+  PADRAO: "deepseek-chat",           // ✅ Balanceado (atual)
+  RACIOCINIO: "deepseek-reasoner",   // 🎯 MELHOR para agendamentos
+  ECONOMICO: "deepseek-chat"         // 💰 Mais econômico
+};
+
 // Função para chamar a API da DeepSeek
-async function chamarDeepSeekIA(mensagem, contexto = "") {
+async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
   try {
     if (!DEEPSEEK_API_KEY) {
       throw new Error("Chave da API DeepSeek não configurada");
     }
 
+    const modelo = MODELOS_IA[tipo] || MODELOS_IA.PADRAO;
     const prompt = contexto ? `${contexto}\n\nPergunta do usuário: ${mensagem}` : mensagem;
+
+    console.log(`🤖 Usando modelo: ${modelo} para: ${tipo}`);
 
     const response = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
@@ -102,7 +112,7 @@ async function chamarDeepSeekIA(mensagem, contexto = "") {
         "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: modelo,  // 🔥 AGORA VARIÁVEL
         messages: [
           {
             role: "system",
@@ -130,8 +140,7 @@ async function chamarDeepSeekIA(mensagem, contexto = "") {
     throw error;
   }
 }
-
-// Função para analisar descrição natural e extrair dados do agendamento
+// Função para analisar descrição natural - USE RACIOCÍNIO
 async function analisarDescricaoNatural(descricao, userEmail) {
   try {
     const hoje = new Date();
@@ -165,7 +174,7 @@ Exemplo de resposta:
 Responda APENAS com o JSON válido, sem nenhum texto adicional.
 `;
 
-    const resposta = await chamarDeepSeekIA(prompt);
+    const resposta = await chamarDeepSeekIA(prompt, "", "RACIOCINIO"); // 🎯 USANDO REASONER
     
     // Tenta extrair JSON da resposta
     const jsonMatch = resposta.match(/\{[\s\S]*\}/);
@@ -180,7 +189,7 @@ Responda APENAS com o JSON válido, sem nenhum texto adicional.
   }
 }
 
-// Função para gerar sugestões inteligentes baseadas nos agendamentos
+// Função para gerar sugestões inteligentes - USE RACIOCÍNIO
 async function gerarSugestoesInteligentes(agendamentos, userEmail) {
   try {
     const contexto = `
@@ -204,7 +213,7 @@ Seja conciso, prático e acionável. Use emojis para tornar mais amigável.
 Máximo de 300 palavras.
 `;
 
-    return await chamarDeepSeekIA("Analise esses agendamentos e forneça sugestões úteis:", contexto);
+    return await chamarDeepSeekIA("Analise esses agendamentos e forneça sugestões úteis:", contexto, "RACIOCINIO"); // 🎯 USANDO REASONER
   } catch (error) {
     console.error("Erro ao gerar sugestões inteligentes:", error);
     throw error;
@@ -261,7 +270,7 @@ Seja encorajador e prático. Máximo de 200 palavras.
 
 // ==================== ROTAS IA ====================
 
-// Rota do assistente de IA
+// Rota do assistente de IA - USE ECONÔMICO
 app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
   try {
     const { mensagem } = req.body;
@@ -285,7 +294,7 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
       ? `Aqui estão os últimos agendamentos do usuário para contexto:\n${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}`
       : "O usuário ainda não tem agendamentos.";
 
-    const resposta = await chamarDeepSeekIA(mensagem, contexto);
+    const resposta = await chamarDeepSeekIA(mensagem, contexto, "ECONOMICO"); // 💰 USANDO ECONÔMICO
 
     res.json({
       success: true,
@@ -921,6 +930,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
