@@ -435,7 +435,7 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
 // ==================== CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
 app.use(cors({
   origin: [
-    'https://frontrender-iota.vercel.app/',
+    'https://frontrender-iota.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173'
   ],
@@ -903,4 +903,5 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
