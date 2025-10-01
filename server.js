@@ -6,34 +6,30 @@ import { GoogleSpreadsheet } from "google-spreadsheet";
 const PORT = process.env.PORT || 3000;
 const app = express();
 
-// ==================== OTIMIZAÇÕES ADICIONADAS ====================
-// Cache em memória para melhor performance
-class CacheManager {
-  constructor() {
-    this.cache = new Map();
-    this.defaultTTL = 2 * 60 * 1000; // 2 minutos
-  }
+// ==================== CACHE SIMPLES E FUNCIONAL ====================
+const cache = new Map();
 
-  set(key, value, ttl = this.defaultTTL) {
-    this.cache.set(key, {
+const cacheManager = {
+  set(key, value, ttl = 2 * 60 * 1000) {
+    cache.set(key, {
       value,
       expiry: Date.now() + ttl
     });
-  }
+  },
 
   get(key) {
-    const item = this.cache.get(key);
+    const item = cache.get(key);
     if (!item) return null;
     
     if (Date.now() > item.expiry) {
-      this.cache.delete(key);
+      cache.delete(key);
       return null;
     }
     
     return item.value;
-  }
+  },
 
-  async getOrSet(key, fetchFn, ttl = this.defaultTTL) {
+  async getOrSet(key, fetchFn, ttl = 2 * 60 * 1000) {
     const cached = this.get(key);
     if (cached) {
       console.log('📦 Cache hit:', key);
@@ -44,14 +40,16 @@ class CacheManager {
     const value = await fetchFn();
     this.set(key, value, ttl);
     return value;
-  }
+  },
+
+  delete(key) {
+    return cache.delete(key);
+  },
 
   clear() {
-    this.cache.clear();
+    cache.clear();
   }
-}
-
-const cache = new CacheManager();
+};
 
 // ==================== TEU CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
 app.use(cors({
@@ -206,7 +204,7 @@ app.get("/warmup", async (req, res) => {
   }
 });
 
-// ==================== ROTAS COM CACHE (MANTIDAS AS TUAS LÓGICAS) ====================
+// ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
 // 🔥 AGENDAMENTOS COM CACHE
 app.get("/agendamentos", authMiddleware, async (req, res) => {
@@ -214,7 +212,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
     const userEmail = req.user.email;
     const cacheKey = `agendamentos_${userEmail}`;
     
-    const agendamentos = await cache.getOrSet(cacheKey, async () => {
+    const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
       console.log('🔄 Buscando agendamentos do DB para:', userEmail);
       const { data, error } = await supabase
         .from("agendamentos")
@@ -240,12 +238,12 @@ app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
     const userEmail = req.user.email;
     const cacheKey = `config_${userEmail}`;
     
-    const config = await cache.getOrSet(cacheKey, async () => {
+    const config = await cacheManager.getOrSet(cacheKey, async () => {
       return {
         temSheetsConfigurado: !!req.user.user_metadata?.spreadsheet_id,
         spreadsheetId: req.user.user_metadata?.spreadsheet_id
       };
-    }, 5 * 60 * 1000); // 5 minutos cache
+    }, 5 * 60 * 1000);
     
     console.log(`📊 Configuração do usuário ${userEmail}:`, config);
     res.json(config);
@@ -306,9 +304,9 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
 
     console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
     
-    // 🔥 INVALIDA CACHE
-    cache.delete(`config_${userEmail}`);
-    cache.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`config_${userEmail}`);
+    cacheManager.delete(`agendamentos_${userEmail}`);
     
     console.log('✅ Sheets configurado com sucesso para:', userEmail);
     
@@ -373,8 +371,8 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE
-    cache.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
     
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
@@ -409,8 +407,8 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE
-    cache.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
     
     res.json({ msg: "Agendamento confirmado", agendamento: data });
   } catch (err) {
@@ -444,8 +442,8 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE
-    cache.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
     
     res.json({ msg: "Agendamento cancelado", agendamento: data });
   } catch (err) {
@@ -494,8 +492,8 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE
-    cache.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
     
     res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
   } catch (err) {
