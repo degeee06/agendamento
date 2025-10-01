@@ -2,9 +2,15 @@ import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import OpenAI from "openai";
 
 const PORT = process.env.PORT || 3000;
 const app = express();
+
+// ==================== CONFIGURAÇÃO IA ====================
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map();
@@ -175,13 +181,389 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
+// ==================== FUNÇÕES IA ====================
+
+// Função para analisar descrição natural e extrair dados
+async function analisarDescricaoNatural(descricao, userEmail) {
+  try {
+    const prompt = `
+Analise esta descrição de agendamento e extraia as informações estruturadas:
+
+DESCRIÇÃO: "${descricao}"
+
+USUÁRIO: ${userEmail}
+
+Extraia as seguintes informações:
+- NOME: Nome da pessoa ou evento
+- DATA: Data no formato YYYY-MM-DD (use datas futuras)
+- HORARIO: Horário no formato HH:MM
+- DESCRICAO: Breve descrição do compromisso
+
+Se a data não for especificada, use amanhã.
+Se o horário não for especificado, use 14:00.
+
+Responda APENAS com JSON:
+{
+  "nome": "string",
+  "data": "YYYY-MM-DD", 
+  "horario": "HH:MM",
+  "descricao": "string"
+}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 500
+    });
+
+    const resposta = completion.choices[0].message.content;
+    return JSON.parse(resposta);
+  } catch (error) {
+    console.error("Erro ao analisar descrição:", error);
+    throw new Error("Falha ao processar descrição natural");
+  }
+}
+
+// Função para gerar sugestões inteligentes
+async function gerarSugestoesInteligentes(agendamentos, userEmail) {
+  try {
+    const hoje = new Date().toISOString().split('T')[0];
+    const agendamentosTexto = agendamentos.map(a => 
+      `${a.data} ${a.horario} - ${a.nome} (${a.status})`
+    ).join('\n');
+
+    const prompt = `
+Com base nos agendamentos do usuário ${userEmail}, gere sugestões úteis:
+
+AGENDAMENTOS ATUAIS:
+${agendamentosTexto}
+
+DATA DE HOJE: ${hoje}
+
+Analise e forneça:
+1. Sugestões de otimização de agenda
+2. Lembretes importantes
+3. Padrões identificados
+4. Recomendações para melhor organização
+
+Seja conciso e prático. Responda em português.
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 800
+    });
+
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error("Erro ao gerar sugestões:", error);
+    return "Não foi possível gerar sugestões no momento.";
+  }
+}
+
+// Função para conversar com assistente IA
+async function conversarComAssistente(mensagem, agendamentos, userEmail) {
+  try {
+    const agendamentosTexto = agendamentos.slice(0, 10).map(a => 
+      `${a.data} ${a.horario} - ${a.nome} (${a.status})`
+    ).join('\n');
+
+    const prompt = `
+Você é um assistente de agenda inteligente. Ajude o usuário ${userEmail} com suas perguntas sobre agendamentos.
+
+AGENDAMENTOS RECENTES:
+${agendamentosTexto}
+
+PERGUNTA DO USUÁRIO: "${mensagem}"
+
+Responda de forma útil e amigável, focando em:
+- Consultar agendamentos
+- Sugerir horários
+- Ajudar com organização
+- Explicar funcionalidades
+
+Mantenha a resposta concisa e prática. Use emojis quando apropriado.
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.6,
+      max_tokens: 600
+    });
+
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error("Erro no assistente IA:", error);
+    return "Desculpe, estou com dificuldades técnicas no momento. Tente novamente mais tarde.";
+  }
+}
+
+// Função para gerar estatísticas e análise
+async function gerarAnaliseEstatisticas(agendamentos, userEmail) {
+  try {
+    const total = agendamentos.length;
+    const confirmados = agendamentos.filter(a => a.status === 'confirmado').length;
+    const pendentes = agendamentos.filter(a => a.status === 'pendente').length;
+    const esteMes = agendamentos.filter(a => a.data.startsWith(new Date().toISOString().slice(0, 7))).length;
+
+    const prompt = `
+Analise estas estatísticas de agendamentos e forneça insights úteis:
+
+ESTATÍSTICAS:
+- Total de agendamentos: ${total}
+- Confirmados: ${confirmados}
+- Pendentes: ${pendentes}
+- Este mês: ${esteMes}
+- Usuário: ${userEmail}
+
+Forneça:
+1. Análise breve dos dados
+2. Sugestões de melhoria
+3. Padrões identificados
+4. Dicas de produtividade
+
+Seja positivo e encorajador. Responda em português.
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.5,
+      max_tokens: 600
+    });
+
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error("Erro ao gerar análise:", error);
+    return "Análise indisponível no momento.";
+  }
+}
+
+// ==================== ROTAS IA (NOVAS) ====================
+
+// 🤖 ASSISTENTE IA - CHAT
+app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
+  try {
+    const { mensagem } = req.body;
+    const userEmail = req.user.email;
+
+    if (!mensagem) {
+      return res.status(400).json({ success: false, msg: "Mensagem é obrigatória" });
+    }
+
+    // Busca agendamentos para contexto
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("email", userEmail)
+      .order("data", { ascending: true })
+      .limit(20);
+
+    if (error) throw error;
+
+    const resposta = await conversarComAssistente(mensagem, agendamentos || [], userEmail);
+
+    res.json({
+      success: true,
+      resposta,
+      agendamentos_count: agendamentos?.length || 0
+    });
+
+  } catch (err) {
+    console.error("Erro no assistente IA:", err);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro interno no assistente IA" 
+    });
+  }
+});
+
+// 🎯 AGENDAMENTO INTELIGENTE
+app.post("/api/agendar-inteligente", authMiddleware, async (req, res) => {
+  try {
+    const { descricaoNatural } = req.body;
+    const userEmail = req.user.email;
+
+    if (!descricaoNatural) {
+      return res.status(400).json({ success: false, msg: "Descrição é obrigatória" });
+    }
+
+    // Analisa a descrição natural
+    const dadosAgendamento = await analisarDescricaoNatural(descricaoNatural, userEmail);
+
+    // Cria o agendamento
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: userEmail,
+        nome: dadosAgendamento.nome,
+        email: userEmail,
+        telefone: "(IA) Não informado",
+        data: dadosAgendamento.data,
+        horario: dadosAgendamento.horario,
+        status: "pendente",
+        confirmado: false,
+        descricao: dadosAgendamento.descricao,
+        criado_via_ia: true
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          success: false,
+          msg: "Já existe um agendamento para esta data e horário" 
+        });
+      }
+      throw error;
+    }
+
+    // Atualiza Google Sheets se configurado
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // Invalida cache
+    cacheManager.delete(`agendamentos_${userEmail}`);
+
+    res.json({
+      success: true,
+      msg: "Agendamento criado com IA!",
+      agendamento: novoAgendamento
+    });
+
+  } catch (err) {
+    console.error("Erro no agendamento inteligente:", err);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao processar agendamento inteligente" 
+    });
+  }
+});
+
+// 💡 SUGESTÕES INTELIGENTES
+app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `sugestoes_${userEmail}`;
+
+    const sugestoes = await cacheManager.getOrSet(cacheKey, async () => {
+      console.log('🔄 Gerando sugestões IA para:', userEmail);
+      
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true });
+
+      if (error) throw error;
+
+      const sugestoesTexto = await gerarSugestoesInteligentes(agendamentos || [], userEmail);
+      
+      return {
+        sugestoes: sugestoesTexto,
+        total_agendamentos: agendamentos?.length || 0
+      };
+    }, 10 * 60 * 1000); // Cache de 10 minutos
+
+    res.json({
+      success: true,
+      ...sugestoes
+    });
+
+  } catch (err) {
+    console.error("Erro nas sugestões IA:", err);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar sugestões inteligentes" 
+    });
+  }
+});
+
+// 📊 ESTATÍSTICAS PESSOAIS COM IA
+app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `estatisticas_${userEmail}`;
+
+    const estatisticas = await cacheManager.getOrSet(cacheKey, async () => {
+      console.log('🔄 Calculando estatísticas para:', userEmail);
+      
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail);
+
+      if (error) throw error;
+
+      const agendamentosList = agendamentos || [];
+      const total = agendamentosList.length;
+      const confirmados = agendamentosList.filter(a => a.status === 'confirmado').length;
+      const pendentes = agendamentosList.filter(a => a.status === 'pendente').length;
+      const cancelados = agendamentosList.filter(a => a.status === 'cancelado').length;
+      
+      const hoje = new Date();
+      const esteMes = agendamentosList.filter(a => 
+        a.data.startsWith(hoje.toISOString().slice(0, 7))
+      ).length;
+
+      const viaIA = agendamentosList.filter(a => a.criado_via_ia).length;
+
+      const analiseIA = await gerarAnaliseEstatisticas(agendamentosList, userEmail);
+
+      return {
+        estatisticas: {
+          total,
+          confirmados,
+          pendentes,
+          cancelados,
+          este_mes: esteMes,
+          via_ia: viaIA
+        },
+        analise_ia: analiseIA
+      };
+    }, 5 * 60 * 1000); // Cache de 5 minutos
+
+    res.json({
+      success: true,
+      ...estatisticas
+    });
+
+  } catch (err) {
+    console.error("Erro nas estatísticas:", err);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar estatísticas" 
+    });
+  }
+});
+
 // ==================== HEALTH CHECKS OTIMIZADOS ====================
 app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Backend rodando com otimizações",
+    message: "Backend rodando com IA integrada",
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    features: {
+      ia: true,
+      cache: true,
+      sheets: true,
+      agendamentos: true
+    }
   });
 });
 
@@ -192,7 +574,8 @@ app.get("/warmup", async (req, res) => {
     res.json({ 
       status: "WARM", 
       timestamp: new Date().toISOString(),
-      supabase: error ? "offline" : "online"
+      supabase: error ? "offline" : "online",
+      ia: !!process.env.OPENAI_API_KEY
     });
   } catch (error) {
     res.json({ 
@@ -203,7 +586,7 @@ app.get("/warmup", async (req, res) => {
   }
 });
 
-// ==================== ROTAS CORRIGIDAS (SEM :email NOS PARÂMETROS) ====================
+// ==================== ROTAS EXISTENTES (MANTIDAS) ====================
 
 // 🔥 AGENDAMENTOS COM CACHE
 app.get("/agendamentos", authMiddleware, async (req, res) => {
@@ -514,10 +897,11 @@ app.use("*", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend CORRIGIDO rodando na porta ${PORT}`);
+  console.log(`🚀 Backend COM IA rodando na porta ${PORT}`);
   console.log('✅ Cache em memória ativo');
+  console.log('✅ IA integrada (OpenAI)');
   console.log('✅ Health checks otimizados');
-  console.log('✅ Rotas corrigidas (sem parâmetro :email conflitante)');
-  console.log('📊 Use /health para status leve');
+  console.log('✅ Rotas IA disponíveis');
+  console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
