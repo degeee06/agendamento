@@ -140,12 +140,19 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
     throw error;
   }
 }
-// Função para analisar descrição natural - USE RACIOCÍNIO
 async function analisarDescricaoNatural(descricao, userEmail) {
   try {
     const hoje = new Date();
     const amanha = new Date(hoje);
     amanha.setDate(amanha.getDate() + 1);
+
+    // ✅ AGORA DOMINGOS SÃO PERMITIDOS (não há mais bloqueio)
+    function calcularDataValida(data) {
+      const dataObj = new Date(data);
+      // ⚠️ REMOVIDO: A lógica que pulava domingos foi retirada
+      // Agora domingos são tratados como dias normais da semana
+      return dataObj.toISOString().split('T')[0];
+    }
 
     const prompt = `
 Analise a seguinte descrição de agendamento e extraia as informações no formato JSON:
@@ -161,61 +168,37 @@ Extraia as seguintes informações:
 - horario (string no formato HH:MM): Horário do compromisso
 - descricao (string): Descrição detalhada do compromisso
 
-Regras importantes:
-- Se não mencionar data específica, use "${amanha.toISOString().split('T')[0]}" (amanhã)
+🔔 REGRAS IMPORTANTES:
+- Se não mencionar data específica, use "${calcularDataValida(amanha.toISOString().split('T')[0])}"
 - Se não mencionar horário, use "09:00" (horário padrão)
 - Para datas relativas: "hoje" = data atual, "amanhã" = data atual + 1 dia
 - Para dias da semana: converta para a próxima ocorrência
+- ✅ DOMINGOS SÃO PERMITIDOS: Agende normalmente para domingos
 - Use o ano atual para todas as datas
 
 Exemplo de resposta:
-{"nome": "Reunião com João", "data": "2024-01-15", "horario": "14:00", "descricao": "Reunião sobre projeto novo"}
+{"nome": "Reunião com João", "data": "2024-01-14", "horario": "14:00", "descricao": "Reunião dominical"}
 
 Responda APENAS com o JSON válido, sem nenhum texto adicional.
 `;
 
-    const resposta = await chamarDeepSeekIA(prompt, "", "RACIOCINIO"); // 🎯 USANDO REASONER
+    const resposta = await chamarDeepSeekIA(prompt, "", "RACIOCINIO");
     
     // Tenta extrair JSON da resposta
     const jsonMatch = resposta.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const dados = JSON.parse(jsonMatch[0]);
+      
+      // ✅ REMOVIDO: A validação que corrigia domingos
+      // Agora domingos são aceitos normalmente
+      
+      console.log('✅ Agendamento processado (domingos permitidos):', dados.data);
+      return dados;
     }
     
     throw new Error("Não foi possível extrair dados estruturados da descrição");
   } catch (error) {
     console.error("Erro ao analisar descrição natural:", error);
-    throw error;
-  }
-}
-
-// Função para gerar sugestões inteligentes - USE RACIOCÍNIO
-async function gerarSugestoesInteligentes(agendamentos, userEmail) {
-  try {
-    const contexto = `
-Dados dos agendamentos do usuário ${userEmail}:
-
-Total de agendamentos: ${agendamentos.length}
-Agendamentos confirmados: ${agendamentos.filter(a => a.status === 'confirmado').length}
-Agendamentos pendentes: ${agendamentos.filter(a => a.status === 'pendente').length}
-Agendamentos cancelados: ${agendamentos.filter(a => a.status === 'cancelado').length}
-
-Últimos agendamentos:
-${agendamentos.slice(0, 10).map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}
-
-Com base nesses agendamentos, forneça:
-1. Análise de padrões (horários mais comuns, tipos de compromissos)
-2. Sugestões de otimização de agenda
-3. Alertas sobre possíveis conflitos ou sobrecarga
-4. Recomendações para melhor gestão do tempo
-
-Seja conciso, prático e acionável. Use emojis para tornar mais amigável.
-Máximo de 300 palavras.
-`;
-
-    return await chamarDeepSeekIA("Analise esses agendamentos e forneça sugestões úteis:", contexto, "RACIOCINIO"); // 🎯 USANDO REASONER
-  } catch (error) {
-    console.error("Erro ao gerar sugestões inteligentes:", error);
     throw error;
   }
 }
@@ -929,6 +912,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
