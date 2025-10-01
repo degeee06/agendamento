@@ -54,7 +54,7 @@ const cacheManager = {
 // ==================== TEU CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
 app.use(cors({
   origin: [
-    'https://frontrender-nine.vercel.app',   // Vercel
+    'https://frontrender-iota.vercel.app',   // Vercel
     'http://localhost:3000',                 // Dev local
     'http://localhost:5173'                  // Dev Vite
   ],
@@ -520,6 +520,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status leve');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
