@@ -51,10 +51,391 @@ const cacheManager = {
   }
 };
 
-// ==================== TEU CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
+// ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
+
+// Função para chamar a API da DeepSeek
+async function chamarDeepSeekIA(mensagem, contexto = "") {
+  try {
+    if (!DEEPSEEK_API_KEY) {
+      throw new Error("Chave da API DeepSeek não configurada");
+    }
+
+    const prompt = contexto ? `${contexto}\n\nPergunta do usuário: ${mensagem}` : mensagem;
+
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: contexto || "Você é um assistente de agenda inteligente. Ajude os usuários a gerenciarem seus compromissos de forma eficiente. Seja útil, amigável e direto ao ponto."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro na API DeepSeek: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error("Erro ao chamar DeepSeek IA:", error);
+    throw error;
+  }
+}
+
+// Função para analisar descrição natural e extrair dados do agendamento
+async function analisarDescricaoNatural(descricao, userEmail) {
+  try {
+    const hoje = new Date();
+    const amanha = new Date(hoje);
+    amanha.setDate(amanha.getDate() + 1);
+
+    const prompt = `
+Analise a seguinte descrição de agendamento e extraia as informações no formato JSON:
+
+DESCRIÇÃO: "${descricao}"
+
+USUÁRIO: ${userEmail}
+DATA ATUAL: ${hoje.toISOString().split('T')[0]}
+
+Extraia as seguintes informações:
+- nome (string): Nome da pessoa ou evento
+- data (string no formato YYYY-MM-DD): Data do compromisso
+- horario (string no formato HH:MM): Horário do compromisso
+- descricao (string): Descrição detalhada do compromisso
+
+Regras importantes:
+- Se não mencionar data específica, use "${amanha.toISOString().split('T')[0]}" (amanhã)
+- Se não mencionar horário, use "09:00" (horário padrão)
+- Para datas relativas: "hoje" = data atual, "amanhã" = data atual + 1 dia
+- Para dias da semana: converta para a próxima ocorrência
+- Use o ano atual para todas as datas
+
+Exemplo de resposta:
+{"nome": "Reunião com João", "data": "2024-01-15", "horario": "14:00", "descricao": "Reunião sobre projeto novo"}
+
+Responda APENAS com o JSON válido, sem nenhum texto adicional.
+`;
+
+    const resposta = await chamarDeepSeekIA(prompt);
+    
+    // Tenta extrair JSON da resposta
+    const jsonMatch = resposta.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    
+    throw new Error("Não foi possível extrair dados estruturados da descrição");
+  } catch (error) {
+    console.error("Erro ao analisar descrição natural:", error);
+    throw error;
+  }
+}
+
+// Função para gerar sugestões inteligentes baseadas nos agendamentos
+async function gerarSugestoesInteligentes(agendamentos, userEmail) {
+  try {
+    const contexto = `
+Dados dos agendamentos do usuário ${userEmail}:
+
+Total de agendamentos: ${agendamentos.length}
+Agendamentos confirmados: ${agendamentos.filter(a => a.status === 'confirmado').length}
+Agendamentos pendentes: ${agendamentos.filter(a => a.status === 'pendente').length}
+Agendamentos cancelados: ${agendamentos.filter(a => a.status === 'cancelado').length}
+
+Últimos agendamentos:
+${agendamentos.slice(0, 10).map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}
+
+Com base nesses agendamentos, forneça:
+1. Análise de padrões (horários mais comuns, tipos de compromissos)
+2. Sugestões de otimização de agenda
+3. Alertas sobre possíveis conflitos ou sobrecarga
+4. Recomendações para melhor gestão do tempo
+
+Seja conciso, prático e acionável. Use emojis para tornar mais amigável.
+Máximo de 300 palavras.
+`;
+
+    return await chamarDeepSeekIA("Analise esses agendamentos e forneça sugestões úteis:", contexto);
+  } catch (error) {
+    console.error("Erro ao gerar sugestões inteligentes:", error);
+    throw error;
+  }
+}
+
+// Função para analisar estatísticas pessoais
+async function analisarEstatisticasPessoais(agendamentos, userEmail) {
+  try {
+    const estatisticas = {
+      total: agendamentos.length,
+      este_mes: agendamentos.filter(a => {
+        const dataAgendamento = new Date(a.data);
+        const agora = new Date();
+        return dataAgendamento.getMonth() === agora.getMonth() && 
+               dataAgendamento.getFullYear() === agora.getFullYear();
+      }).length,
+      confirmados: agendamentos.filter(a => a.status === 'confirmado').length,
+      pendentes: agendamentos.filter(a => a.status === 'pendente').length,
+      cancelados: agendamentos.filter(a => a.status === 'cancelado').length,
+      via_ia: agendamentos.filter(a => a.criado_via_ia).length
+    };
+
+    const contexto = `
+Estatísticas dos agendamentos do usuário ${userEmail}:
+
+- Total de agendamentos: ${estatisticas.total}
+- Agendamentos este mês: ${estatisticas.este_mes}
+- Confirmados: ${estatisticas.confirmados}
+- Pendentes: ${estatisticas.pendentes}
+- Cancelados: ${estatisticas.cancelados}
+- Criados via IA: ${estatisticas.via_ia}
+
+Forneça uma análise inteligente sobre:
+1. Comportamento de agendamento do usuário
+2. Taxa de comparecimento (confirmados vs total)
+3. Distribuição ao longo do tempo
+4. Recomendações personalizadas
+
+Seja encorajador e prático. Máximo de 200 palavras.
+`;
+
+    const analise = await chamarDeepSeekIA("Analise essas estatísticas de agendamentos:", contexto);
+    
+    return {
+      estatisticas,
+      analise_ia: analise
+    };
+  } catch (error) {
+    console.error("Erro ao analisar estatísticas:", error);
+    throw error;
+  }
+}
+
+// ==================== ROTAS IA ====================
+
+// Rota do assistente de IA
+app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
+  try {
+    const { mensagem } = req.body;
+    const userEmail = req.user.email;
+
+    if (!mensagem) {
+      return res.status(400).json({ success: false, msg: "Mensagem é obrigatória" });
+    }
+
+    // Busca agendamentos recentes para contexto
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("email", userEmail)
+      .order("data", { ascending: false })
+      .limit(5);
+
+    if (error) throw error;
+
+    const contexto = agendamentos && agendamentos.length > 0 
+      ? `Aqui estão os últimos agendamentos do usuário para contexto:\n${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}`
+      : "O usuário ainda não tem agendamentos.";
+
+    const resposta = await chamarDeepSeekIA(mensagem, contexto);
+
+    res.json({
+      success: true,
+      resposta,
+      agendamentos_referenciados: agendamentos?.length || 0
+    });
+
+  } catch (error) {
+    console.error("Erro no assistente IA:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao processar pergunta com IA",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Rota de agendamento inteligente
+app.post("/api/agendar-inteligente", authMiddleware, async (req, res) => {
+  try {
+    const { descricaoNatural } = req.body;
+    const userEmail = req.user.email;
+
+    if (!descricaoNatural) {
+      return res.status(400).json({ success: false, msg: "Descrição é obrigatória" });
+    }
+
+    // Analisa a descrição natural com IA
+    const dadosAgendamento = await analisarDescricaoNatural(descricaoNatural, userEmail);
+
+    // Verifica conflitos de horário
+    const { data: conflitos, error: conflitoError } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("email", userEmail)
+      .eq("data", dadosAgendamento.data)
+      .eq("horario", dadosAgendamento.horario);
+
+    if (conflitoError) throw conflitoError;
+
+    if (conflitos && conflitos.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        msg: `Já existe um agendamento para ${dadosAgendamento.data} às ${dadosAgendamento.horario}` 
+      });
+    }
+
+    // Cria o agendamento
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: userEmail,
+        nome: dadosAgendamento.nome || "Agendamento via IA",
+        email: userEmail,
+        telefone: "Não informado",
+        data: dadosAgendamento.data,
+        horario: dadosAgendamento.horario,
+        status: "pendente",
+        confirmado: false,
+        descricao: dadosAgendamento.descricao,
+        criado_via_ia: true
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Atualiza Google Sheets se configurado
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE
+    cacheManager.delete(`agendamentos_${userEmail}`);
+
+    res.json({
+      success: true,
+      msg: "Agendamento criado com IA!",
+      agendamento: novoAgendamento
+    });
+
+  } catch (error) {
+    console.error("Erro no agendamento inteligente:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao criar agendamento com IA",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Rota de sugestões inteligentes
+app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `sugestoes_${userEmail}`;
+
+    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
+      // Busca todos os agendamentos
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true });
+
+      if (error) throw error;
+
+      if (!agendamentos || agendamentos.length === 0) {
+        return {
+          sugestoes: "📝 Você ainda não tem agendamentos. Que tal agendar seu primeiro compromisso? Use o agendamento por IA para facilitar!",
+          total_agendamentos: 0
+        };
+      }
+
+      const sugestoes = await gerarSugestoesInteligentes(agendamentos, userEmail);
+
+      return {
+        sugestoes,
+        total_agendamentos: agendamentos.length
+      };
+    }, 10 * 60 * 1000); // Cache de 10 minutos para sugestões
+
+    res.json({
+      success: true,
+      ...resultado
+    });
+
+  } catch (error) {
+    console.error("Erro nas sugestões inteligentes:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar sugestões inteligentes",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Rota de estatísticas pessoais com IA
+app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `estatisticas_${userEmail}`;
+
+    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
+      // Busca todos os agendamentos
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail);
+
+      if (error) throw error;
+
+      return await analisarEstatisticasPessoais(agendamentos || [], userEmail);
+    }, 5 * 60 * 1000); // Cache de 5 minutos para estatísticas
+
+    res.json({
+      success: true,
+      ...resultado
+    });
+
+  } catch (error) {
+    console.error("Erro nas estatísticas pessoais:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar estatísticas pessoais",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// ==================== CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
 app.use(cors({
   origin: [
-    'hfrontrender-iota.vercel.app',
+    'https://frontrender-iota.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173'
   ],
@@ -115,7 +496,7 @@ async function createSpreadsheetForUser(userEmail, userName) {
     
     const sheet = doc.sheetsByIndex[0];
     await sheet.setHeaderRow([
-      'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em'
+      'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em', 'criado_via_ia', 'descricao'
     ]);
     
     try {
@@ -179,9 +560,10 @@ async function authMiddleware(req, res, next) {
 app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Backend rodando com otimizações",
+    message: "Backend rodando com otimizações e IA",
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    ia_configurada: !!DEEPSEEK_API_KEY
   });
 });
 
@@ -193,7 +575,8 @@ app.get("/warmup", async (req, res) => {
     res.json({ 
       status: "WARM", 
       timestamp: new Date().toISOString(),
-      supabase: error ? "offline" : "online"
+      supabase: error ? "offline" : "online",
+      ia: DEEPSEEK_API_KEY ? "configurada" : "não configurada"
     });
   } catch (error) {
     res.json({ 
@@ -516,6 +899,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Backend otimizado rodando na porta ${PORT}`);
   console.log('✅ Cache em memória ativo');
   console.log('✅ Health checks otimizados');
-  console.log('📊 Use /health para status leve');
+  console.log('🤖 DeepSeek IA: ' + (DEEPSEEK_API_KEY ? 'CONFIGURADA' : 'NÃO CONFIGURADA'));
+  console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
