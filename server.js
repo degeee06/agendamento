@@ -312,86 +312,85 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
   }
 });
 
-// Rota de agendamento inteligente
-app.post("/api/agendar-inteligente", authMiddleware, async (req, res) => {
-  try {
-    const { descricaoNatural } = req.body;
-    const userEmail = req.user.email;
+// ==================== ROTA SUGERIR HORÁRIOS ====================
 
-    if (!descricaoNatural) {
-      return res.status(400).json({ success: false, msg: "Descrição é obrigatória" });
-    }
-
-    // Analisa a descrição natural com IA
-    const dadosAgendamento = await analisarDescricaoNatural(descricaoNatural, userEmail);
-
-    // Verifica conflitos de horário
-    const { data: conflitos, error: conflitoError } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("email", userEmail)
-      .eq("data", dadosAgendamento.data)
-      .eq("horario", dadosAgendamento.horario);
-
-    if (conflitoError) throw conflitoError;
-
-    if (conflitos && conflitos.length > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        msg: `Já existe um agendamento para ${dadosAgendamento.data} às ${dadosAgendamento.horario}` 
-      });
-    }
-
-    // Cria o agendamento
-    const { data: novoAgendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente: userEmail,
-        nome: dadosAgendamento.nome || "Agendamento via IA",
-        email: userEmail,
-        telefone: "Não informado",
-        data: dadosAgendamento.data,
-        horario: dadosAgendamento.horario,
-        status: "pendente",
-        confirmado: false,
-        descricao: dadosAgendamento.descricao,
-        criado_via_ia: true
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Atualiza Google Sheets se configurado
+// Rota para sugerir horários livres
+app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
     try {
-      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
-      if (doc) {
-        const sheet = doc.sheetsByIndex[0];
-        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-        await sheet.addRow(novoAgendamento);
-      }
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
+        const userEmail = req.user.email;
+
+        // Busca todos os agendamentos
+        const { data: agendamentos, error } = await supabase
+            .from("agendamentos")
+            .select("*")
+            .eq("email", userEmail)
+            .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
+            .order("data", { ascending: true })
+            .order("horario", { ascending: true });
+
+        if (error) throw error;
+
+        // Análise inteligente com IA
+        const sugestoes = await analisarHorariosLivres(agendamentos || [], userEmail);
+
+        res.json({
+            success: true,
+            sugestoes: sugestoes,
+            total_agendamentos: agendamentos?.length || 0
+        });
+
+    } catch (error) {
+        console.error("Erro ao sugerir horários:", error);
+        res.status(500).json({ 
+            success: false, 
+            msg: "Erro ao analisar horários livres",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-
-    // 🔥 INVALIDA CACHE
-    cacheManager.delete(`agendamentos_${userEmail}`);
-
-    res.json({
-      success: true,
-      msg: "Agendamento criado com IA!",
-      agendamento: novoAgendamento
-    });
-
-  } catch (error) {
-    console.error("Erro no agendamento inteligente:", error);
-    res.status(500).json({ 
-      success: false, 
-      msg: "Erro ao criar agendamento com IA",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
 });
+
+// Função para analisar horários livres
+async function analisarHorariosLivres(agendamentos, userEmail) {
+    try {
+        const contexto = `
+ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
+
+Dados da agenda do usuário ${userEmail}:
+
+AGENDAMENTOS EXISTENTES (próximos 7 dias):
+${agendamentos.length > 0 ? 
+    agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome}`).join('\n') 
+    : 'Nenhum agendamento futuro encontrado.'
+}
+
+DATA ATUAL: ${new Date().toISOString().split('T')[0]}
+
+INSTRUÇÕES:
+Analise a agenda acima e sugira os MELHORES horários livres para os próximos 7 dias.
+Considere:
+- Horários comerciais (9h-18h)
+- Evitar início/fim de dia
+- Espaçamento entre compromissos
+- Balancear dias da semana
+
+FORMATO DA RESPOSTA:
+Forneça uma lista de 3-5 sugestões de horários no formato:
+"📅 [DIA] às [HORÁRIO] - [CONTEXTO/SUGESTÃO]"
+
+Exemplo:
+"📅 Segunda-feira às 14:00 - Período da tarde, bom para reuniões
+📅 Quarta-feira às 10:30 - Horário produtivo para trabalho focado"
+
+Seja prático, útil e use emojis. Máximo de 150 palavras.
+`;
+
+        // No backend, na função analisarHorariosLivres:
+return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horários livres:", contexto, "ECONOMICO");
+    } catch (error) {
+        console.error("Erro na análise de horários:", error);
+        return "📅 **Sugestões de Horários:**\n\n- Segunda-feira: 14h-16h (tarde)\n- Quarta-feira: 10h-12h (manhã)\n- Sexta-feira: 15h-17h (final de semana próximo)\n\n💡 **Dica:** Estes são horários typically produtivos com boa disponibilidade.";
+    }
+}
 
 // Rota de sugestões inteligentes
 app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
@@ -930,6 +929,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
