@@ -1,37 +1,13 @@
 import express from "express";
 import cors from "cors";
-import compression from "compression";
-import helmet from "helmet";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 
 const PORT = process.env.PORT || 3000;
 const app = express();
 
-// ==================== NOVAS OTIMIZAÇÕES ====================
-// 1. Compression para reduzir bandwidth
-app.use(compression());
-
-// 2. Helmet para segurança
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
-
-// 3. CORS configurado
-app.use(cors({
-  origin: [
-    'https://frontrender.netlify.app',
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-app.use(express.json());
-
-// ==================== CACHE EM MEMÓRIA ====================
+// ==================== OTIMIZAÇÕES ADICIONADAS ====================
+// Cache em memória para melhor performance
 class CacheManager {
   constructor() {
     this.cache = new Map();
@@ -77,7 +53,20 @@ class CacheManager {
 
 const cache = new CacheManager();
 
-// ==================== CONEXÕES ====================
+// ==================== TEU CÓDIGO ORIGINAL (MANTIDO INTACTO) ====================
+app.use(cors({
+  origin: [
+    'https://frontrender.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json());
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -91,40 +80,7 @@ try {
   process.exit(1);
 }
 
-// ==================== PRÉ-CARREGAMENTO ====================
-console.log('🔄 Pré-carregando recursos...');
-
-// ==================== HEALTH CHECKS OTIMIZADOS ====================
-app.get("/health", (req, res) => {
-  res.json({ 
-    status: "OK", 
-    message: "Backend rodando com Sheets por usuário",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
-// Novo endpoint para warm-up (usado pelo ping)
-app.get("/warmup", async (req, res) => {
-  try {
-    // Simula uma operação leve para manter a instância ativa
-    const { data, error } = await supabase.from('agendamentos').select('count').limit(1);
-    
-    res.json({ 
-      status: "WARM", 
-      timestamp: new Date().toISOString(),
-      supabase: error ? "offline" : "online"
-    });
-  } catch (error) {
-    res.json({ 
-      status: "COLD", 
-      timestamp: new Date().toISOString(),
-      error: error.message 
-    });
-  }
-});
-
-// ==================== GOOGLE SHEETS POR USUÁRIO ====================
+// ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
 async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
     const spreadsheetId = userMetadata?.spreadsheet_id;
@@ -209,7 +165,7 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   }
 }
 
-// ==================== MIDDLEWARE AUTH ====================
+// ---------------- MIDDLEWARE AUTH ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -221,7 +177,36 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ==================== ROTAS COM CACHE ====================
+// ==================== HEALTH CHECKS OTIMIZADOS ====================
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "OK", 
+    message: "Backend rodando com otimizações",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Novo endpoint para warm-up (para o teu ping)
+app.get("/warmup", async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('agendamentos').select('count').limit(1);
+    
+    res.json({ 
+      status: "WARM", 
+      timestamp: new Date().toISOString(),
+      supabase: error ? "offline" : "online"
+    });
+  } catch (error) {
+    res.json({ 
+      status: "COLD", 
+      timestamp: new Date().toISOString(),
+      error: error.message 
+    });
+  }
+});
+
+// ==================== ROTAS COM CACHE (MANTIDAS AS TUAS LÓGICAS) ====================
 
 // 🔥 AGENDAMENTOS COM CACHE
 app.get("/agendamentos", authMiddleware, async (req, res) => {
@@ -271,8 +256,7 @@ app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   }
 });
 
-// ==================== ROTAS ORIGINAIS (COM INVALIDAÇÃO DE CACHE) ====================
-
+// 🔥 CONFIGURAR SHEETS COM INVALIDAÇÃO DE CACHE
 app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   try {
     const { spreadsheetId, criarAutomatico } = req.body;
@@ -520,7 +504,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
   }
 });
 
-// ==================== ERROR HANDLING ====================
+// ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ msg: "Algo deu errado!" });
@@ -530,10 +514,8 @@ app.use("*", (req, res) => {
   res.status(404).json({ msg: "Endpoint não encontrado" });
 });
 
-// ==================== INICIALIZAÇÃO ====================
 app.listen(PORT, () => {
   console.log(`🚀 Backend otimizado rodando na porta ${PORT}`);
-  console.log('✅ Compression ativado');
   console.log('✅ Cache em memória ativo');
   console.log('✅ Health checks otimizados');
   console.log('📊 Use /health para status leve');
