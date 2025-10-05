@@ -5,7 +5,6 @@ import { GoogleSpreadsheet } from "google-spreadsheet";
 
 const PORT = process.env.PORT || 3000;
 const app = express();
-
 // ==================== CORS CONFIGURADO CORRETAMENTE ====================
 app.use(cors({
   origin: [
@@ -31,19 +30,21 @@ app.use(cors({
   maxAge: 86400 // 24 hours
 }));
 
+// Handle preflight requests for ALL routes
 app.options('*', cors());
+
+// 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
-// ==================== SISTEMA DE CACHE INTELIGENTE ====================
-const cache = new Map();
-const pendingActions = new Map();
+// ==================== CACHE SIMPLES E FUNCIONAL ====================
+const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
+
 
 const cacheManager = {
   set(key, value, ttl = 2 * 60 * 1000) {
     cache.set(key, {
       value,
-      expiry: Date.now() + ttl,
-      timestamp: Date.now()
+      expiry: Date.now() + ttl
     });
   },
 
@@ -73,20 +74,7 @@ const cacheManager = {
   },
 
   delete(key) {
-    console.log('🗑️ Cache deleted:', key);
     return cache.delete(key);
-  },
-
-  deletePattern(pattern) {
-    let deletedCount = 0;
-    for (const key of cache.keys()) {
-      if (key.includes(pattern)) {
-        cache.delete(key);
-        deletedCount++;
-      }
-    }
-    console.log(`🗑️ Cache pattern deleted: ${pattern} (${deletedCount} items)`);
-    return deletedCount;
   },
 
   clear() {
@@ -94,137 +82,18 @@ const cacheManager = {
   }
 };
 
-// ==================== SISTEMA OFFLINE + AÇÕES PENDENTES ====================
-const offlineManager = {
-  addAction(userEmail, action) {
-    if (!pendingActions.has(userEmail)) {
-      pendingActions.set(userEmail, []);
-    }
-    
-    const actionWithId = {
-      id: `pending_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date().toISOString(),
-      ...action,
-      retryCount: 0
-    };
-    
-    const userQueue = pendingActions.get(userEmail);
-    userQueue.push(actionWithId);
-    
-    console.log(`📝 Action queued for ${userEmail}:`, action.type, actionWithId.id);
-    return actionWithId.id;
-  },
-
-  getActions(userEmail) {
-    return pendingActions.get(userEmail) || [];
-  },
-
-  removeAction(userEmail, actionId) {
-    const userQueue = pendingActions.get(userEmail);
-    if (userQueue) {
-      const filteredQueue = userQueue.filter(action => action.id !== actionId);
-      pendingActions.set(userEmail, filteredQueue);
-    }
-  },
-
-  async retryPendingActions(userEmail) {
-    const userQueue = this.getActions(userEmail);
-    if (userQueue.length === 0) return [];
-
-    console.log(`🔄 Retrying ${userQueue.length} pending actions for ${userEmail}`);
-    
-    const results = [];
-    for (const action of userQueue) {
-      try {
-        let result;
-        switch (action.type) {
-          case 'CREATE_AGENDAMENTO':
-            result = await handleAgendar(action.data, userEmail, true);
-            break;
-          case 'UPDATE_AGENDAMENTO':
-            result = await handleAtualizarAgendamento(action.agendamentoId, action.data, userEmail, true);
-            break;
-          case 'DELETE_AGENDAMENTO':
-            result = await handleCancelarAgendamento(action.agendamentoId, userEmail, true);
-            break;
-        }
-        
-        if (result.success) {
-          this.removeAction(userEmail, action.id);
-          results.push({ actionId: action.id, success: true });
-        }
-      } catch (error) {
-        console.error(`❌ Error retrying action ${action.id}:`, error.message);
-        results.push({ actionId: action.id, success: false, error: error.message });
-      }
-    }
-    
-    return results;
-  }
-};
-
-// ==================== CONFIGURAÇÃO SUPABASE ====================
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-// ==================== SUPABASE REALTIME PARA CACHE AUTOMÁTICO ====================
-function setupSupabaseRealtime() {
-  try {
-    const subscription = supabase
-      .channel('agendamentos-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'agendamentos'
-        },
-        (payload) => {
-          console.log('🔔 Realtime update received:', payload.eventType);
-          
-          // Invalida cache baseado no email do usuário afetado
-          if (payload.new?.email) {
-            const userEmail = payload.new.email;
-            cacheManager.deletePattern(`agendamentos_${userEmail}`);
-            cacheManager.deletePattern(`estatisticas_${userEmail}`);
-            cacheManager.deletePattern(`sugestoes_${userEmail}`);
-          } else if (payload.old?.email) {
-            const userEmail = payload.old.email;
-            cacheManager.deletePattern(`agendamentos_${userEmail}`);
-            cacheManager.deletePattern(`estatisticas_${userEmail}`);
-            cacheManager.deletePattern(`sugestoes_${userEmail}`);
-          }
-          
-          // Invalida cache global se necessário
-          if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
-            cacheManager.deletePattern('sugestoes_');
-            cacheManager.deletePattern('estatisticas_');
-          }
-        }
-      )
-      .subscribe();
-
-    console.log('✅ Supabase Realtime connected for cache invalidation');
-  } catch (error) {
-    console.error('❌ Failed to setup Supabase Realtime:', error.message);
-  }
-}
-
-// Inicializar Realtime
-setupSupabaseRealtime();
-
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
+// Configuração dos modelos
 const MODELOS_IA = {
-  PADRAO: "deepseek-chat",
-  RACIOCINIO: "deepseek-reasoner",
-  ECONOMICO: "deepseek-chat"
+  PADRAO: "deepseek-chat",           // ✅ Balanceado (atual)
+  RACIOCINIO: "deepseek-reasoner",   // 🎯 MELHOR para agendamentos
+  ECONOMICO: "deepseek-chat"         // 💰 Mais econômico
 };
 
+// Função para chamar a API da DeepSeek
 async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
   try {
     if (!DEEPSEEK_API_KEY) {
@@ -234,6 +103,8 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
     const modelo = MODELOS_IA[tipo] || MODELOS_IA.PADRAO;
     const prompt = contexto ? `${contexto}\n\nPergunta do usuário: ${mensagem}` : mensagem;
 
+    console.log(`🤖 Usando modelo: ${modelo} para: ${tipo}`);
+
     const response = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
       headers: {
@@ -241,7 +112,7 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
         "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
       },
       body: JSON.stringify({
-        model: modelo,
+        model: modelo,  // 🔥 AGORA VARIÁVEL
         messages: [
           {
             role: "system",
@@ -269,16 +140,17 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
     throw error;
   }
 }
-
-// ==================== FUNÇÕES IA (MANTIDAS ORIGINAIS) ====================
 async function analisarDescricaoNatural(descricao, userEmail) {
   try {
     const hoje = new Date();
     const amanha = new Date(hoje);
     amanha.setDate(amanha.getDate() + 1);
 
+    // ✅ AGORA DOMINGOS SÃO PERMITIDOS (não há mais bloqueio)
     function calcularDataValida(data) {
       const dataObj = new Date(data);
+      // ⚠️ REMOVIDO: A lógica que pulava domingos foi retirada
+      // Agora domingos são tratados como dias normais da semana
       return dataObj.toISOString().split('T')[0];
     }
 
@@ -312,9 +184,14 @@ Responda APENAS com o JSON válido, sem nenhum texto adicional.
 
     const resposta = await chamarDeepSeekIA(prompt, "", "RACIOCINIO");
     
+    // Tenta extrair JSON da resposta
     const jsonMatch = resposta.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const dados = JSON.parse(jsonMatch[0]);
+      
+      // ✅ REMOVIDO: A validação que corrigia domingos
+      // Agora domingos são aceitos normalmente
+      
       console.log('✅ Agendamento processado (domingos permitidos):', dados.data);
       return dados;
     }
@@ -326,6 +203,7 @@ Responda APENAS com o JSON válido, sem nenhum texto adicional.
   }
 }
 
+// Função para analisar estatísticas pessoais
 async function analisarEstatisticasPessoais(agendamentos, userEmail) {
   try {
     const estatisticas = {
@@ -373,7 +251,215 @@ Seja encorajador e prático. Máximo de 200 palavras.
   }
 }
 
-// ==================== CONFIGURAÇÃO GOOGLE SHEETS ====================
+// ==================== ROTAS IA ====================
+
+// Rota do assistente de IA - USE ECONÔMICO
+app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
+  try {
+    const { mensagem } = req.body;
+    const userEmail = req.user.email;
+
+    if (!mensagem) {
+      return res.status(400).json({ success: false, msg: "Mensagem é obrigatória" });
+    }
+
+    // Busca agendamentos recentes para contexto
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("email", userEmail)
+      .order("data", { ascending: false })
+      .limit(5);
+
+    if (error) throw error;
+
+    const contexto = agendamentos && agendamentos.length > 0 
+      ? `Aqui estão os últimos agendamentos do usuário para contexto:\n${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}`
+      : "O usuário ainda não tem agendamentos.";
+
+    const resposta = await chamarDeepSeekIA(mensagem, contexto, "ECONOMICO"); // 💰 USANDO ECONÔMICO
+
+    res.json({
+      success: true,
+      resposta,
+      agendamentos_referenciados: agendamentos?.length || 0
+    });
+
+  } catch (error) {
+    console.error("Erro no assistente IA:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao processar pergunta com IA",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// ==================== ROTA SUGERIR HORÁRIOS ====================
+
+// Rota para sugerir horários livres
+app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
+    try {
+        const userEmail = req.user.email;
+
+        // Busca todos os agendamentos
+        const { data: agendamentos, error } = await supabase
+            .from("agendamentos")
+            .select("*")
+            .eq("email", userEmail)
+            .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
+            .order("data", { ascending: true })
+            .order("horario", { ascending: true });
+
+        if (error) throw error;
+
+        // Análise inteligente com IA
+        const sugestoes = await analisarHorariosLivres(agendamentos || [], userEmail);
+
+        res.json({
+            success: true,
+            sugestoes: sugestoes,
+            total_agendamentos: agendamentos?.length || 0
+        });
+
+    } catch (error) {
+        console.error("Erro ao sugerir horários:", error);
+        res.status(500).json({ 
+            success: false, 
+            msg: "Erro ao analisar horários livres",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Função para analisar horários livres
+async function analisarHorariosLivres(agendamentos, userEmail) {
+    try {
+        const contexto = `
+ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
+
+Dados da agenda do usuário ${userEmail}:
+
+AGENDAMENTOS EXISTENTES (próximos 7 dias):
+${agendamentos.length > 0 ? 
+    agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome}`).join('\n') 
+    : 'Nenhum agendamento futuro encontrado.'
+}
+
+DATA ATUAL: ${new Date().toISOString().split('T')[0]}
+
+INSTRUÇÕES:
+Analise a agenda acima e sugira os MELHORES horários livres para os próximos 7 dias.
+Considere:
+- Horários comerciais (9h-18h)
+- Evitar início/fim de dia
+- Espaçamento entre compromissos
+- Balancear dias da semana
+
+FORMATO DA RESPOSTA:
+Forneça uma lista de 3-5 sugestões de horários no formato:
+"📅 [DIA] às [HORÁRIO] - [CONTEXTO/SUGESTÃO]"
+
+Exemplo:
+"📅 Segunda-feira às 14:00 - Período da tarde, bom para reuniões
+📅 Quarta-feira às 10:30 - Horário produtivo para trabalho focado"
+
+Seja prático, útil e use emojis. Máximo de 150 palavras.
+`;
+
+        // No backend, na função analisarHorariosLivres:
+return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horários livres:", contexto, "ECONOMICO");
+    } catch (error) {
+        console.error("Erro na análise de horários:", error);
+        return "📅 **Sugestões de Horários:**\n\n- Segunda-feira: 14h-16h (tarde)\n- Quarta-feira: 10h-12h (manhã)\n- Sexta-feira: 15h-17h (final de semana próximo)\n\n💡 **Dica:** Estes são horários typically produtivos com boa disponibilidade.";
+    }
+}
+
+// Rota de sugestões inteligentes
+app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `sugestoes_${userEmail}`;
+
+    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
+      // Busca todos os agendamentos
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true });
+
+      if (error) throw error;
+
+      if (!agendamentos || agendamentos.length === 0) {
+        return {
+          sugestoes: "📝 Você ainda não tem agendamentos. Que tal agendar seu primeiro compromisso? Use o agendamento por IA para facilitar!",
+          total_agendamentos: 0
+        };
+      }
+
+      const sugestoes = await gerarSugestoesInteligentes(agendamentos, userEmail);
+
+      return {
+        sugestoes,
+        total_agendamentos: agendamentos.length
+      };
+    }, 10 * 60 * 1000); // Cache de 10 minutos para sugestões
+
+    res.json({
+      success: true,
+      ...resultado
+    });
+
+  } catch (error) {
+    console.error("Erro nas sugestões inteligentes:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar sugestões inteligentes",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Rota de estatísticas pessoais com IA
+app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `estatisticas_${userEmail}`;
+
+    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
+      // Busca todos os agendamentos
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail);
+
+      if (error) throw error;
+
+      return await analisarEstatisticasPessoais(agendamentos || [], userEmail);
+    }, 5 * 60 * 1000); // Cache de 5 minutos para estatísticas
+
+    res.json({
+      success: true,
+      ...resultado
+    });
+
+  } catch (error) {
+    console.error("Erro nas estatísticas pessoais:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar estatísticas pessoais",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
 let creds;
 try {
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -382,6 +468,7 @@ try {
   process.exit(1);
 }
 
+// ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
 async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
     const spreadsheetId = userMetadata?.spreadsheet_id;
@@ -440,7 +527,33 @@ async function createSpreadsheetForUser(userEmail, userName) {
   }
 }
 
-// ==================== MIDDLEWARE AUTH ====================
+async function ensureDynamicHeaders(sheet, newKeys) {
+  await sheet.loadHeaderRow().catch(async () => await sheet.setHeaderRow(newKeys));
+  const currentHeaders = sheet.headerValues || [];
+  const headersToAdd = newKeys.filter((k) => !currentHeaders.includes(k));
+  if (headersToAdd.length > 0) {
+    await sheet.setHeaderRow([...currentHeaders, ...headersToAdd]);
+  }
+}
+
+async function updateRowInSheet(sheet, rowId, updatedData) {
+  if (!sheet) return;
+  
+  await sheet.loadHeaderRow();
+  const rows = await sheet.getRows();
+  const row = rows.find(r => r.id === rowId);
+  if (row) {
+    Object.keys(updatedData).forEach(key => {
+      if (sheet.headerValues.includes(key)) row[key] = updatedData[key];
+    });
+    await row.save();
+  } else {
+    await ensureDynamicHeaders(sheet, Object.keys(updatedData));
+    await sheet.addRow(updatedData);
+  }
+}
+
+// ---------------- MIDDLEWARE AUTH ----------------
 async function authMiddleware(req, res, next) {
   const token = req.headers["authorization"]?.split("Bearer ")[1];
   if (!token) return res.status(401).json({ msg: "Token não enviado" });
@@ -452,164 +565,18 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ==================== HANDLERS COM CACHE INTELIGENTE - CORRIGIDOS ====================
-async function handleAgendar(dados, userEmail, userMetadata, isRetry = false) {
-  try {
-    // 1️⃣ Backup no Google Sheets primeiro
-    const doc = await accessUserSpreadsheet(userEmail, userMetadata);
-    
-    if (doc) {
-      const sheet = doc.sheetsByIndex[0];
-      await sheet.addRow({
-        ...dados,
-        id: `temp_${Date.now()}`,
-        email: userEmail,
-        criado_em: new Date().toISOString(),
-        status: 'pendente'
-      });
-    }
-
-    // 2️⃣ Insert no Supabase
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .insert([{ ...dados, email: userEmail }])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // 3️⃣ Invalidar cache
-    cacheManager.deletePattern(`agendamentos_${userEmail}`);
-    cacheManager.deletePattern(`estatisticas_${userEmail}`);
-    cacheManager.deletePattern(`sugestoes_${userEmail}`);
-
-    console.log('✅ Agendamento criado com cache invalidation');
-
-    return { success: true, data };
-
-  } catch (error) {
-    console.error('❌ Erro ao agendar:', error);
-    
-    if (!isRetry) {
-      // Adiciona à fila de ações pendentes
-      offlineManager.addAction(userEmail, {
-        type: 'CREATE_AGENDAMENTO',
-        data: dados
-      });
-      console.log('📝 Agendamento adicionado à fila offline');
-    }
-    
-    return { success: false, error: error.message };
-  }
-}
-
-async function handleAtualizarAgendamento(agendamentoId, dados, userEmail, userMetadata, isRetry = false) {
-  try {
-    // 1️⃣ Atualizar no Supabase
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .update(dados)
-      .eq("id", agendamentoId)
-      .eq("email", userEmail)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // 2️⃣ Invalidar cache
-    cacheManager.deletePattern(`agendamentos_${userEmail}`);
-    cacheManager.deletePattern(`estatisticas_${userEmail}`);
-    cacheManager.deletePattern(`sugestoes_${userEmail}`);
-
-    console.log('✅ Agendamento atualizado com cache invalidation');
-
-    return { success: true, data };
-
-  } catch (error) {
-    console.error('❌ Erro ao atualizar agendamento:', error);
-    
-    if (!isRetry) {
-      offlineManager.addAction(userEmail, {
-        type: 'UPDATE_AGENDAMENTO',
-        agendamentoId,
-        data: dados
-      });
-    }
-    
-    return { success: false, error: error.message };
-  }
-}
-
-async function handleCancelarAgendamento(agendamentoId, userEmail, userMetadata, isRetry = false) {
-  try {
-    // 1️⃣ Buscar dados antes de deletar para backup
-    const { data: agendamento } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("id", agendamentoId)
-      .eq("email", userEmail)
-      .single();
-
-    // 2️⃣ Backup no Sheets antes de deletar
-    if (agendamento) {
-      const doc = await accessUserSpreadsheet(userEmail, userMetadata);
-      
-      if (doc) {
-        const sheet = doc.sheetsByIndex[0];
-        await sheet.addRow({
-          ...agendamento,
-          status: 'cancelado',
-          canceled_at: new Date().toISOString()
-        });
-      }
-    }
-
-    // 3️⃣ Delete do Supabase
-    const { error } = await supabase
-      .from("agendamentos")
-      .delete()
-      .eq("id", agendamentoId)
-      .eq("email", userEmail);
-
-    if (error) throw error;
-
-    // 4️⃣ Invalidar cache
-    cacheManager.deletePattern(`agendamentos_${userEmail}`);
-    cacheManager.deletePattern(`estatisticas_${userEmail}`);
-    cacheManager.deletePattern(`sugestoes_${userEmail}`);
-
-    console.log('✅ Agendamento cancelado com cache invalidation');
-
-    return { success: true };
-
-  } catch (error) {
-    console.error('❌ Erro ao cancelar agendamento:', error);
-    
-    if (!isRetry) {
-      offlineManager.addAction(userEmail, {
-        type: 'DELETE_AGENDAMENTO',
-        agendamentoId
-      });
-    }
-    
-    return { success: false, error: error.message };
-  }
-}
-
-// ==================== ROTAS ATUALIZADAS COM CACHE ====================
-
-// 🔥 HEALTH CHECKS
+// ==================== HEALTH CHECKS OTIMIZADOS ====================
 app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Backend rodando com CACHE INTELIGENTE",
+    message: "Backend rodando com otimizações e IA",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    cache_size: cache.size,
-    pending_actions: pendingActions.size
+    ia_configurada: !!DEEPSEEK_API_KEY
   });
 });
 
+// Novo endpoint para warm-up (para o teu ping)
 app.get("/warmup", async (req, res) => {
   try {
     const { data, error } = await supabase.from('agendamentos').select('count').limit(1);
@@ -618,7 +585,7 @@ app.get("/warmup", async (req, res) => {
       status: "WARM", 
       timestamp: new Date().toISOString(),
       supabase: error ? "offline" : "online",
-      cache: "active"
+      ia: DEEPSEEK_API_KEY ? "configurada" : "não configurada"
     });
   } catch (error) {
     res.json({ 
@@ -629,7 +596,9 @@ app.get("/warmup", async (req, res) => {
   }
 });
 
-// 🔥 LISTAR AGENDAMENTOS COM CACHE HÍBRIDO
+// ==================== ROTAS COM CACHE CORRIGIDAS ====================
+
+// 🔥 AGENDAMENTOS COM CACHE
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
@@ -646,7 +615,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
 
       if (error) throw error;
       return data;
-    }, 2 * 60 * 1000); // 2 minutos cache
+    });
 
     res.json({ agendamentos });
   } catch (err) {
@@ -655,304 +624,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 CRIAR AGENDAMENTO COM ATUALIZAÇÃO OTIMISTA
-app.post("/agendamentos", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const userMetadata = req.user.user_metadata;
-    const dados = req.body;
-
-    const resultado = await handleAgendar(dados, userEmail, userMetadata);
-
-    if (resultado.success) {
-      res.json({ 
-        success: true, 
-        agendamento: resultado.data,
-        pending: offlineManager.getActions(userEmail).length > 0
-      });
-    } else {
-      res.status(500).json({ 
-        success: false, 
-        msg: "Erro ao criar agendamento",
-        pending: true // Indica que foi para fila offline
-      });
-    }
-  } catch (err) {
-    console.error("Erro ao criar agendamento:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// 🔥 ATUALIZAR AGENDAMENTO COM SYNC EM BACKGROUND
-app.put("/agendamentos/:id", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const userMetadata = req.user.user_metadata;
-    const agendamentoId = req.params.id;
-    const dados = req.body;
-
-    const resultado = await handleAtualizarAgendamento(agendamentoId, dados, userEmail, userMetadata);
-
-    if (resultado.success) {
-      res.json({ 
-        success: true, 
-        agendamento: resultado.data 
-      });
-    } else {
-      res.status(500).json({ 
-        success: false, 
-        msg: "Erro ao atualizar agendamento",
-        pending: true
-      });
-    }
-  } catch (err) {
-    console.error("Erro ao atualizar agendamento:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// 🔥 CANCELAR AGENDAMENTO COM DELETE OTIMISTA
-app.delete("/agendamentos/:id", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const userMetadata = req.user.user_metadata;
-    const agendamentoId = req.params.id;
-
-    const resultado = await handleCancelarAgendamento(agendamentoId, userEmail, userMetadata);
-
-    if (resultado.success) {
-      res.json({ 
-        success: true, 
-        msg: "Agendamento cancelado com sucesso" 
-      });
-    } else {
-      res.status(500).json({ 
-        success: false, 
-        msg: "Erro ao cancelar agendamento",
-        pending: true
-      });
-    }
-  } catch (err) {
-    console.error("Erro ao cancelar agendamento:", err);
-    res.status(500).json({ msg: "Erro interno" });
-  }
-});
-
-// 🔥 OFFLINE SYNC - RETRY PENDING ACTIONS
-app.post("/offline/sync", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const userMetadata = req.user.user_metadata;
-    
-    const results = await offlineManager.retryPendingActions(userEmail);
-    
-    res.json({
-      success: true,
-      results,
-      pending_remaining: offlineManager.getActions(userEmail).length
-    });
-  } catch (error) {
-    console.error("Erro no sync offline:", error);
-    res.status(500).json({ 
-      success: false, 
-      msg: "Erro ao sincronizar ações pendentes" 
-    });
-  }
-});
-
-// 🔥 CHECK PENDING ACTIONS
-app.get("/offline/pending", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const pending = offlineManager.getActions(userEmail);
-    
-    res.json({
-      success: true,
-      pending_actions: pending,
-      count: pending.length
-    });
-  } catch (error) {
-    console.error("Erro ao verificar ações pendentes:", error);
-    res.status(500).json({ 
-      success: false, 
-      msg: "Erro ao verificar ações pendentes" 
-    });
-  }
-});
-
-// ==================== ROTAS IA (MANTIDAS ORIGINAIS COM CACHE) ====================
-
-app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
-  try {
-    const { mensagem } = req.body;
-    const userEmail = req.user.email;
-
-    if (!mensagem) {
-      return res.status(400).json({ success: false, msg: "Mensagem é obrigatória" });
-    }
-
-    const { data: agendamentos, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("email", userEmail)
-      .order("data", { ascending: false })
-      .limit(5);
-
-    if (error) throw error;
-
-    const contexto = agendamentos && agendamentos.length > 0 
-      ? `Aqui estão os últimos agendamentos do usuário para contexto:\n${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}`
-      : "O usuário ainda não tem agendamentos.";
-
-    const resposta = await chamarDeepSeekIA(mensagem, contexto, "ECONOMICO");
-
-    res.json({
-      success: true,
-      resposta,
-      agendamentos_referenciados: agendamentos?.length || 0
-    });
-
-  } catch (error) {
-    console.error("Erro no assistente IA:", error);
-    res.status(500).json({ 
-      success: false, 
-      msg: "Erro ao processar pergunta com IA",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// 🔥 SUGERIR HORÁRIOS COM CACHE
-app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const cacheKey = `sugerir_horarios_${userEmail}`;
-
-    const sugestoes = await cacheManager.getOrSet(cacheKey, async () => {
-      const { data: agendamentos, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", userEmail)
-        .gte("data", new Date().toISOString().split('T')[0])
-        .order("data", { ascending: true })
-        .order("horario", { ascending: true });
-
-      if (error) throw error;
-
-      // Sua lógica original de análise de horários
-      const contexto = `
-ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
-Dados da agenda do usuário ${userEmail}:
-AGENDAMENTOS EXISTENTES:
-${agendamentos.length > 0 ? 
-  agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome}`).join('\n') 
-  : 'Nenhum agendamento futuro encontrado.'
-}
-DATA ATUAL: ${new Date().toISOString().split('T')[0]}
-`;
-
-      return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horários livres:", contexto, "ECONOMICO");
-    }, 10 * 60 * 1000); // 10 minutos cache
-
-    res.json({
-      success: true,
-      sugestoes: sugestoes,
-      total_agendamentos: 0 // Pode ajustar conforme necessário
-    });
-
-  } catch (error) {
-    console.error("Erro ao sugerir horários:", error);
-    res.status(500).json({ 
-      success: false, 
-      msg: "Erro ao analisar horários livres" 
-    });
-  }
-});
-
-// 🔥 ESTATÍSTICAS COM CACHE
-app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const cacheKey = `estatisticas_${userEmail}`;
-
-    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
-      const { data: agendamentos, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", userEmail);
-
-      if (error) throw error;
-      return await analisarEstatisticasPessoais(agendamentos || [], userEmail);
-    }, 5 * 60 * 1000); // 5 minutos cache
-
-    res.json({
-      success: true,
-      ...resultado
-    });
-
-  } catch (error) {
-    console.error("Erro nas estatísticas pessoais:", error);
-    res.status(500).json({ 
-      success: false, 
-      msg: "Erro ao gerar estatísticas pessoais" 
-    });
-  }
-});
-
-// 🔥 SUGESTÕES INTELIGENTES COM CACHE  
-app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const cacheKey = `sugestoes_${userEmail}`;
-
-    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
-      const { data: agendamentos, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("email", userEmail)
-        .order("data", { ascending: true });
-
-      if (error) throw error;
-
-      if (!agendamentos || agendamentos.length === 0) {
-        return {
-          sugestoes: "📝 Você ainda não tem agendamentos. Que tal agendar seu primeiro compromisso? Use o agendamento por IA para facilitar!",
-          total_agendamentos: 0
-        };
-      }
-
-      // Sua lógica original para gerar sugestões
-      const contexto = `
-Agendamentos do usuário ${userEmail}:
-${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}
-
-Forneça sugestões inteligentes baseadas nos padrões de agendamento.
-`;
-
-      const sugestoes = await chamarDeepSeekIA("Analise esses agendamentos e forneça sugestões úteis:", contexto, "ECONOMICO");
-
-      return {
-        sugestoes,
-        total_agendamentos: agendamentos.length
-      };
-    }, 10 * 60 * 1000); // 10 minutos cache
-
-    res.json({
-      success: true,
-      ...resultado
-    });
-
-  } catch (error) {
-    console.error("Erro nas sugestões inteligentes:", error);
-    res.status(500).json({ 
-      success: false, 
-      msg: "Erro ao gerar sugestões inteligentes" 
-    });
-  }
-});
-
-// ==================== CONFIGURAÇÃO SHEETS (MANTIDA ORIGINAL) ====================
-
+// 🔥 CONFIGURAÇÃO SHEETS COM CACHE
 app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
@@ -969,46 +641,281 @@ app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
     res.json(config);
     
   } catch (err) {
-    console.error("Erro ao buscar configuração:", err);
+    console.error("Erro ao verificar configuração:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
 
+// 🔥 CONFIGURAR SHEETS COM INVALIDAÇÃO DE CACHE
 app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   try {
+    const { spreadsheetId, criarAutomatico } = req.body;
     const userEmail = req.user.email;
-    const { userName } = req.body;
+    
+    console.log('🔧 Configurando Sheets para:', userEmail, { spreadsheetId, criarAutomatico });
+    
+    let finalSpreadsheetId = spreadsheetId;
 
-    const spreadsheetId = await createSpreadsheetForUser(userEmail, userName);
+    if (criarAutomatico) {
+      console.log('🔧 Criando planilha automática para:', userEmail);
+      finalSpreadsheetId = await createSpreadsheetForUser(userEmail, req.user.user_metadata?.name);
+      console.log('✅ Planilha criada com ID:', finalSpreadsheetId);
+    }
 
-    const { error } = await supabase.auth.admin.updateUserById(
+    if (!finalSpreadsheetId) {
+      return res.status(400).json({ msg: "Spreadsheet ID é obrigatório" });
+    }
+
+    try {
+      console.log('🔧 Verificando acesso à planilha:', finalSpreadsheetId);
+      const doc = new GoogleSpreadsheet(finalSpreadsheetId);
+      await doc.useServiceAccountAuth(creds);
+      await doc.loadInfo();
+      console.log('✅ Planilha acessível:', doc.title);
+    } catch (accessError) {
+      console.error('❌ Erro ao acessar planilha:', accessError.message);
+      return res.status(400).json({ 
+        msg: "Não foi possível acessar a planilha. Verifique o ID e as permissões." 
+      });
+    }
+
+    const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(
       req.user.id,
-      { user_metadata: { spreadsheet_id: spreadsheetId } }
+      { 
+        user_metadata: { 
+          ...req.user.user_metadata,
+          spreadsheet_id: finalSpreadsheetId 
+        } 
+      }
     );
 
-    if (error) throw error;
+    if (updateError) {
+      console.error('❌ Erro ao atualizar usuário:', updateError);
+      throw updateError;
+    }
 
-    // Invalidar cache de configuração
+    console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
+    
+    // 🔥 INVALIDA CACHE CORRETAMENTE
     cacheManager.delete(`config_${userEmail}`);
-
+    cacheManager.delete(`agendamentos_${userEmail}`);
+    
+    console.log('✅ Sheets configurado com sucesso para:', userEmail);
+    
     res.json({ 
-      success: true, 
-      spreadsheetId,
-      msg: "Planilha configurada com sucesso!" 
+      msg: criarAutomatico ? "✅ Planilha criada e configurada com sucesso!" : "✅ Spreadsheet configurado com sucesso!",
+      spreadsheetId: finalSpreadsheetId
     });
 
   } catch (err) {
-    console.error("Erro ao configurar sheets:", err);
-    res.status(500).json({ msg: err.message });
+    console.error("❌ Erro ao configurar sheets:", err);
+    res.status(500).json({ 
+      msg: "Erro interno do servidor",
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// ==================== INICIALIZAR SERVER ====================
+// 🔥 AGENDAR COM INVALIDAÇÃO DE CACHE
+app.post("/agendar", authMiddleware, async (req, res) => {
+  try {
+    const { Nome, Email, Telefone, Data, Horario } = req.body;
+    if (!Nome || !Email || !Telefone || !Data || !Horario)
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+
+    const userEmail = req.user.email;
+    const emailNormalizado = Email.toLowerCase().trim();
+    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
+
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: userEmail,
+        nome: Nome,
+        email: userEmail,
+        telefone: Telefone,
+        data: dataNormalizada,
+        horario: Horario,
+        status: "pendente",
+        confirmado: false,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          msg: "Você já possui um agendamento para esta data e horário" 
+        });
+      }
+      throw error;
+    }
+
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+        console.log(`✅ Agendamento salvo na planilha do usuário ${userEmail}`);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
+    
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+
+  } catch (err) {
+    console.error("Erro no /agendar:", err);
+    res.status(500).json({ msg: "Erro interno no servidor" });
+  }
+});
+
+// 🔥 CONFIRMAR COM INVALIDAÇÃO DE CACHE
+app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user.email;
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ confirmado: true, status: "confirmado" })
+      .eq("id", id)
+      .eq("email", userEmail)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
+    
+    res.json({ msg: "Agendamento confirmado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao confirmar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 CANCELAR COM INVALIDAÇÃO DE CACHE
+app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user.email;
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ status: "cancelado", confirmado: false })
+      .eq("id", id)
+      .eq("email", userEmail)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
+    
+    res.json({ msg: "Agendamento cancelado", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao cancelar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 REAGENDAR COM INVALIDAÇÃO DE CACHE
+app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { novaData, novoHorario } = req.body;
+    const userEmail = req.user.email;
+    
+    if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
+    
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ 
+        data: novaData, 
+        horario: novoHorario,
+        status: "pendente",
+        confirmado: false
+      })
+      .eq("id", id)
+      .eq("email", userEmail)
+      .select()
+      .single();
+    
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          msg: "Você já possui um agendamento para esta nova data e horário" 
+        });
+      }
+      throw error;
+    }
+    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE CORRETAMENTE
+    cacheManager.delete(`agendamentos_${userEmail}`);
+    
+    res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
+  } catch (err) {
+    console.error("Erro ao reagendar:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ---------------- Error Handling ----------------
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ msg: "Algo deu errado!" });
+});
+
+app.use("*", (req, res) => {
+  res.status(404).json({ msg: "Endpoint não encontrado" });
+});
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📦 Cache inteligente: ATIVO`);
-  console.log(`🔔 Supabase Realtime: CONECTADO`);
-  console.log(`📱 Sistema offline: PRONTO`);
-  console.log(`🤖 IA DeepSeek: ${DEEPSEEK_API_KEY ? 'CONFIGURADA' : 'NÃO CONFIGURADA'}`);
+  console.log(`🚀 Backend otimizado rodando na porta ${PORT}`);
+  console.log('✅ Cache em memória ativo');
+  console.log('✅ Health checks otimizados');
+  console.log('🤖 DeepSeek IA: ' + (DEEPSEEK_API_KEY ? 'CONFIGURADA' : 'NÃO CONFIGURADA'));
+  console.log('📊 Use /health para status completo');
+  console.log('🔥 Use /warmup para manter instância ativa');
 });
+
+
+
+
+
+
+
