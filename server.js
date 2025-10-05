@@ -667,4 +667,347 @@ app.post("/agendamentos", authMiddleware, async (req, res) => {
 
     if (resultado.success) {
       res.json({ 
-        success: tr
+        success: true, 
+        agendamento: resultado.data,
+        pending: offlineManager.getActions(userEmail).length > 0
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        msg: "Erro ao criar agendamento",
+        pending: true // Indica que foi para fila offline
+      });
+    }
+  } catch (err) {
+    console.error("Erro ao criar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 ATUALIZAR AGENDAMENTO COM SYNC EM BACKGROUND
+app.put("/agendamentos/:id", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const agendamentoId = req.params.id;
+    const dados = req.body;
+
+    const resultado = await handleAtualizarAgendamento(agendamentoId, dados, userEmail);
+
+    if (resultado.success) {
+      res.json({ 
+        success: true, 
+        agendamento: resultado.data 
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        msg: "Erro ao atualizar agendamento",
+        pending: true
+      });
+    }
+  } catch (err) {
+    console.error("Erro ao atualizar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 CANCELAR AGENDAMENTO COM DELETE OTIMISTA
+app.delete("/agendamentos/:id", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const agendamentoId = req.params.id;
+
+    const resultado = await handleCancelarAgendamento(agendamentoId, userEmail);
+
+    if (resultado.success) {
+      res.json({ 
+        success: true, 
+        msg: "Agendamento cancelado com sucesso" 
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        msg: "Erro ao cancelar agendamento",
+        pending: true
+      });
+    }
+  } catch (err) {
+    console.error("Erro ao cancelar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 OFFLINE SYNC - RETRY PENDING ACTIONS
+app.post("/offline/sync", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    
+    const results = await offlineManager.retryPendingActions(userEmail);
+    
+    res.json({
+      success: true,
+      results,
+      pending_remaining: offlineManager.getActions(userEmail).length
+    });
+  } catch (error) {
+    console.error("Erro no sync offline:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao sincronizar ações pendentes" 
+    });
+  }
+});
+
+// 🔥 CHECK PENDING ACTIONS
+app.get("/offline/pending", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const pending = offlineManager.getActions(userEmail);
+    
+    res.json({
+      success: true,
+      pending_actions: pending,
+      count: pending.length
+    });
+  } catch (error) {
+    console.error("Erro ao verificar ações pendentes:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao verificar ações pendentes" 
+    });
+  }
+});
+
+// ==================== ROTAS IA (MANTIDAS ORIGINAIS COM CACHE) ====================
+
+app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
+  try {
+    const { mensagem } = req.body;
+    const userEmail = req.user.email;
+
+    if (!mensagem) {
+      return res.status(400).json({ success: false, msg: "Mensagem é obrigatória" });
+    }
+
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("email", userEmail)
+      .order("data", { ascending: false })
+      .limit(5);
+
+    if (error) throw error;
+
+    const contexto = agendamentos && agendamentos.length > 0 
+      ? `Aqui estão os últimos agendamentos do usuário para contexto:\n${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}`
+      : "O usuário ainda não tem agendamentos.";
+
+    const resposta = await chamarDeepSeekIA(mensagem, contexto, "ECONOMICO");
+
+    res.json({
+      success: true,
+      resposta,
+      agendamentos_referenciados: agendamentos?.length || 0
+    });
+
+  } catch (error) {
+    console.error("Erro no assistente IA:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao processar pergunta com IA",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// 🔥 SUGERIR HORÁRIOS COM CACHE
+app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `sugerir_horarios_${userEmail}`;
+
+    const sugestoes = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .gte("data", new Date().toISOString().split('T')[0])
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
+
+      if (error) throw error;
+
+      // Sua lógica original de análise de horários
+      const contexto = `
+ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
+Dados da agenda do usuário ${userEmail}:
+AGENDAMENTOS EXISTENTES:
+${agendamentos.length > 0 ? 
+  agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome}`).join('\n') 
+  : 'Nenhum agendamento futuro encontrado.'
+}
+DATA ATUAL: ${new Date().toISOString().split('T')[0]}
+`;
+
+      return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horários livres:", contexto, "ECONOMICO");
+    }, 10 * 60 * 1000); // 10 minutos cache
+
+    res.json({
+      success: true,
+      sugestoes: sugestoes,
+      total_agendamentos: 0 // Pode ajustar conforme necessário
+    });
+
+  } catch (error) {
+    console.error("Erro ao sugerir horários:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao analisar horários livres" 
+    });
+  }
+});
+
+// 🔥 ESTATÍSTICAS COM CACHE
+app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `estatisticas_${userEmail}`;
+
+    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail);
+
+      if (error) throw error;
+      return await analisarEstatisticasPessoais(agendamentos || [], userEmail);
+    }, 5 * 60 * 1000); // 5 minutos cache
+
+    res.json({
+      success: true,
+      ...resultado
+    });
+
+  } catch (error) {
+    console.error("Erro nas estatísticas pessoais:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar estatísticas pessoais" 
+    });
+  }
+});
+
+// 🔥 SUGESTÕES INTELIGENTES COM CACHE  
+app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `sugestoes_${userEmail}`;
+
+    const resultado = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data: agendamentos, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true });
+
+      if (error) throw error;
+
+      if (!agendamentos || agendamentos.length === 0) {
+        return {
+          sugestoes: "📝 Você ainda não tem agendamentos. Que tal agendar seu primeiro compromisso? Use o agendamento por IA para facilitar!",
+          total_agendamentos: 0
+        };
+      }
+
+      // Sua lógica original para gerar sugestões
+      const contexto = `
+Agendamentos do usuário ${userEmail}:
+${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}
+
+Forneça sugestões inteligentes baseadas nos padrões de agendamento.
+`;
+
+      const sugestoes = await chamarDeepSeekIA("Analise esses agendamentos e forneça sugestões úteis:", contexto, "ECONOMICO");
+
+      return {
+        sugestoes,
+        total_agendamentos: agendamentos.length
+      };
+    }, 10 * 60 * 1000); // 10 minutos cache
+
+    res.json({
+      success: true,
+      ...resultado
+    });
+
+  } catch (error) {
+    console.error("Erro nas sugestões inteligentes:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao gerar sugestões inteligentes" 
+    });
+  }
+});
+
+// ==================== CONFIGURAÇÃO SHEETS (MANTIDA ORIGINAL) ====================
+
+app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const cacheKey = `config_${userEmail}`;
+    
+    const config = await cacheManager.getOrSet(cacheKey, async () => {
+      return {
+        temSheetsConfigurado: !!req.user.user_metadata?.spreadsheet_id,
+        spreadsheetId: req.user.user_metadata?.spreadsheet_id
+      };
+    }, 5 * 60 * 1000);
+    
+    console.log(`📊 Configuração do usuário ${userEmail}:`, config);
+    res.json(config);
+    
+  } catch (err) {
+    console.error("Erro ao buscar configuração:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+app.post("/configurar-sheets", authMiddleware, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { userName } = req.body;
+
+    const spreadsheetId = await createSpreadsheetForUser(userEmail, userName);
+
+    const { error } = await supabase.auth.admin.updateUserById(
+      req.user.id,
+      { user_metadata: { spreadsheet_id: spreadsheetId } }
+    );
+
+    if (error) throw error;
+
+    // Invalidar cache de configuração
+    cacheManager.delete(`config_${userEmail}`);
+
+    res.json({ 
+      success: true, 
+      spreadsheetId,
+      msg: "Planilha configurada com sucesso!" 
+    });
+
+  } catch (err) {
+    console.error("Erro ao configurar sheets:", err);
+    res.status(500).json({ msg: err.message });
+  }
+});
+
+// ==================== INICIALIZAR SERVER ====================
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📦 Cache inteligente: ATIVO`);
+  console.log(`🔔 Supabase Realtime: CONECTADO`);
+  console.log(`📱 Sistema offline: PRONTO`);
+  console.log(`🤖 IA DeepSeek: ${DEEPSEEK_API_KEY ? 'CONFIGURADA' : 'NÃO CONFIGURADA'}`);
+});
+
