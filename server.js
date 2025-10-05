@@ -452,11 +452,10 @@ async function authMiddleware(req, res, next) {
   next();
 }
 
-// ==================== HANDLERS COM CACHE INTELIGENTE ====================
-async function handleAgendar(dados, userEmail, isRetry = false) {
+// ==================== HANDLERS COM CACHE INTELIGENTE - CORRIGIDOS ====================
+async function handleAgendar(dados, userEmail, userMetadata, isRetry = false) {
   try {
     // 1️⃣ Backup no Google Sheets primeiro
-    const userMetadata = (await supabase.auth.admin.getUserById(req.user.id)).data.user?.user_metadata;
     const doc = await accessUserSpreadsheet(userEmail, userMetadata);
     
     if (doc) {
@@ -504,7 +503,7 @@ async function handleAgendar(dados, userEmail, isRetry = false) {
   }
 }
 
-async function handleAtualizarAgendamento(agendamentoId, dados, userEmail, isRetry = false) {
+async function handleAtualizarAgendamento(agendamentoId, dados, userEmail, userMetadata, isRetry = false) {
   try {
     // 1️⃣ Atualizar no Supabase
     const { data, error } = await supabase
@@ -541,7 +540,7 @@ async function handleAtualizarAgendamento(agendamentoId, dados, userEmail, isRet
   }
 }
 
-async function handleCancelarAgendamento(agendamentoId, userEmail, isRetry = false) {
+async function handleCancelarAgendamento(agendamentoId, userEmail, userMetadata, isRetry = false) {
   try {
     // 1️⃣ Buscar dados antes de deletar para backup
     const { data: agendamento } = await supabase
@@ -553,7 +552,6 @@ async function handleCancelarAgendamento(agendamentoId, userEmail, isRetry = fal
 
     // 2️⃣ Backup no Sheets antes de deletar
     if (agendamento) {
-      const userMetadata = (await supabase.auth.admin.getUserById(req.user.id)).data.user?.user_metadata;
       const doc = await accessUserSpreadsheet(userEmail, userMetadata);
       
       if (doc) {
@@ -661,9 +659,10 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
 app.post("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
+    const userMetadata = req.user.user_metadata;
     const dados = req.body;
 
-    const resultado = await handleAgendar(dados, userEmail);
+    const resultado = await handleAgendar(dados, userEmail, userMetadata);
 
     if (resultado.success) {
       res.json({ 
@@ -688,10 +687,11 @@ app.post("/agendamentos", authMiddleware, async (req, res) => {
 app.put("/agendamentos/:id", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
+    const userMetadata = req.user.user_metadata;
     const agendamentoId = req.params.id;
     const dados = req.body;
 
-    const resultado = await handleAtualizarAgendamento(agendamentoId, dados, userEmail);
+    const resultado = await handleAtualizarAgendamento(agendamentoId, dados, userEmail, userMetadata);
 
     if (resultado.success) {
       res.json({ 
@@ -715,9 +715,10 @@ app.put("/agendamentos/:id", authMiddleware, async (req, res) => {
 app.delete("/agendamentos/:id", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
+    const userMetadata = req.user.user_metadata;
     const agendamentoId = req.params.id;
 
-    const resultado = await handleCancelarAgendamento(agendamentoId, userEmail);
+    const resultado = await handleCancelarAgendamento(agendamentoId, userEmail, userMetadata);
 
     if (resultado.success) {
       res.json({ 
@@ -741,6 +742,7 @@ app.delete("/agendamentos/:id", authMiddleware, async (req, res) => {
 app.post("/offline/sync", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
+    const userMetadata = req.user.user_metadata;
     
     const results = await offlineManager.retryPendingActions(userEmail);
     
@@ -1010,4 +1012,3 @@ app.listen(PORT, () => {
   console.log(`📱 Sistema offline: PRONTO`);
   console.log(`🤖 IA DeepSeek: ${DEEPSEEK_API_KEY ? 'CONFIGURADA' : 'NÃO CONFIGURADA'}`);
 });
-
