@@ -716,7 +716,7 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 AGENDAR COM INVALIDAÇÃO DE CACHE
+// 🔥 AGENDAR COM CACHE E INVALIDAÇÃO
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -724,9 +724,33 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
     const userEmail = req.user.email;
-    const emailNormalizado = Email.toLowerCase().trim();
-    const dataNormalizada = new Date(Data).toISOString().split("T")[0];
+    const cacheKey = `agendamentos_${userEmail}`;
+    
+    // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
+    const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
 
+      if (error) throw error;
+      return data || [];
+    });
+
+    // Verifica conflito usando dados em cache
+    const conflito = agendamentosExistentes.find(a => 
+      a.data === Data && a.horario === Horario
+    );
+    
+    if (conflito) {
+      return res.status(400).json({ 
+        msg: "Você já possui um agendamento para esta data e horário" 
+      });
+    }
+
+    // Se não há conflito, cria o agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -734,7 +758,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         nome: Nome,
         email: userEmail,
         telefone: Telefone,
-        data: dataNormalizada,
+        data: Data,
         horario: Horario,
         status: "pendente",
         confirmado: false,
@@ -742,14 +766,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       .select()
       .single();
 
-    if (error) {
-      if (error.code === '23505') {
-        return res.status(400).json({ 
-          msg: "Você já possui um agendamento para esta data e horário" 
-        });
-      }
-      throw error;
-    }
+    if (error) throw error;
 
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
@@ -763,8 +780,8 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE CORRETAMENTE
-    cacheManager.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
+    cacheManager.delete(cacheKey);
     
     res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
@@ -774,12 +791,33 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 CONFIRMAR COM INVALIDAÇÃO DE CACHE
+// 🔥 CONFIRMAR COM CACHE E INVALIDAÇÃO
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
+    // ✅ PRIMEIRO BUSCA O AGENDAMENTO USANDO CACHE
+    const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    });
+
+    // Verifica se o agendamento existe nos dados em cache
+    const agendamentoExistente = agendamentos.find(a => a.id == id);
+    if (!agendamentoExistente) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+    }
+
+    // Atualiza no banco
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
@@ -799,8 +837,8 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE CORRETAMENTE
-    cacheManager.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
+    cacheManager.delete(cacheKey);
     
     res.json({ msg: "Agendamento confirmado", agendamento: data });
   } catch (err) {
@@ -808,13 +846,33 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
-// 🔥 CANCELAR COM INVALIDAÇÃO DE CACHE
+// 🔥 CANCELAR COM CACHE E INVALIDAÇÃO
 app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
+    // ✅ PRIMEIRO BUSCA O AGENDAMENTO USANDO CACHE
+    const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    });
+
+    // Verifica se o agendamento existe nos dados em cache
+    const agendamentoExistente = agendamentos.find(a => a.id == id);
+    if (!agendamentoExistente) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+    }
+
+    // Atualiza no banco
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
@@ -834,8 +892,8 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE CORRETAMENTE
-    cacheManager.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
+    cacheManager.delete(cacheKey);
     
     res.json({ msg: "Agendamento cancelado", agendamento: data });
   } catch (err) {
@@ -844,15 +902,47 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
   }
 });
 
-// 🔥 REAGENDAR COM INVALIDAÇÃO DE CACHE
+// 🔥 REAGENDAR COM CACHE E INVALIDAÇÃO
 app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { novaData, novoHorario } = req.body;
     const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
     
+    // ✅ PRIMEIRO BUSCA AGENDAMENTOS USANDO CACHE PARA VERIFICAR CONFLITOS
+    const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    });
+
+    // Verifica se o agendamento a ser reagendado existe
+    const agendamentoExistente = agendamentos.find(a => a.id == id);
+    if (!agendamentoExistente) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+    }
+
+    // Verifica conflito com novo horário (excluindo o próprio agendamento)
+    const conflito = agendamentos.find(a => 
+      a.id != id && a.data === novaData && a.horario === novoHorario
+    );
+    
+    if (conflito) {
+      return res.status(400).json({ 
+        msg: "Você já possui um agendamento para esta nova data e horário" 
+      });
+    }
+
+    // Se não há conflito, atualiza no banco
     const { data, error } = await supabase.from("agendamentos")
       .update({ 
         data: novaData, 
@@ -865,15 +955,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       .select()
       .single();
     
-    if (error) {
-      if (error.code === '23505') {
-        return res.status(400).json({ 
-          msg: "Você já possui um agendamento para esta nova data e horário" 
-        });
-      }
-      throw error;
-    }
-    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
+    if (error) throw error;
 
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
@@ -884,8 +966,8 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE CORRETAMENTE
-    cacheManager.delete(`agendamentos_${userEmail}`);
+    // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
+    cacheManager.delete(cacheKey);
     
     res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
   } catch (err) {
@@ -912,6 +994,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
