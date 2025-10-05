@@ -610,7 +610,6 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
         .from("agendamentos")
         .select("*")
         .eq("email", userEmail)
-        .neq("status", "cancelado") // 🔥 ÚNICA MUDANÇA NECESSÁRIA!
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -995,6 +994,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
