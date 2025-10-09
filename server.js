@@ -598,7 +598,7 @@ app.get("/warmup", async (req, res) => {
 
 // ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
-// 🔥 AGENDAMENTOS COM CACHE
+// Rota principal
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
@@ -609,7 +609,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", userEmail) // 🔥 MUDANÇA: Busca por 'cliente'
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -791,19 +791,19 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 CONFIRMAR COM CACHE E INVALIDAÇÃO
+// Atualize também as outras rotas (confirmar, cancelar, reagendar):
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const userEmail = req.user.email;
     const cacheKey = `agendamentos_${userEmail}`;
     
-    // ✅ PRIMEIRO BUSCA O AGENDAMENTO USANDO CACHE
+    // ✅ BUSCA POR CLIENTE
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", userEmail) // 🔥 MUDANÇA
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -817,11 +817,11 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       return res.status(404).json({ msg: "Agendamento não encontrado" });
     }
 
-    // Atualiza no banco
+     // ... resto do código
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-      .eq("email", userEmail)
+      .eq("cliente", userEmail) // 🔥 MUDANÇA
       .select()
       .single();
     
@@ -994,6 +994,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
