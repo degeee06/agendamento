@@ -750,19 +750,19 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-    // Se não há conflito, cria o agendamento
-    const { data: novoAgendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente: userEmail,
-        nome: Nome,
-        email: userEmail,
-        telefone: Telefone,
-        data: Data,
-        horario: Horario,
-        status: "pendente",
-        confirmado: false,
-      }])
+    // ✅ CORREÇÃO - use o Email do formulário
+const { data: novoAgendamento, error } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente: userEmail, // dono do agendamento (sempre o usuário logado)
+    nome: Nome,
+    email: Email, // 🔥 AQUI: Use o email do formulário (pode ser "Não informado")
+    telefone: Telefone,
+    data: Data,
+    horario: Horario,
+    status: "pendente",
+    confirmado: false,
+  }])
       .select()
       .single();
 
@@ -994,6 +994,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
