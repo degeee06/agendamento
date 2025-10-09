@@ -267,7 +267,7 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("email", userEmail)
+      .eq("cliente", userEmail)
       .order("data", { ascending: false })
       .limit(5);
 
@@ -306,7 +306,7 @@ app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
         const { data: agendamentos, error } = await supabase
             .from("agendamentos")
             .select("*")
-            .eq("email", userEmail)
+            .eq("cliente", userEmail)
             .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
             .order("data", { ascending: true })
             .order("horario", { ascending: true });
@@ -386,7 +386,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", userEmail)
         .order("data", { ascending: true });
 
       if (error) throw error;
@@ -432,7 +432,7 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail);
+       .eq("cliente", userEmail);
 
       if (error) throw error;
 
@@ -731,7 +731,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", userEmail)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -876,7 +876,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-      .eq("email", userEmail)
+     .eq("cliente", userEmail)
       .select()
       .single();
     
@@ -951,7 +951,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
         confirmado: false
       })
       .eq("id", id)
-      .eq("email", userEmail)
+      .eq("cliente", userEmail)
       .select()
       .single();
     
