@@ -750,21 +750,21 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-  // 🔥 SOLUÇÃO MAIS FÁCIL: Use req.body diretamente
-const { data: novoAgendamento, error } = await supabase
-  .from("agendamentos")
-  .insert([{
-    cliente: userEmail,
-    nome: req.body.Nome,       // 🔥 Use req.body.Nome (maiúsculo)
-    email: req.body.Email,     // 🔥 Use req.body.Email (maiúsculo)
-    telefone: req.body.Telefone, // 🔥 Use req.body.Telefone
-    data: req.body.Data,       // 🔥 Use req.body.Data
-    horario: req.body.Horario, // 🔥 Use req.body.Horario
-    status: "pendente",
-    confirmado: false,
-  }])
-  .select()
-  .single();
+ // Se não há conflito, cria o agendamento
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: userEmail,
+        nome: Nome,
+        email: Email,
+        telefone: Telefone,
+        data: Data,
+        horario: Horario,
+        status: "pendente",
+        confirmado: false,
+      }])
+      .select()
+      .single();
 
     if (error) throw error;
 
@@ -994,6 +994,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
