@@ -754,9 +754,9 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
-        cliente: userEmail,
+        cliente: userEmail,           // 🔥 SEMPRE o email do usuário logado (PARA BUSCA)
         nome: Nome,
-        email: Email,
+        email: Email || null,         // 🔥 Email do cliente (pode ser null)
         telefone: Telefone,
         data: Data,
         horario: Horario,
@@ -858,7 +858,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", userEmail)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -917,7 +917,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", userEmail)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -994,6 +994,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
