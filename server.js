@@ -84,6 +84,131 @@ const cacheManager = {
   }
 };
 
+// ✅ ADICIONAR NO SEU BACKEND (server.js)
+
+// Rota pública para agendamento por link personalizado
+app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
+    try {
+        const { username, token } = req.params;
+        
+        console.log('🔧 [DEBUG] Buscando link:', { username, token });
+        
+        // Verificar token válido com username
+        const { data: link, error } = await supabase
+            .from('links_agendamento')
+            .select(`
+                *,
+                perfis_usuarios!inner(username, nome_empresa)
+            `)
+            .eq('token', token)
+            .eq('username', username)
+            .gt('expira_em', new Date())
+            .eq('utilizado', false)
+            .single();
+        
+        console.log('🔧 [DEBUG] Link encontrado:', link);
+        console.log('🔧 [DEBUG] Erro:', error);
+        
+        if (error || !link) {
+            return res.status(404).json({ 
+                success: false, 
+                msg: "Link inválido, expirado ou já utilizado" 
+            });
+        }
+        
+        res.json({
+            success: true,
+            dados_predefinidos: {
+                nome: link.nome_cliente,
+                email: link.email_cliente,
+                telefone: link.telefone_cliente,
+                data: link.data,
+                horario: link.horario
+            },
+            personalizacao: {
+                nome_empresa: link.perfis_usuarios?.nome_empresa,
+                username: link.perfis_usuarios?.username
+            }
+        });
+        
+    } catch (error) {
+        console.error("❌ Erro no link de agendamento:", error);
+        res.status(500).json({ 
+            success: false, 
+            msg: "Erro interno",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// ✅ ADICIONAR: Rota para confirmar agendamento via link
+app.post("/api/confirmar-agendamento-link", async (req, res) => {
+    try {
+        const { token, nome, email, telefone } = req.body;
+        
+        console.log('🔧 [DEBUG] Confirmando agendamento via link:', { token });
+        
+        // Validar token
+        const { data: link, error: linkError } = await supabase
+            .from('links_agendamento')
+            .select('*')
+            .eq('token', token)
+            .gt('expira_em', new Date())
+            .eq('utilizado', false)
+            .single();
+        
+        if (linkError || !link) {
+            return res.status(400).json({ 
+                success: false, 
+                msg: "Link inválido ou expirado" 
+            });
+        }
+        
+        // Criar agendamento
+        const { data: agendamento, error: agendamentoError } = await supabase
+            .from('agendamentos')
+            .insert({
+                cliente: link.criador_id.toString(), // ✅ Converter UUID para string
+                nome: nome || link.nome_cliente,
+                email: email || link.email_cliente,
+                telefone: telefone || link.telefone_cliente,
+                data: link.data,
+                horario: link.horario,
+                status: 'confirmado',
+                criado_via_link: true
+            })
+            .select()
+            .single();
+        
+        if (agendamentoError) {
+            console.error('❌ Erro ao criar agendamento:', agendamentoError);
+            throw agendamentoError;
+        }
+        
+        // Marcar link como utilizado
+        await supabase
+            .from('links_agendamento')
+            .update({ utilizado: true })
+            .eq('token', token);
+        
+        console.log('✅ Agendamento criado via link:', agendamento);
+        
+        res.json({ 
+            success: true, 
+            msg: "Agendamento confirmado com sucesso!",
+            agendamento 
+        });
+        
+    } catch (error) {
+        console.error("❌ Erro ao confirmar agendamento:", error);
+        res.status(500).json({ 
+            success: false, 
+            msg: "Erro interno",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
 // Rota para verificar perfil
 app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
     try {
@@ -1238,6 +1363,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
