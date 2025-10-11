@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import crypto from 'crypto';
+
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -142,7 +144,11 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, msg: "Erro interno" });
     }
 });
-// No seu backend - rota /gerar-link-agendamento
+// ✅ BACKEND CORRIGIDO - use import em vez de require
+import crypto from 'crypto';
+
+// ... seu código ...
+
 app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     try {
         console.log('🔧 [DEBUG] Iniciando gerar-link-agendamento');
@@ -152,27 +158,35 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
         const { data, horario, nome, email, telefone } = req.body;
         
         // Buscar perfil do usuário
-        const { data: perfil, error: perfilError } = await supabase
+        const { data: perfis, error: perfilError } = await supabase
             .from('perfis_usuarios')
             .select('username')
-            .eq('user_id', req.user.id)
-            .single();
+            .eq('user_id', req.user.id);
         
-        console.log('🔧 [DEBUG] Perfil encontrado:', perfil);
-        console.log('🔧 [DEBUG] Erro no perfil:', perfilError);
+        console.log('🔧 [DEBUG] Perfis encontrados:', perfis);
 
-        if (!perfil) {
-            console.log('🔧 [DEBUG] Nenhum perfil encontrado');
+        if (perfilError) {
+            console.log('❌ Erro ao buscar perfil:', perfilError);
+            throw perfilError;
+        }
+
+        if (!perfis || perfis.length === 0) {
+            console.log('🔧 [DEBUG] Nenhum perfil encontrado para o usuário');
             return res.status(400).json({ 
                 success: false, 
                 msg: "Configure seu perfil primeiro" 
             });
         }
+
+        const perfil = perfis[0];
+        console.log('🔧 [DEBUG] Usando perfil:', perfil);
         
-        console.log('🔧 [DEBUG] Gerando token...');
-        const token = require('crypto').randomBytes(32).toString('hex');
+        // 🔥 CORREÇÃO: Use crypto.randomBytes diretamente
+        const token = crypto.randomBytes(32).toString('hex');
         
-        console.log('🔧 [DEBUG] Inserindo no banco...');
+        console.log('🔧 [DEBUG] Token gerado:', token);
+        console.log('🔧 [DEBUG] Inserindo link no banco...');
+        
         const { data: link, error: linkError } = await supabase
             .from('links_agendamento')
             .insert({
@@ -180,21 +194,24 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
                 criador_id: req.user.id,
                 username: perfil.username,
                 nome_cliente: nome,
-                email_cliente: email,
+                email_cliente: email || null,
                 telefone_cliente: telefone,
                 data: data,
                 horario: horario,
-                expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000)
+                expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
             })
-            .select()
-            .single();
+            .select();
 
         console.log('🔧 [DEBUG] Link inserido:', link);
         console.log('🔧 [DEBUG] Erro no insert:', linkError);
 
         if (linkError) {
-            console.log('🔧 [DEBUG] Erro ao inserir link:', linkError);
+            console.log('❌ Erro ao inserir link:', linkError);
             throw linkError;
+        }
+
+        if (!link || link.length === 0) {
+            throw new Error('Nenhum link foi retornado após inserção');
         }
 
         const linkPersonalizado = `https://oubook.vercel.app/agendar/${perfil.username}/${token}`;
@@ -208,10 +225,10 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [DEBUG] Erro completo:', error);
+        console.error('❌ [DEBUG] Erro completo no backend:', error);
         res.status(500).json({ 
             success: false, 
-            msg: "Erro interno",
+            msg: "Erro interno no servidor",
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
@@ -1225,6 +1242,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
