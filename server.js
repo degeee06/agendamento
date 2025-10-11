@@ -195,7 +195,6 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
                 data: link.data,
                 horario: link.horario,
                 status: 'confirmado',
-                criado_via_link: true
             })
             .select()
             .single();
@@ -1300,6 +1299,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
