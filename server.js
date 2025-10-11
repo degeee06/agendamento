@@ -482,7 +482,7 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
     throw error;
   }
 }
-async function analisarDescricaoNatural(descricao, userEmail) {
+async function analisarDescricaoNatural(descricao, userId) {
   try {
     const hoje = new Date();
     const amanha = new Date(hoje);
@@ -501,7 +501,7 @@ Analise a seguinte descrição de agendamento e extraia as informações no form
 
 DESCRIÇÃO: "${descricao}"
 
-USUÁRIO: ${userEmail}
+USUÁRIO: ${userId}
 DATA ATUAL: ${hoje.toISOString().split('T')[0]}
 
 Extraia as seguintes informações:
@@ -546,7 +546,7 @@ Responda APENAS com o JSON válido, sem nenhum texto adicional.
 }
 
 // Função para analisar estatísticas pessoais
-async function analisarEstatisticasPessoais(agendamentos, userEmail) {
+async function analisarEstatisticasPessoais(agendamentos, userId) {
   try {
     const estatisticas = {
       total: agendamentos.length,
@@ -563,7 +563,7 @@ async function analisarEstatisticasPessoais(agendamentos, userEmail) {
     };
 
     const contexto = `
-Estatísticas dos agendamentos do usuário ${userEmail}:
+Estatísticas dos agendamentos do usuário ${userId}:
 
 - Total de agendamentos: ${estatisticas.total}
 - Agendamentos este mês: ${estatisticas.este_mes}
@@ -656,7 +656,7 @@ app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
         if (error) throw error;
 
         // Análise inteligente com IA
-        const sugestoes = await analisarHorariosLivres(agendamentos || [], userEmail);
+        const sugestoes = await analisarHorariosLivres(agendamentos || [], userId);
 
         res.json({
             success: true,
@@ -675,12 +675,12 @@ app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
 });
 
 // Função para analisar horários livres
-async function analisarHorariosLivres(agendamentos, userEmail) {
+async function analisarHorariosLivres(agendamentos, userId) {
     try {
         const contexto = `
 ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
 
-Dados da agenda do usuário ${userEmail}:
+Dados da agenda do usuário ${userId}:
 
 AGENDAMENTOS EXISTENTES (próximos 7 dias):
 ${agendamentos.length > 0 ? 
@@ -740,7 +740,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
         };
       }
 
-      const sugestoes = await gerarSugestoesInteligentes(agendamentos, userEmail);
+      const sugestoes = await gerarSugestoesInteligentes(agendamentos, userId);
 
       return {
         sugestoes,
@@ -778,7 +778,7 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
 
       if (error) throw error;
 
-      return await analisarEstatisticasPessoais(agendamentos || [], userEmail);
+      return await analisarEstatisticasPessoais(agendamentos || [], userId);
     }, 5 * 60 * 1000); // Cache de 5 minutos para estatísticas
 
     res.json({
@@ -811,12 +811,12 @@ try {
 }
 
 // ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
-async function accessUserSpreadsheet(userEmail, userMetadata) {
+async function accessUserSpreadsheet(userId, userMetadata) {
   try {
     const spreadsheetId = userMetadata?.spreadsheet_id;
     
     if (!spreadsheetId) {
-      console.log(`📝 Usuário ${userEmail} não configurou Sheets`);
+      console.log(`📝 Usuário ${userId} não configurou Sheets`);
       return null;
     }
     
@@ -824,23 +824,23 @@ async function accessUserSpreadsheet(userEmail, userMetadata) {
     await doc.useServiceAccountAuth(creds);
     await doc.loadInfo();
     
-    console.log(`✅ Acessando planilha do usuário: ${userEmail}`);
+    console.log(`✅ Acessando planilha do usuário: ${userId}`);
     return doc;
   } catch (error) {
-    console.error(`❌ Erro ao acessar planilha do usuário ${userEmail}:`, error.message);
+    console.error(`❌ Erro ao acessar planilha do usuário ${userId}:`, error.message);
     return null;
   }
 }
 
-async function createSpreadsheetForUser(userEmail, userName) {
+async function createSpreadsheetForUser(userId, userName) {
   try {
-    console.log('🔧 Iniciando criação de planilha para:', userEmail);
+    console.log('🔧 Iniciando criação de planilha para:', userId);
     
     const doc = new GoogleSpreadsheet();
     await doc.useServiceAccountAuth(creds);
     
     await doc.createNewSpreadsheetDocument({
-      title: `Agendamentos - ${userName || userEmail}`.substring(0, 100),
+      title: `Agendamentos - ${userName || userId}`.substring(0, 100),
     });
     
     console.log('📊 Planilha criada, ID:', doc.spreadsheetId);
@@ -851,16 +851,16 @@ async function createSpreadsheetForUser(userEmail, userName) {
     ]);
     
     try {
-      await doc.shareWithEmail(userEmail, {
+      await doc.shareWithEmail(userId, {
         role: 'writer',
         emailMessage: 'Planilha de agendamentos compartilhada com você!'
       });
-      console.log('✅ Planilha compartilhada com:', userEmail);
+      console.log('✅ Planilha compartilhada com:', userId);
     } catch (shareError) {
       console.warn('⚠️ Não foi possível compartilhar a planilha:', shareError.message);
     }
     
-    console.log(`📊 Nova planilha criada para ${userEmail}: ${doc.spreadsheetId}`);
+    console.log(`📊 Nova planilha criada para ${userId}: ${doc.spreadsheetId}`);
     return doc.spreadsheetId;
     
   } catch (error) {
@@ -947,7 +947,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
     const cacheKey = `agendamentos_${userId}`;
     
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
-      console.log('🔄 Buscando agendamentos do DB para:', userEmail);
+      console.log('🔄 Buscando agendamentos do DB para:', userId);
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
@@ -979,7 +979,7 @@ app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
       };
     }, 5 * 60 * 1000);
     
-    console.log(`📊 Configuração do usuário ${userEmail}:`, config);
+    console.log(`📊 Configuração do usuário ${userId}:`, config);
     res.json(config);
     
   } catch (err) {
@@ -994,13 +994,13 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
     const { spreadsheetId, criarAutomatico } = req.body;
     const userId = req.user.id;
     
-    console.log('🔧 Configurando Sheets para:', userEmail, { spreadsheetId, criarAutomatico });
+    console.log('🔧 Configurando Sheets para:', userId, { spreadsheetId, criarAutomatico });
     
     let finalSpreadsheetId = spreadsheetId;
 
     if (criarAutomatico) {
-      console.log('🔧 Criando planilha automática para:', userEmail);
-      finalSpreadsheetId = await createSpreadsheetForUser(userEmail, req.user.user_metadata?.name);
+      console.log('🔧 Criando planilha automática para:', userId);
+      finalSpreadsheetId = await createSpreadsheetForUser(userId, req.user.user_metadata?.name);
       console.log('✅ Planilha criada com ID:', finalSpreadsheetId);
     }
 
@@ -1039,10 +1039,10 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
     console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
     
     // 🔥 INVALIDA CACHE CORRETAMENTE
-    cacheManager.delete(`config_${userEmail}`);
-    cacheManager.delete(`agendamentos_${userEmail}`);
+    cacheManager.delete(`config_${userId}`);
+    cacheManager.delete(`agendamentos_${userId}`);
     
-    console.log('✅ Sheets configurado com sucesso para:', userEmail);
+    console.log('✅ Sheets configurado com sucesso para:', userId);
     
     res.json({ 
       msg: criarAutomatico ? "✅ Planilha criada e configurada com sucesso!" : "✅ Spreadsheet configurado com sucesso!",
@@ -1111,12 +1111,12 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     if (error) throw error;
 
     try {
-      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
         await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
         await sheet.addRow(novoAgendamento);
-        console.log(`✅ Agendamento salvo na planilha do usuário ${userEmail}`);
+        console.log(`✅ Agendamento salvo na planilha do usuário ${userId}`);
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -1171,7 +1171,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
       }
@@ -1226,7 +1226,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
       }
@@ -1300,7 +1300,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     if (error) throw error;
 
     try {
-      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
       }
@@ -1336,6 +1336,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
