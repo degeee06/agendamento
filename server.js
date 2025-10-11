@@ -84,7 +84,33 @@ const cacheManager = {
   }
 };
 
-// ✅ ADICIONAR NO SEU BACKEND (server.js)
+// ✅ ADICIONAR: Rota para verificar perfil
+app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
+    try {
+        const { data: perfil, error } = await supabase
+            .from('perfis_usuarios')
+            .select('*')
+            .eq('user_id', req.user.id) // ✅ MUDAR para user_id
+            .single();
+
+        if (error || !perfil) {
+            return res.json({ 
+                success: false, 
+                temPerfil: false 
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            temPerfil: true,
+            perfil 
+        });
+
+    } catch (error) {
+        console.error("Erro ao verificar perfil:", error);
+        res.status(500).json({ success: false, msg: "Erro interno" });
+    }
+});
 
 // Rota pública para agendamento por link personalizado
 app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
@@ -1336,6 +1362,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
