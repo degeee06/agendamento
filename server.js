@@ -194,7 +194,7 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
     const { data: agendamento, error: agendamentoError } = await supabase
       .from('agendamentos')
       .insert({
-        cliente: link.criador_id::text, // 🔥 Converter UUID para text para compatibilidade
+        cliente: link.criador_id.toString(), // 🔥 Converter UUID para text para compatibilidade
         nome: nome || link.nome_cliente,
         email: email || link.email_cliente,
         telefone: telefone || link.telefone_cliente,
@@ -1140,6 +1140,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
