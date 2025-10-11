@@ -144,10 +144,6 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, msg: "Erro interno" });
     }
 });
-// ✅ BACKEND CORRIGIDO - use import em vez de require
-import crypto from 'crypto';
-
-// ... seu código ...
 
 app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     try {
@@ -1242,6 +1238,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
