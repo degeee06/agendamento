@@ -155,10 +155,9 @@ app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
     }
 });
 
-// ✅ ATUALIZAR rota de confirmação
 app.post("/api/confirmar-agendamento-link", async (req, res) => {
     try {
-        const { token, nome, email, telefone, data, horario } = req.body; // ✅ ADD data, horario
+        const { token, nome, email, telefone, data, horario } = req.body;
         
         console.log('🔧 [DEBUG] Confirmando agendamento:', { token, data, horario });
         
@@ -179,14 +178,28 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ VERIFICAR SE HORÁRIO AINDA ESTÁ DISPONÍVEL
+        // ✅ VERSÃO RECOMENDADA: Buscar email do profissional via Supabase Auth
+        const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(link.criador_id);
+        
+        if (userError || !user) {
+            console.error('❌ Erro ao buscar usuário:', userError);
+            return res.status(400).json({
+                success: false,
+                msg: "Erro ao buscar dados do profissional"
+            });
+        }
+        
+        const emailProfissional = user.email;
+        console.log('🔧 [DEBUG] Email do profissional:', emailProfissional);
+        
+        // ✅ VERIFICAR CONFLITO usando o EMAIL correto
         const { data: conflito } = await supabase
             .from('agendamentos')
             .select('id')
-            .eq('cliente', link.criador_id.toString())
+            .eq('cliente', emailProfissional) // ✅ AGORA com email correto
             .eq('data', data)
             .eq('horario', horario)
-            .eq('status', 'confirmado')
+            .neq('status', 'cancelado') // ✅ Considera apenas agendamentos ativos
             .single();
             
         if (conflito) {
@@ -196,23 +209,33 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // Criar agendamento com data/horário ESCOLHIDOS
+        // ✅ CRIAR AGENDAMENTO com EMAIL correto
         const { data: agendamento, error: agendamentoError } = await supabase
             .from('agendamentos')
             .insert({
-                cliente: link.criador_id.toString(),
+                cliente: emailProfissional, // ✅ EMAIL do profissional (SEU email)
                 nome: nome || link.nome_cliente,
                 email: email || link.email_cliente,
                 telefone: telefone || link.telefone_cliente,
-                data: data, // 🎯 AGORA do cliente
-                horario: horario, // 🎯 AGORA do cliente
+                data: data,
+                horario: horario,
                 status: 'confirmado',
+                confirmado: true
             })
             .select()
             .single();
         
         if (agendamentoError) {
             console.error('❌ Erro ao criar agendamento:', agendamentoError);
+            
+            // Detectar conflito de unique constraint
+            if (agendamentoError.code === '23505') {
+                return res.status(400).json({
+                    success: false,
+                    msg: "Conflito de horário. Este horário já está ocupado."
+                });
+            }
+            
             throw agendamentoError;
         }
         
@@ -1326,6 +1349,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
