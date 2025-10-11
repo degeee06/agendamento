@@ -155,21 +155,27 @@ app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
     }
 });
 
-// ✅ ADICIONAR: Rota para confirmar agendamento via link
 app.post("/api/confirmar-agendamento-link", async (req, res) => {
     try {
         const { token, nome, email, telefone } = req.body;
         
         console.log('🔧 [DEBUG] Confirmando agendamento via link:', { token });
         
+        // ✅ CORREÇÃO: DEFINIR dataAtualISO ANTES DE USAR!
+        const dataAtualISO = new Date().toISOString();
+        console.log('🔧 [DEBUG] Data atual para comparação:', dataAtualISO);
+        
         // Validar token
         const { data: link, error: linkError } = await supabase
             .from('links_agendamento')
             .select('*')
             .eq('token', token)
-            .gt('expira_em', new Date())
+            .gt('expira_em', dataAtualISO) // ✅ AGORA dataAtualISO ESTÁ DEFINIDA!
             .eq('utilizado', false)
             .single();
+        
+        console.log('🔧 [DEBUG] Link encontrado na confirmação:', link);
+        console.log('🔧 [DEBUG] Erro na confirmação:', linkError);
         
         if (linkError || !link) {
             return res.status(400).json({ 
@@ -379,62 +385,6 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     }
 });
 
-
-app.post("/api/confirmar-agendamento-link", async (req, res) => {
-  try {
-    const { token, nome, email, telefone } = req.body;
-    
-    // Validar token
-    const { data: link, error: linkError } = await supabase
-      .from('links_agendamento')
-      .select('*')
-      .eq('token', token)
-      .gt('expira_em', new Date())
-      .eq('utilizado', false)
-      .single();
-    
-    if (linkError || !link) {
-      return res.status(400).json({ 
-        success: false, 
-        msg: "Link inválido ou expirado" 
-      });
-    }
-    
-    // Criar agendamento
-    const { data: agendamento, error: agendamentoError } = await supabase
-      .from('agendamentos')
-      .insert({
-        cliente: link.criador_id.toString(), // 🔥 Converter UUID para text para compatibilidade
-        nome: nome || link.nome_cliente,
-        email: email || link.email_cliente,
-        telefone: telefone || link.telefone_cliente,
-        data: link.data,
-        horario: link.horario,
-        status: 'confirmado',
-        criado_via_link: true
-      })
-      .select()
-      .single();
-    
-    if (agendamentoError) throw agendamentoError;
-    
-    // Marcar link como utilizado
-    await supabase
-      .from('links_agendamento')
-      .update({ utilizado: true })
-      .eq('token', token);
-    
-    res.json({ 
-      success: true, 
-      msg: "Agendamento confirmado com sucesso!",
-      agendamento 
-    });
-    
-  } catch (error) {
-    console.error("Erro ao confirmar agendamento:", error);
-    res.status(500).json({ success: false, msg: "Erro interno" });
-  }
-});
 
 
 
@@ -1350,6 +1300,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
