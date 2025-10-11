@@ -178,28 +178,18 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ VERSÃO RECOMENDADA: Buscar email do profissional via Supabase Auth
-        const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(link.criador_id);
+        // ✅ MANTER cliente como user_id (NÃO buscar email)
+        const profissionalUserId = link.criador_id;
+        console.log('🔧 [DEBUG] User ID do profissional:', profissionalUserId);
         
-        if (userError || !user) {
-            console.error('❌ Erro ao buscar usuário:', userError);
-            return res.status(400).json({
-                success: false,
-                msg: "Erro ao buscar dados do profissional"
-            });
-        }
-        
-        const emailProfissional = user.email;
-        console.log('🔧 [DEBUG] Email do profissional:', emailProfissional);
-        
-        // ✅ VERIFICAR CONFLITO usando o EMAIL correto
+        // ✅ VERIFICAR CONFLITO usando user_id
         const { data: conflito } = await supabase
             .from('agendamentos')
             .select('id')
-            .eq('cliente', emailProfissional) // ✅ AGORA com email correto
+            .eq('cliente', profissionalUserId) // ✅ user_id do profissional
             .eq('data', data)
             .eq('horario', horario)
-            .neq('status', 'cancelado') // ✅ Considera apenas agendamentos ativos
+            .neq('status', 'cancelado')
             .single();
             
         if (conflito) {
@@ -209,11 +199,11 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ CRIAR AGENDAMENTO com EMAIL correto
+        // ✅ CRIAR AGENDAMENTO com user_id
         const { data: agendamento, error: agendamentoError } = await supabase
             .from('agendamentos')
             .insert({
-                cliente: emailProfissional, // ✅ EMAIL do profissional (SEU email)
+                cliente: profissionalUserId, // ✅ user_id do profissional
                 nome: nome || link.nome_cliente,
                 email: email || link.email_cliente,
                 telefone: telefone || link.telefone_cliente,
@@ -227,15 +217,12 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
         
         if (agendamentoError) {
             console.error('❌ Erro ao criar agendamento:', agendamentoError);
-            
-            // Detectar conflito de unique constraint
             if (agendamentoError.code === '23505') {
                 return res.status(400).json({
                     success: false,
                     msg: "Conflito de horário. Este horário já está ocupado."
                 });
             }
-            
             throw agendamentoError;
         }
         
@@ -1349,6 +1336,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
