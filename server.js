@@ -358,7 +358,7 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
             throw new Error('Nenhum link foi retornado após inserção');
         }
 
-        const linkPersonalizado = `https://oubook.vercel.app/agendar/${perfil.username}/${token}`;
+       const linkPersonalizado = `https://oubook.vercel.app/agendar.html?username=${perfil.username}&token=${token}`;
         
         console.log('🔧 [DEBUG] Link gerado com sucesso:', linkPersonalizado);
         
@@ -1349,6 +1349,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
