@@ -355,44 +355,7 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     }
 });
 
-// Rota pública para agendamento por link
-app.get("/api/agendar-convidado/:token", async (req, res) => {
-  try {
-    const { token } = req.params;
-    
-    // Verificar token válido
-    const { data: link, error } = await supabase
-      .from('links_agendamento')
-      .select('*')
-      .eq('token', token)
-      .gt('expira_em', new Date())
-      .eq('utilizado', false)
-      .single();
-    
-    if (error || !link) {
-      return res.status(404).json({ 
-        success: false, 
-        msg: "Link inválido, expirado ou já utilizado" 
-      });
-    }
-    
-    res.json({
-      success: true,
-      dados_predefinidos: {
-        nome: link.nome_cliente,
-        email: link.email_cliente,
-        telefone: link.telefone_cliente,
-        data: link.data,
-        horario: link.horario
-      },
-      token: token
-    });
-    
-  } catch (error) {
-    console.error("Erro no link de agendamento:", error);
-    res.status(500).json({ success: false, msg: "Erro interno" });
-  }
-});
+
 app.post("/api/confirmar-agendamento-link", async (req, res) => {
   try {
     const { token, nome, email, telefone } = req.body;
@@ -1363,6 +1326,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
