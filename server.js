@@ -82,6 +82,152 @@ const cacheManager = {
   }
 };
 
+// Gerar link com UUID correto
+app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
+  try {
+    const { data, horario, nome, email, telefone } = req.body;
+    
+    // Buscar perfil do usuário
+    const { data: perfil } = await supabase
+      .from('perfis_usuarios')
+      .select('username')
+      .eq('user_id', req.user.id)
+      .single();
+    
+    if (!perfil) {
+      return res.status(400).json({ 
+        success: false, 
+        msg: "Configure seu perfil primeiro" 
+      });
+    }
+    
+    const token = require('crypto').randomBytes(32).toString('hex');
+    
+    const { data: link } = await supabase
+      .from('links_agendamento')
+      .insert({
+        token: token,
+        criador_id: req.user.id,
+        username: perfil.username, // 🔥 Adicionar username
+        nome_cliente: nome,
+        email_cliente: email,
+        telefone_cliente: telefone,
+        data: data,
+        horario: horario,
+        expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      })
+      .select()
+      .single();
+
+    const linkPersonalizado = `https://oubook.vercel.app/agendar/${perfil.username}/${token}`;
+    
+    res.json({ 
+      success: true,
+      link: linkPersonalizado,
+      expira_em: '24h'
+    });
+    
+  } catch (error) {
+    console.error("Erro ao gerar link:", error);
+    res.status(500).json({ success: false, msg: "Erro interno" });
+  }
+});
+// Rota pública para agendamento por link
+app.get("/api/agendar-convidado/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    // Verificar token válido
+    const { data: link, error } = await supabase
+      .from('links_agendamento')
+      .select('*')
+      .eq('token', token)
+      .gt('expira_em', new Date())
+      .eq('utilizado', false)
+      .single();
+    
+    if (error || !link) {
+      return res.status(404).json({ 
+        success: false, 
+        msg: "Link inválido, expirado ou já utilizado" 
+      });
+    }
+    
+    res.json({
+      success: true,
+      dados_predefinidos: {
+        nome: link.nome_cliente,
+        email: link.email_cliente,
+        telefone: link.telefone_cliente,
+        data: link.data,
+        horario: link.horario
+      },
+      token: token
+    });
+    
+  } catch (error) {
+    console.error("Erro no link de agendamento:", error);
+    res.status(500).json({ success: false, msg: "Erro interno" });
+  }
+});
+app.post("/api/confirmar-agendamento-link", async (req, res) => {
+  try {
+    const { token, nome, email, telefone } = req.body;
+    
+    // Validar token
+    const { data: link, error: linkError } = await supabase
+      .from('links_agendamento')
+      .select('*')
+      .eq('token', token)
+      .gt('expira_em', new Date())
+      .eq('utilizado', false)
+      .single();
+    
+    if (linkError || !link) {
+      return res.status(400).json({ 
+        success: false, 
+        msg: "Link inválido ou expirado" 
+      });
+    }
+    
+    // Criar agendamento
+    const { data: agendamento, error: agendamentoError } = await supabase
+      .from('agendamentos')
+      .insert({
+        cliente: link.criador_id::text, // 🔥 Converter UUID para text para compatibilidade
+        nome: nome || link.nome_cliente,
+        email: email || link.email_cliente,
+        telefone: telefone || link.telefone_cliente,
+        data: link.data,
+        horario: link.horario,
+        status: 'confirmado',
+        criado_via_link: true
+      })
+      .select()
+      .single();
+    
+    if (agendamentoError) throw agendamentoError;
+    
+    // Marcar link como utilizado
+    await supabase
+      .from('links_agendamento')
+      .update({ utilizado: true })
+      .eq('token', token);
+    
+    res.json({ 
+      success: true, 
+      msg: "Agendamento confirmado com sucesso!",
+      agendamento 
+    });
+    
+  } catch (error) {
+    console.error("Erro ao confirmar agendamento:", error);
+    res.status(500).json({ success: false, msg: "Erro interno" });
+  }
+});
+
+
+
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -994,6 +1140,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
