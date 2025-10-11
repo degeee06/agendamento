@@ -93,18 +93,41 @@ app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
         
         console.log('🔧 [DEBUG] Buscando link:', { username, token });
         
-        // Verificar token válido com username
-        const { data: link, error } = await supabase
-            .from('links_agendamento')
-            .select(`
-                *,
-                perfis_usuarios!inner(username, nome_empresa)
-            `)
-            .eq('token', token)
-            .eq('username', username)
-            .gt('expira_em', new Date())
-            .eq('utilizado', false)
-            .single();
+        // ✅ SOLUÇÃO COM DEBUG
+console.log('🔧 [DEBUG] Buscando link:', { username, token });
+
+// Primeiro busca sem o join complexo
+const { data: link, error } = await supabase
+    .from('links_agendamento')
+    .select('*')
+    .eq('token', token)
+    .eq('username', username)
+    .gt('expira_em', new Date())
+    .eq('utilizado', false)
+    .single();
+
+console.log('🔧 [DEBUG] Link encontrado:', link);
+console.log('🔧 [DEBUG] Erro na query:', error);
+
+if (error) {
+    console.log('❌ Erro detalhado:', error);
+}
+
+if (error || !link) {
+    return res.status(404).json({ 
+        success: false, 
+        msg: "Link inválido, expirado ou já utilizado" 
+    });
+}
+
+// Depois busca o perfil separadamente se precisar
+const { data: perfil } = await supabase
+    .from('perfis_usuarios')
+    .select('username, nome_empresa')
+    .eq('username', username)
+    .single();
+
+console.log('🔧 [DEBUG] Perfil encontrado:', perfil);
         
         console.log('🔧 [DEBUG] Link encontrado:', link);
         console.log('🔧 [DEBUG] Erro:', error);
@@ -1326,6 +1349,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
