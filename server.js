@@ -84,34 +84,52 @@ const cacheManager = {
   }
 };
 
-// ✅ ADICIONAR: Rota para verificar perfil
-app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
+
+// ✅ CORREÇÃO: Função para gerar link automático
+async function gerarLinkAutomatico() {
     try {
-        const { data: perfil, error } = await supabase
-            .from('perfis_usuarios')
-            .select('*')
-            .eq('user_id', req.user.id) // ✅ MUDAR para user_id
-            .single();
-
-        if (error || !perfil) {
-            return res.json({ 
-                success: false, 
-                temPerfil: false 
-            });
-        }
-
-        res.json({ 
-            success: true, 
-            temPerfil: true,
-            perfil 
+        console.log('🔧 Gerando link automaticamente...');
+        
+        // Dados pré-definidos para o link
+        const dados = {
+            nome: "Cliente via Link",
+            email: "",
+            telefone: "11999999999", // Telefone padrão
+            // NÃO enviar data e horário - o cliente escolhe depois
+        };
+        
+        const response = await fetch(`${API_BASE_URL}/gerar-link-agendamento`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify(dados)
         });
-
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Mostra o link gerado diretamente
+            document.getElementById('linkGerado').value = data.link;
+            document.getElementById('linkResultado').classList.remove('hidden');
+            copiarLink();
+            showToast('✅ Link gerado e copiado automaticamente!', 'success');
+            
+            // Fecha o modal automaticamente após 2 segundos
+            setTimeout(() => {
+                fecharGerarLinkModal();
+            }, 2000);
+        } else {
+            throw new Error(data.msg || 'Erro ao gerar link');
+        }
+        
     } catch (error) {
-        console.error("Erro ao verificar perfil:", error);
-        res.status(500).json({ success: false, msg: "Erro interno" });
+        console.error('Erro ao gerar link automaticamente:', error);
+        // Se der erro, abre o modal normal como fallback
+        abrirGerarLinkModal();
     }
-});
-
+}
 // Rota pública para agendamento por link personalizado
 app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
     try {
@@ -1362,6 +1380,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
