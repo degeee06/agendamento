@@ -295,41 +295,14 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
 
 app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     try {
-        console.log('🔧 [DEBUG] Iniciando gerar-link-agendamento');
-        console.log('🔧 [DEBUG] Usuário:', req.user?.email);
-        console.log('🔧 [DEBUG] Body:', req.body);
-        
         const { data, horario, nome, email, telefone } = req.body;
         
-        // Buscar perfil do usuário
-        const { data: perfis, error: perfilError } = await supabase
-            .from('perfis_usuarios')
-            .select('username')
-            .eq('user_id', req.user.id);
+        // ✅ CORREÇÃO: Calcular expiração corretamente
+        const dataAgendamento = new Date(`${data}T${horario}`);
+        const expiracao = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h da criação
         
-        console.log('🔧 [DEBUG] Perfis encontrados:', perfis);
-
-        if (perfilError) {
-            console.log('❌ Erro ao buscar perfil:', perfilError);
-            throw perfilError;
-        }
-
-        if (!perfis || perfis.length === 0) {
-            console.log('🔧 [DEBUG] Nenhum perfil encontrado para o usuário');
-            return res.status(400).json({ 
-                success: false, 
-                msg: "Configure seu perfil primeiro" 
-            });
-        }
-
-        const perfil = perfis[0];
-        console.log('🔧 [DEBUG] Usando perfil:', perfil);
-        
-        // 🔥 CORREÇÃO: Use crypto.randomBytes diretamente
-        const token = crypto.randomBytes(32).toString('hex');
-        
-        console.log('🔧 [DEBUG] Token gerado:', token);
-        console.log('🔧 [DEBUG] Inserindo link no banco...');
+        // Usa a data MAIS TARDE para garantir que não expire antes do agendamento
+        const dataExpiracao = new Date(Math.max(expiracao.getTime(), dataAgendamento.getTime()));
         
         const { data: link, error: linkError } = await supabase
             .from('links_agendamento')
@@ -342,8 +315,8 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
                 telefone_cliente: telefone,
                 data: data,
                 horario: horario,
-                // ✅ CORREÇÃO DEFINITIVA:
-expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+                expira_em: dataExpiracao.toISOString(), // ✅ CORRIGIDO
+                utilizado: false
             })
             .select();
 
@@ -1350,6 +1323,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
