@@ -599,7 +599,7 @@ Seja encorajador e prático. Máximo de 200 palavras.
 app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
   try {
     const { mensagem } = req.body;
-    const userEmail = req.user.email;
+    const userId = req.user.id;
 
     if (!mensagem) {
       return res.status(400).json({ success: false, msg: "Mensagem é obrigatória" });
@@ -609,7 +609,7 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("cliente", userEmail)
+      .eq("cliente", userId)
       .order("data", { ascending: false })
       .limit(5);
 
@@ -642,13 +642,13 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
 // Rota para sugerir horários livres
 app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
     try {
-        const userEmail = req.user.email;
+        const userId = req.user.id;
 
         // Busca todos os agendamentos
         const { data: agendamentos, error } = await supabase
             .from("agendamentos")
             .select("*")
-            .eq("cliente", userEmail)
+            .eq("cliente", userId)
             .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
             .order("data", { ascending: true })
             .order("horario", { ascending: true });
@@ -720,7 +720,7 @@ return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horário
 // Rota de sugestões inteligentes
 app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
   try {
-    const userEmail = req.user.email;
+    const userId = req.user.id;
     const cacheKey = `sugestoes_${userEmail}`;
 
     const resultado = await cacheManager.getOrSet(cacheKey, async () => {
@@ -728,7 +728,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userEmail)
+        .eq("cliente", userId)
         .order("data", { ascending: true });
 
       if (error) throw error;
@@ -766,7 +766,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
 // Rota de estatísticas pessoais com IA
 app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
   try {
-    const userEmail = req.user.email;
+    const userId = req.user.id;
     const cacheKey = `estatisticas_${userEmail}`;
 
     const resultado = await cacheManager.getOrSet(cacheKey, async () => {
@@ -774,7 +774,7 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-       .eq("cliente", userEmail);
+       .eq("cliente", userId)
 
       if (error) throw error;
 
@@ -943,15 +943,15 @@ app.get("/warmup", async (req, res) => {
 // Rota principal
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
-    const userEmail = req.user.email;
-    const cacheKey = `agendamentos_${userEmail}`;
+    const userId = req.user.id;
+    const cacheKey = agendamentos_${userId}
     
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
       console.log('🔄 Buscando agendamentos do DB para:', userEmail);
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userEmail) // 🔥 MUDANÇA: Busca por 'cliente'
+       .eq("cliente", userId) // 🔥 MUDANÇA: Busca por 'cliente'
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -969,7 +969,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
 // 🔥 CONFIGURAÇÃO SHEETS COM CACHE
 app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   try {
-    const userEmail = req.user.email;
+    const userId = req.user.id;
     const cacheKey = `config_${userEmail}`;
     
     const config = await cacheManager.getOrSet(cacheKey, async () => {
@@ -992,7 +992,7 @@ app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
 app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   try {
     const { spreadsheetId, criarAutomatico } = req.body;
-    const userEmail = req.user.email;
+    const userId = req.user.id;
     
     console.log('🔧 Configurando Sheets para:', userEmail, { spreadsheetId, criarAutomatico });
     
@@ -1065,7 +1065,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
    if (!Nome || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const userEmail = req.user.email;
+    const userId = req.user.id;
     const cacheKey = `agendamentos_${userEmail}`;
     
     // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
@@ -1073,7 +1073,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userEmail)
+        .eq("cliente", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1096,7 +1096,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
-        cliente: userEmail,           // 🔥 SEMPRE o email do usuário logado (PARA BUSCA)
+       cliente: userId,           // 🔥 SEMPRE o email do usuário logado (PARA BUSCA)
         nome: Nome,
         email: Email || null,         // 🔥 Email do cliente (pode ser null)
         telefone: Telefone,
@@ -1137,7 +1137,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const userEmail = req.user.email;
+    const userId = req.user.id;
     const cacheKey = `agendamentos_${userEmail}`;
     
     // ✅ BUSCA POR CLIENTE
@@ -1145,7 +1145,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userEmail) // 🔥 MUDANÇA
+        .eq("cliente", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1163,7 +1163,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-      .eq("cliente", userEmail) // 🔥 MUDANÇA
+     .eq("cliente", userId)
       .select()
       .single();
     
@@ -1192,7 +1192,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
 app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const userEmail = req.user.email;
+    const userId = req.user.id;
     const cacheKey = `agendamentos_${userEmail}`;
     
     // ✅ PRIMEIRO BUSCA O AGENDAMENTO USANDO CACHE
@@ -1200,7 +1200,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userEmail)
+        .eq("cliente", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1218,7 +1218,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-     .eq("cliente", userEmail)
+     .eq("cliente", userId)
       .select()
       .single();
     
@@ -1249,7 +1249,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
   try {
     const { id } = req.params;
     const { novaData, novoHorario } = req.body;
-    const userEmail = req.user.email;
+   const userId = req.user.id;
     const cacheKey = `agendamentos_${userEmail}`;
     
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
@@ -1259,7 +1259,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userEmail)
+        .eq("cliente", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1293,7 +1293,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
         confirmado: false
       })
       .eq("id", id)
-      .eq("cliente", userEmail)
+      .eq("cliente", userId)
       .select()
       .single();
     
