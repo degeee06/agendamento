@@ -142,56 +142,81 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, msg: "Erro interno" });
     }
 });
-// Gerar link com UUID correto
+// No seu backend - rota /gerar-link-agendamento
 app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
-  try {
-    const { data, horario, nome, email, telefone } = req.body;
-    
-    // Buscar perfil do usuário
-    const { data: perfil } = await supabase
-      .from('perfis_usuarios')
-      .select('username')
-      .eq('user_id', req.user.id)
-      .single();
-    
-    if (!perfil) {
-      return res.status(400).json({ 
-        success: false, 
-        msg: "Configure seu perfil primeiro" 
-      });
-    }
-    
-    const token = require('crypto').randomBytes(32).toString('hex');
-    
-    const { data: link } = await supabase
-      .from('links_agendamento')
-      .insert({
-        token: token,
-        criador_id: req.user.id,
-        username: perfil.username, // 🔥 Adicionar username
-        nome_cliente: nome,
-        email_cliente: email,
-        telefone_cliente: telefone,
-        data: data,
-        horario: horario,
-        expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000)
-      })
-      .select()
-      .single();
+    try {
+        console.log('🔧 [DEBUG] Iniciando gerar-link-agendamento');
+        console.log('🔧 [DEBUG] Usuário:', req.user?.email);
+        console.log('🔧 [DEBUG] Body:', req.body);
+        
+        const { data, horario, nome, email, telefone } = req.body;
+        
+        // Buscar perfil do usuário
+        const { data: perfil, error: perfilError } = await supabase
+            .from('perfis_usuarios')
+            .select('username')
+            .eq('user_id', req.user.id)
+            .single();
+        
+        console.log('🔧 [DEBUG] Perfil encontrado:', perfil);
+        console.log('🔧 [DEBUG] Erro no perfil:', perfilError);
 
-    const linkPersonalizado = `https://oubook.vercel.app/agendar/${perfil.username}/${token}`;
-    
-    res.json({ 
-      success: true,
-      link: linkPersonalizado,
-      expira_em: '24h'
-    });
-    
-  } catch (error) {
-    console.error("Erro ao gerar link:", error);
-    res.status(500).json({ success: false, msg: "Erro interno" });
-  }
+        if (!perfil) {
+            console.log('🔧 [DEBUG] Nenhum perfil encontrado');
+            return res.status(400).json({ 
+                success: false, 
+                msg: "Configure seu perfil primeiro" 
+            });
+        }
+        
+        console.log('🔧 [DEBUG] Gerando token...');
+        const token = require('crypto').randomBytes(32).toString('hex');
+        
+        console.log('🔧 [DEBUG] Inserindo no banco...');
+        const { data: link, error: linkError } = await supabase
+            .from('links_agendamento')
+            .insert({
+                token: token,
+                criador_id: req.user.id,
+                username: perfil.username,
+                nome_cliente: nome,
+                email_cliente: email,
+                telefone_cliente: telefone,
+                data: data,
+                horario: horario,
+                expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000)
+            })
+            .select()
+            .single();
+
+        console.log('🔧 [DEBUG] Link inserido:', link);
+        console.log('🔧 [DEBUG] Erro no insert:', linkError);
+
+        if (linkError) {
+            console.log('🔧 [DEBUG] Erro ao inserir link:', linkError);
+            throw linkError;
+        }
+
+        const linkPersonalizado = `https://oubook.vercel.app/agendar/${perfil.username}/${token}`;
+        
+        console.log('🔧 [DEBUG] Link gerado com sucesso:', linkPersonalizado);
+        
+        res.json({ 
+            success: true,
+            link: linkPersonalizado,
+            expira_em: '24h'
+        });
+        
+    } catch (error) {
+        console.error('❌ [DEBUG] Erro completo:', error);
+        res.status(500).json({ 
+            success: false, 
+            msg: "Erro interno",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
 });
+
 // Rota pública para agendamento por link
 app.get("/api/agendar-convidado/:token", async (req, res) => {
   try {
@@ -1200,6 +1225,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
