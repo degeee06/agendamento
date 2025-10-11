@@ -295,21 +295,57 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
 
 app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     try {
+        console.log('🔧 [DEBUG GERAR-LINK] Iniciando...');
         const { data, horario, nome, email, telefone } = req.body;
         
-        // ✅ CORREÇÃO: Calcular expiração corretamente
+        // ✅ 1. BUSCAR PERFIL DO USUÁRIO (FALTANDO!)
+        const { data: perfis, error: perfilError } = await supabase
+            .from('perfis_usuarios')
+            .select('username')
+            .eq('user_id', req.user.id);
+        
+        console.log('🔧 [DEBUG] Perfis encontrados:', perfis);
+
+        if (perfilError) {
+            console.log('❌ Erro ao buscar perfil:', perfilError);
+            throw perfilError;
+        }
+
+        if (!perfis || perfis.length === 0) {
+            console.log('🔧 [DEBUG] Nenhum perfil encontrado para o usuário');
+            return res.status(400).json({ 
+                success: false, 
+                msg: "Configure seu perfil primeiro" 
+            });
+        }
+
+        const perfil = perfis[0];
+        console.log('🔧 [DEBUG] Usando perfil:', perfil);
+        
+        // ✅ 2. GERAR TOKEN (FALTANDO!)
+        const token = crypto.randomBytes(32).toString('hex');
+        console.log('🔧 [DEBUG] Token gerado:', token);
+        
+        // ✅ 3. CALCULAR EXPIRAÇÃO CORRETAMENTE
         const dataAgendamento = new Date(`${data}T${horario}`);
         const expiracao = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h da criação
         
         // Usa a data MAIS TARDE para garantir que não expire antes do agendamento
         const dataExpiracao = new Date(Math.max(expiracao.getTime(), dataAgendamento.getTime()));
         
+        console.log('🔧 [DEBUG] Datas calculadas:');
+        console.log('   - Data agendamento:', dataAgendamento);
+        console.log('   - Expiração 24h:', expiracao);
+        console.log('   - Data expiração final:', dataExpiracao);
+        
+        // ✅ 4. INSERIR NO BANCO
+        console.log('🔧 [DEBUG] Inserindo link no banco...');
         const { data: link, error: linkError } = await supabase
             .from('links_agendamento')
             .insert({
-                token: token,
+                token: token, // ✅ AGORA DEFINIDO
                 criador_id: req.user.id,
-                username: perfil.username,
+                username: perfil.username, // ✅ AGORA DEFINIDO
                 nome_cliente: nome,
                 email_cliente: email || null,
                 telefone_cliente: telefone,
@@ -332,7 +368,7 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
             throw new Error('Nenhum link foi retornado após inserção');
         }
 
-       const linkPersonalizado = `https://oubook.vercel.app/agendar.html?username=${perfil.username}&token=${token}`;
+        const linkPersonalizado = `https://oubook.vercel.app/agendar.html?username=${perfil.username}&token=${token}`;
         
         console.log('🔧 [DEBUG] Link gerado com sucesso:', linkPersonalizado);
         
@@ -1323,6 +1359,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
