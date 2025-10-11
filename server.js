@@ -93,51 +93,42 @@ app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
         
         console.log('🔧 [DEBUG] Buscando link:', { username, token });
         
-        // ✅ SOLUÇÃO COM DEBUG
-console.log('🔧 [DEBUG] Buscando link:', { username, token });
-
-// Primeiro busca sem o join complexo
-const { data: link, error } = await supabase
-    .from('links_agendamento')
-    .select('*')
-    .eq('token', token)
-    .eq('username', username)
-    .gt('expira_em', new Date())
-    .eq('utilizado', false)
-    .single();
-
-console.log('🔧 [DEBUG] Link encontrado:', link);
-console.log('🔧 [DEBUG] Erro na query:', error);
-
-if (error) {
-    console.log('❌ Erro detalhado:', error);
-}
-
-if (error || !link) {
-    return res.status(404).json({ 
-        success: false, 
-        msg: "Link inválido, expirado ou já utilizado" 
-    });
-}
-
-// Depois busca o perfil separadamente se precisar
-const { data: perfil } = await supabase
-    .from('perfis_usuarios')
-    .select('username, nome_empresa')
-    .eq('username', username)
-    .single();
-
-console.log('🔧 [DEBUG] Perfil encontrado:', perfil);
+        // ✅ CORREÇÃO: Usar ISO string para a data de comparação
+        const dataAtualISO = new Date().toISOString();
+        console.log('🔧 [DEBUG] Data atual para comparação:', dataAtualISO);
         
+        // Primeiro busca sem o join complexo
+        const { data: link, error } = await supabase
+            .from('links_agendamento')
+            .select('*')
+            .eq('token', token)
+            .eq('username', username)
+            .gt('expira_em', dataAtualISO) // ✅ CORREÇÃO AQUI!
+            .eq('utilizado', false)
+            .single();
+
         console.log('🔧 [DEBUG] Link encontrado:', link);
-        console.log('🔧 [DEBUG] Erro:', error);
-        
+        console.log('🔧 [DEBUG] Erro na query:', error);
+
+        if (error) {
+            console.log('❌ Erro detalhado:', error);
+        }
+
         if (error || !link) {
             return res.status(404).json({ 
                 success: false, 
                 msg: "Link inválido, expirado ou já utilizado" 
             });
         }
+
+        // Depois busca o perfil separadamente se precisar
+        const { data: perfil } = await supabase
+            .from('perfis_usuarios')
+            .select('username, nome_empresa')
+            .eq('username', username)
+            .single();
+
+        console.log('🔧 [DEBUG] Perfil encontrado:', perfil);
         
         res.json({
             success: true,
@@ -149,8 +140,8 @@ console.log('🔧 [DEBUG] Perfil encontrado:', perfil);
                 horario: link.horario
             },
             personalizacao: {
-                nome_empresa: link.perfis_usuarios?.nome_empresa,
-                username: link.perfis_usuarios?.username
+                nome_empresa: perfil?.nome_empresa,
+                username: perfil?.username
             }
         });
         
@@ -1359,6 +1350,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
