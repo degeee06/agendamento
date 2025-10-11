@@ -155,27 +155,22 @@ app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
     }
 });
 
+// ✅ ATUALIZAR rota de confirmação
 app.post("/api/confirmar-agendamento-link", async (req, res) => {
     try {
-        const { token, nome, email, telefone } = req.body;
+        const { token, nome, email, telefone, data, horario } = req.body; // ✅ ADD data, horario
         
-        console.log('🔧 [DEBUG] Confirmando agendamento via link:', { token });
-        
-        // ✅ CORREÇÃO: DEFINIR dataAtualISO ANTES DE USAR!
-        const dataAtualISO = new Date().toISOString();
-        console.log('🔧 [DEBUG] Data atual para comparação:', dataAtualISO);
+        console.log('🔧 [DEBUG] Confirmando agendamento:', { token, data, horario });
         
         // Validar token
+        const dataAtualISO = new Date().toISOString();
         const { data: link, error: linkError } = await supabase
             .from('links_agendamento')
             .select('*')
             .eq('token', token)
-            .gt('expira_em', dataAtualISO) // ✅ AGORA dataAtualISO ESTÁ DEFINIDA!
+            .gt('expira_em', dataAtualISO)
             .eq('utilizado', false)
             .single();
-        
-        console.log('🔧 [DEBUG] Link encontrado na confirmação:', link);
-        console.log('🔧 [DEBUG] Erro na confirmação:', linkError);
         
         if (linkError || !link) {
             return res.status(400).json({ 
@@ -184,16 +179,33 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // Criar agendamento
+        // ✅ VERIFICAR SE HORÁRIO AINDA ESTÁ DISPONÍVEL
+        const { data: conflito } = await supabase
+            .from('agendamentos')
+            .select('id')
+            .eq('cliente', link.criador_id.toString())
+            .eq('data', data)
+            .eq('horario', horario)
+            .eq('status', 'confirmado')
+            .single();
+            
+        if (conflito) {
+            return res.status(400).json({
+                success: false,
+                msg: "Este horário já foi ocupado. Por favor, escolha outro horário."
+            });
+        }
+        
+        // Criar agendamento com data/horário ESCOLHIDOS
         const { data: agendamento, error: agendamentoError } = await supabase
             .from('agendamentos')
             .insert({
-                cliente: link.criador_id.toString(), // ✅ Converter UUID para string
+                cliente: link.criador_id.toString(),
                 nome: nome || link.nome_cliente,
                 email: email || link.email_cliente,
                 telefone: telefone || link.telefone_cliente,
-                data: link.data,
-                horario: link.horario,
+                data: data, // 🎯 AGORA do cliente
+                horario: horario, // 🎯 AGORA do cliente
                 status: 'confirmado',
             })
             .select()
@@ -222,8 +234,7 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
         console.error("❌ Erro ao confirmar agendamento:", error);
         res.status(500).json({ 
             success: false, 
-            msg: "Erro interno",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            msg: "Erro interno"
         });
     }
 });
@@ -289,26 +300,19 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
     }
 });
 
+// 🔥 CORRIGIR a rota de gerar link
 app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     try {
         console.log('🔧 [DEBUG GERAR-LINK] Iniciando...');
-        const { data, horario, nome, email, telefone } = req.body;
+        const { nome, email, telefone } = req.body; // ✅ REMOVER data, horario
         
-        // ✅ 1. BUSCAR PERFIL DO USUÁRIO (FALTANDO!)
+        // ✅ BUSCAR PERFIL DO USUÁRIO
         const { data: perfis, error: perfilError } = await supabase
             .from('perfis_usuarios')
             .select('username')
             .eq('user_id', req.user.id);
         
-        console.log('🔧 [DEBUG] Perfis encontrados:', perfis);
-
-        if (perfilError) {
-            console.log('❌ Erro ao buscar perfil:', perfilError);
-            throw perfilError;
-        }
-
-        if (!perfis || perfis.length === 0) {
-            console.log('🔧 [DEBUG] Nenhum perfil encontrado para o usuário');
+        if (perfilError || !perfis || perfis.length === 0) {
             return res.status(400).json({ 
                 success: false, 
                 msg: "Configure seu perfil primeiro" 
@@ -316,53 +320,28 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
         }
 
         const perfil = perfis[0];
-        console.log('🔧 [DEBUG] Usando perfil:', perfil);
-        
-        // ✅ 2. GERAR TOKEN (FALTANDO!)
         const token = crypto.randomBytes(32).toString('hex');
-        console.log('🔧 [DEBUG] Token gerado:', token);
         
-        // ✅ 3. CALCULAR EXPIRAÇÃO CORRETAMENTE
-        const dataAgendamento = new Date(`${data}T${horario}`);
-        const expiracao = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h da criação
+        // ✅ EXPIRAÇÃO SIMPLES (24h)
+        const expiracao = new Date(Date.now() + 24 * 60 * 60 * 1000);
         
-        // Usa a data MAIS TARDE para garantir que não expire antes do agendamento
-        const dataExpiracao = new Date(Math.max(expiracao.getTime(), dataAgendamento.getTime()));
-        
-        console.log('🔧 [DEBUG] Datas calculadas:');
-        console.log('   - Data agendamento:', dataAgendamento);
-        console.log('   - Expiração 24h:', expiracao);
-        console.log('   - Data expiração final:', dataExpiracao);
-        
-        // ✅ 4. INSERIR NO BANCO
         console.log('🔧 [DEBUG] Inserindo link no banco...');
         const { data: link, error: linkError } = await supabase
             .from('links_agendamento')
             .insert({
-                token: token, // ✅ AGORA DEFINIDO
+                token: token,
                 criador_id: req.user.id,
-                username: perfil.username, // ✅ AGORA DEFINIDO
+                username: perfil.username,
                 nome_cliente: nome,
                 email_cliente: email || null,
                 telefone_cliente: telefone,
-                data: data,
-                horario: horario,
-                expira_em: dataExpiracao.toISOString(), // ✅ CORRIGIDO
+                // ✅ REMOVIDO: data, horario
+                expira_em: expiracao.toISOString(),
                 utilizado: false
             })
             .select();
 
-        console.log('🔧 [DEBUG] Link inserido:', link);
-        console.log('🔧 [DEBUG] Erro no insert:', linkError);
-
-        if (linkError) {
-            console.log('❌ Erro ao inserir link:', linkError);
-            throw linkError;
-        }
-
-        if (!link || link.length === 0) {
-            throw new Error('Nenhum link foi retornado após inserção');
-        }
+        if (linkError) throw linkError;
 
         const linkPersonalizado = `https://oubook.vercel.app/agendar.html?username=${perfil.username}&token=${token}`;
         
@@ -375,15 +354,63 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ [DEBUG] Erro completo no backend:', error);
+        console.error('❌ Erro ao gerar link:', error);
         res.status(500).json({ 
             success: false, 
-            msg: "Erro interno no servidor",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            msg: "Erro interno no servidor"
         });
     }
 });
-
+// ✅ NOVA ROTA: Buscar horários disponíveis
+app.get("/api/horarios-disponiveis/:username", async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { data } = req.query; // Data para verificar
+        
+        console.log('🔧 [DEBUG] Buscando horários para:', { username, data });
+        
+        // Buscar perfil do profissional
+        const { data: perfil } = await supabase
+            .from('perfis_usuarios')
+            .select('user_id')
+            .eq('username', username)
+            .single();
+            
+        if (!perfil) {
+            return res.status(404).json({ success: false, msg: "Profissional não encontrado" });
+        }
+        
+        // Buscar agendamentos do profissional na data específica
+        const { data: agendamentos } = await supabase
+            .from('agendamentos')
+            .select('horario')
+            .eq('cliente', perfil.user_id) // Email do profissional
+            .eq('data', data)
+            .eq('status', 'confirmado');
+        
+        const horariosOcupados = agendamentos?.map(a => a.horario) || [];
+        
+        // Horários disponíveis (9h às 18h, de hora em hora)
+        const todosHorarios = [
+            '09:00', '10:00', '11:00', '12:00', 
+            '13:00', '14:00', '15:00', '16:00', '17:00'
+        ];
+        
+        const horariosDisponiveis = todosHorarios.filter(
+            horario => !horariosOcupados.includes(horario)
+        );
+        
+        res.json({
+            success: true,
+            horarios_disponiveis: horariosDisponiveis,
+            horarios_ocupados: horariosOcupados
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar horários:', error);
+        res.status(500).json({ success: false, msg: "Erro interno" });
+    }
+});
 
 
 
@@ -1299,6 +1326,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
