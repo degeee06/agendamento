@@ -721,7 +721,7 @@ return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horário
 app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const cacheKey = `sugestoes_${userEmail}`;
+    const cacheKey = `sugestoes_${userId}`;
 
     const resultado = await cacheManager.getOrSet(cacheKey, async () => {
       // Busca todos os agendamentos
@@ -767,7 +767,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
 app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const cacheKey = `estatisticas_${userEmail}`;
+    const cacheKey = `estatisticas_${userId}`;
 
     const resultado = await cacheManager.getOrSet(cacheKey, async () => {
       // Busca todos os agendamentos
@@ -944,7 +944,7 @@ app.get("/warmup", async (req, res) => {
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const cacheKey = agendamentos_${userId}
+    const cacheKey = `agendamentos_${userId}`;
     
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
       console.log('🔄 Buscando agendamentos do DB para:', userEmail);
@@ -970,7 +970,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
 app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const cacheKey = `config_${userEmail}`;
+    const cacheKey = `config_${userId}`;
     
     const config = await cacheManager.getOrSet(cacheKey, async () => {
       return {
@@ -1066,7 +1066,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
     const userId = req.user.id;
-    const cacheKey = `agendamentos_${userEmail}`;
+    const cacheKey = `agendamentos_${userId}`;
     
     // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
     const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
@@ -1138,7 +1138,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const cacheKey = `agendamentos_${userEmail}`;
+    const cacheKey = `agendamentos_${userId}`;
     
     // ✅ BUSCA POR CLIENTE
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
@@ -1193,7 +1193,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const cacheKey = `agendamentos_${userEmail}`;
+    const cacheKey = `agendamentos_${userId}`;
     
     // ✅ PRIMEIRO BUSCA O AGENDAMENTO USANDO CACHE
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
@@ -1250,7 +1250,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     const { id } = req.params;
     const { novaData, novoHorario } = req.body;
    const userId = req.user.id;
-    const cacheKey = `agendamentos_${userEmail}`;
+    const cacheKey = `agendamentos_${userId}`;
     
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
     
@@ -1336,6 +1336,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
