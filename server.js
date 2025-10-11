@@ -342,7 +342,8 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
                 telefone_cliente: telefone,
                 data: data,
                 horario: horario,
-                expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
+                // ✅ CORREÇÃO DEFINITIVA:
+expira_em: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
             })
             .select();
 
@@ -1349,6 +1350,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
