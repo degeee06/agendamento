@@ -253,8 +253,8 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
                 telefone: telefone || link.telefone_cliente,
                 data: data,
                 horario: horario,
-                status: 'confirmado',
-                confirmado: true
+               status: 'pendente', // ✅ MUDAR PARA PENDENTE
+                confirmado: false   // ✅ MUDAR PARA FALSE
             })
             .select()
             .single();
@@ -1380,6 +1380,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
