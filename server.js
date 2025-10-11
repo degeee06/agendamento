@@ -82,6 +82,66 @@ const cacheManager = {
   }
 };
 
+// Rota para verificar perfil
+app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
+    try {
+        const { data: perfil, error } = await supabase
+            .from('perfis_usuarios')
+            .select('*')
+            .eq('user_id', req.user.id)
+            .single();
+
+        if (error || !perfil) {
+            return res.json({ 
+                success: false, 
+                temPerfil: false 
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            temPerfil: true,
+            perfil 
+        });
+
+    } catch (error) {
+        console.error("Erro ao verificar perfil:", error);
+        res.status(500).json({ success: false, msg: "Erro interno" });
+    }
+});
+
+// Rota para criar perfil (já existe, só garantir que está funcionando)
+app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
+    try {
+        const { username, nome_empresa } = req.body;
+        
+        const { data: perfil, error } = await supabase
+            .from('perfis_usuarios')
+            .insert({
+                user_id: req.user.id,
+                username: username.toLowerCase(),
+                nome_empresa
+            })
+            .select()
+            .single();
+        
+        if (error) {
+            if (error.code === '23505') {
+                return res.status(400).json({ 
+                    success: false, 
+                    msg: "Username já está em uso" 
+                });
+            }
+            throw error;
+        }
+        
+        res.json({ success: true, perfil });
+        
+    } catch (error) {
+        console.error("Erro ao criar perfil:", error);
+        res.status(500).json({ success: false, msg: "Erro interno" });
+    }
+});
 // Gerar link com UUID correto
 app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
   try {
@@ -1140,6 +1200,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
