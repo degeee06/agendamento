@@ -9,7 +9,7 @@ const app = express();
 app.use(cors({
   origin: [
     'https://frontrender-iota.vercel.app',
-    'https://frontrender.netlify.app',
+    'https://oubook.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173',
     'https://localhost:3000'
@@ -1018,6 +1018,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
