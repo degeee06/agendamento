@@ -63,57 +63,47 @@ app.post("/agendamento-publico", async (req, res) => {
       return res.status(400).json({ msg: "Horário indisponível" });
     }
 
-     // Cria agendamento (código existente)
-           // 🔥 CRIA O AGENDAMENTO
-        const { data: novoAgendamento, error } = await supabase
-            .from("agendamentos")
-            .insert([{
-                cliente: user_id,
-                user_id: user_id,
-                nome: nome,
-                email: email,
-                telefone: telefone,
-                data: data,
-                horario: horario,
-                status: "pendente",
-                confirmado: false,
-            }])
-            .select()
-            .single();
+    // Cria agendamento
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: user_id,
+        user_id: user_id,
+        nome: nome,
+        email: email,
+        telefone: telefone,
+        data: data,
+        horario: horario,
+        status: "pendente",
+        confirmado: false,
+      }])
+      .select()
+      .single();
 
-        if (error) throw error;
+    if (error) throw error;
 
-        // 🔥 ATUALIZA GOOGLE SHEETS (se configurado)
-        try {
-            const { data: user } = await supabase.auth.admin.getUserById(user_id);
-            if (user?.user) {
-                const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
-                if (doc) {
-                    const sheet = doc.sheetsByIndex[0];
-                    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-                    await sheet.addRow(novoAgendamento);
-                }
-            }
-        } catch (sheetError) {
-            console.error("Erro ao atualizar Google Sheets:", sheetError);
-        }
-
-        // 🔥 INVALIDA CACHE DO USUÁRIO ESPECÍFICO
-        const cacheKey = `agendamentos_${user_id}`;
-        cacheManager.delete(cacheKey);
-        
-        console.log(`✅ Cache invalidado para usuário: ${user_id}`);
-
-        res.json({ 
-            success: true, 
-            msg: "Agendamento realizado com sucesso!", 
-            agendamento: novoAgendamento 
-        });
-
-    } catch (err) {
-        console.error("Erro no agendamento público:", err);
-        res.status(500).json({ msg: "Erro interno no servidor" });
+    // Atualiza Google Sheets
+    try {
+      const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
+      if (doc) {
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
+
+    res.json({ 
+      success: true, 
+      msg: "Agendamento realizado com sucesso!", 
+      agendamento: novoAgendamento 
+    });
+
+  } catch (err) {
+    console.error("Erro no agendamento público:", err);
+    res.status(500).json({ msg: "Erro interno no servidor" });
+  }
 });
 
 // ROTA para gerar link único
@@ -139,8 +129,6 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
-
 
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
@@ -187,9 +175,6 @@ const cacheManager = {
     cache.clear();
   }
 };
-
-
-
 
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -1127,10 +1112,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
-
-
 
 
 
