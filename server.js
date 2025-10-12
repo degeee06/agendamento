@@ -497,7 +497,7 @@ async function accessUserSpreadsheet(userEmail, userMetadata) {
     const spreadsheetId = userMetadata?.spreadsheet_id;
     
     if (!spreadsheetId) {
-      console.log(`📝 Usuário ${req.userId} não configurou Sheets`);
+      console.log(`📝 Usuário ${userEmail} não configurou Sheets`);
       return null;
     }
     
@@ -540,7 +540,7 @@ async function createSpreadsheetForUser(userEmail, userName) {
       console.warn('⚠️ Não foi possível compartilhar a planilha:', shareError.message);
     }
     
-    console.log(`📊 Nova planilha criada para ${req.userId}: ${doc.spreadsheetId}`);
+    console.log(`📊 Nova planilha criada para ${userEmail}`);
     return doc.spreadsheetId;
     
   } catch (error) {
@@ -1018,6 +1018,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
