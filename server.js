@@ -38,11 +38,7 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
-function invalidarCacheAgendamentos(userId) {
-    const cacheKey = `agendamentos_${userId}`;
-    cacheManager.delete(cacheKey);
-    console.log(`🗑️ Cache invalidado para usuário: ${userId}`);
-}
+
 
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
@@ -89,8 +85,12 @@ const cacheManager = {
     cache.clear();
   }
 };
+function invalidarCacheAgendamentos(userId) {
+    const cacheKey = `agendamentos_${userId}`;
+    cacheManager.delete(cacheKey);
+    console.log(`🗑️ Cache invalidado para usuário: ${userId}`);
+}
 
-// ✅ ADICIONAR NO SEU BACKEND (server.js)
 
 // Rota pública para agendamento por link personalizado
 app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
@@ -951,9 +951,10 @@ app.get("/warmup", async (req, res) => {
 // ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
 // Rota principal
+// ✅ CORRIGIR: Adicionar authMiddleware na rota /agendamentos
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id; // ✅ AGORA req.user existe
     const cacheKey = `agendamentos_${userId}`;
     
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
@@ -961,7 +962,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-       .eq("cliente", userId) // 🔥 MUDANÇA: Busca por 'cliente'
+        .eq("cliente", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1346,6 +1347,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
