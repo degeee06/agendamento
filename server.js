@@ -805,10 +805,6 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
       return await analisarEstatisticasPessoais(agendamentos || [], userId);
     }, 60 * 1000); // 🔥 1 MINUTO
 
-
-      return await analisarEstatisticasPessoais(agendamentos || [], userId);
-    }, 5 * 60 * 1000); // Cache de 5 minutos para estatísticas
-
     res.json({
       success: true,
       ...resultado
@@ -968,7 +964,7 @@ app.get("/warmup", async (req, res) => {
 
 // ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
-// Rota principal
+
 // ✅ CORRIGIR: Adicionar authMiddleware na rota /agendamentos
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
@@ -1365,6 +1361,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
