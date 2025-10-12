@@ -36,6 +36,100 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
+// ROTA PÚBLICA para agendamento via link
+app.post("/agendamento-publico", async (req, res) => {
+  try {
+    const { nome, email, telefone, data, horario, user_id } = req.body;
+    
+    if (!nome || !email || !telefone || !data || !horario || !user_id) {
+      return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
+    }
+
+    // Verifica se o user_id existe
+    const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id);
+    if (userError || !user) {
+      return res.status(400).json({ msg: "Link inválido" });
+    }
+
+    // Verifica conflitos
+    const { data: conflito } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", user_id)
+      .eq("data", data)
+      .eq("horario", horario);
+
+    if (conflito && conflito.length > 0) {
+      return res.status(400).json({ msg: "Horário indisponível" });
+    }
+
+    // Cria agendamento
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: user_id,
+        user_id: user_id,
+        nome: nome,
+        email: email,
+        telefone: telefone,
+        data: data,
+        horario: horario,
+        status: "pendente",
+        confirmado: false,
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Atualiza Google Sheets
+    try {
+      const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
+      if (doc) {
+        const sheet = doc.sheetsByIndex[0];
+        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+        await sheet.addRow(novoAgendamento);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    res.json({ 
+      success: true, 
+      msg: "Agendamento realizado com sucesso!", 
+      agendamento: novoAgendamento 
+    });
+
+  } catch (err) {
+    console.error("Erro no agendamento público:", err);
+    res.status(500).json({ msg: "Erro interno no servidor" });
+  }
+});
+
+// ROTA para gerar link único
+app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
+  try {
+    const user_id = req.params.user_id;
+    
+    // Verifica se é o próprio usuário
+    if (req.userId !== user_id) {
+      return res.status(403).json({ msg: "Não autorizado" });
+    }
+
+    const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}`;
+    
+    res.json({ 
+      success: true, 
+      link: link,
+      qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`
+    });
+
+  } catch (error) {
+    console.error("Erro ao gerar link:", error);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
 
@@ -1018,6 +1112,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
