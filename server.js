@@ -64,6 +64,7 @@ app.post("/agendamento-publico", async (req, res) => {
     }
 
      // Cria agendamento (código existente)
+           // 🔥 CRIA O AGENDAMENTO
         const { data: novoAgendamento, error } = await supabase
             .from("agendamentos")
             .insert([{
@@ -82,16 +83,26 @@ app.post("/agendamento-publico", async (req, res) => {
 
         if (error) throw error;
 
-        // 🔥 NOVO: Notifica em tempo real
-        notificarClientes(user_id, {
-            type: 'novo_agendamento',
-            agendamento: novoAgendamento,
-            message: 'Novo agendamento recebido!'
-        });
+        // 🔥 ATUALIZA GOOGLE SHEETS (se configurado)
+        try {
+            const { data: user } = await supabase.auth.admin.getUserById(user_id);
+            if (user?.user) {
+                const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
+                if (doc) {
+                    const sheet = doc.sheetsByIndex[0];
+                    await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
+                    await sheet.addRow(novoAgendamento);
+                }
+            }
+        } catch (sheetError) {
+            console.error("Erro ao atualizar Google Sheets:", sheetError);
+        }
 
-        // 🔥 INVALIDA CACHE no backend também
+        // 🔥 INVALIDA CACHE DO USUÁRIO ESPECÍFICO
         const cacheKey = `agendamentos_${user_id}`;
         cacheManager.delete(cacheKey);
+        
+        console.log(`✅ Cache invalidado para usuário: ${user_id}`);
 
         res.json({ 
             success: true, 
@@ -177,76 +188,7 @@ const cacheManager = {
   }
 };
 
-// ==================== SSE PARA TEMPO REAL ====================
-const clients = new Map(); // Armazena conexões dos usuários
 
-// 🔥 ATUALIZE a rota SSE para lidar com CORS
-app.get("/api/updates", authMiddleware, async (req, res) => {
-    const userId = req.userId;
-    
-    console.log(`🔔 Nova conexão SSE para usuário: ${userId}`);
-    
-    // 🔥 CORREÇÃO: Headers CORS para SSE
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-        'Access-Control-Allow-Credentials': 'true'
-    });
-    
-    // 🔥 CORREÇÃO: Envia dados imediatamente para manter conexão
-    res.write(':\n\n'); // Empty comment to prevent timeout
-    
-    // Envia um ping inicial
-    res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Conectado', userId })}\n\n`);
-    
-    // Armazena a conexão
-    const clientId = Date.now();
-    clients.set(clientId, { userId, res });
-    console.log(`🔔 Cliente ${clientId} conectado. Total: ${clients.size}`);
-    
-    // Remove conexão quando o cliente desconectar
-    req.on('close', () => {
-        console.log(`🔔 Cliente ${clientId} desconectado. Restantes: ${clients.size - 1}`);
-        clients.delete(clientId);
-    });
-    
-    // 🔥 CORREÇÃO: Envia ping a cada 30 segundos para manter conexão
-    const pingInterval = setInterval(() => {
-        if (!res.writableEnded) {
-            res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: Date.now() })}\n\n`);
-        } else {
-            clearInterval(pingInterval);
-        }
-    }, 30000);
-    
-    // Limpa intervalo quando conexão fechar
-    req.on('close', () => {
-        clearInterval(pingInterval);
-    });
-});
-
-// 🔥 FUNÇÃO: Notificar todos os clientes de um usuário
-function notificarClientes(userId, mensagem) {
-    console.log(`🔔 Notificando usuário ${userId}:`, mensagem);
-    
-    let notificados = 0;
-    clients.forEach((client, clientId) => {
-        if (client.userId === userId) {
-            try {
-                client.res.write(`data: ${JSON.stringify(mensagem)}\n\n`);
-                notificados++;
-            } catch (error) {
-                console.log(`❌ Erro ao notificar cliente ${clientId}:`, error);
-                clients.delete(clientId);
-            }
-        }
-    });
-    
-    console.log(`🔔 ${notificados} clientes notificados`);
-}
 
 
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
@@ -1185,6 +1127,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
