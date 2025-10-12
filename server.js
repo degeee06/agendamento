@@ -183,7 +183,7 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
         console.log('🔧 [DEBUG] User ID do profissional:', profissionalUserId);
         
         // ✅ VERIFICAR CONFLITO usando user_id
-        const { data: conflito } = await supabase
+        const { data: conflito, error: conflitoError } = await supabase
             .from('agendamentos')
             .select('id')
             .eq('cliente', profissionalUserId) // ✅ user_id do profissional
@@ -191,6 +191,11 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             .eq('horario', horario)
             .neq('status', 'cancelado')
             .single();
+        
+        if (conflitoError && conflitoError.code !== 'PGRST116') {
+            console.error('❌ Erro ao verificar conflito:', conflitoError);
+            throw conflitoError;
+        }
             
         if (conflito) {
             return res.status(400).json({
@@ -209,8 +214,8 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
                 telefone: telefone || link.telefone_cliente,
                 data: data,
                 horario: horario,
-                status: 'confirmado',
-                confirmado: true
+                status: 'pendente',
+                confirmado: false
             })
             .select()
             .single();
@@ -227,10 +232,15 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
         }
         
         // Marcar link como utilizado
-        await supabase
+        const { error: updateError } = await supabase
             .from('links_agendamento')
             .update({ utilizado: true })
             .eq('token', token);
+        
+        if (updateError) {
+            console.error('❌ Erro ao marcar link como utilizado:', updateError);
+            throw updateError;
+        }
         
         console.log('✅ Agendamento criado via link:', agendamento);
         
@@ -244,7 +254,7 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
         console.error("❌ Erro ao confirmar agendamento:", error);
         res.status(500).json({ 
             success: false, 
-            msg: "Erro interno"
+            msg: "Erro interno do servidor"
         });
     }
 });
@@ -1336,6 +1346,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
