@@ -178,15 +178,29 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ MANTER cliente como user_id (NÃO buscar email)
         const profissionalUserId = link.criador_id;
         console.log('🔧 [DEBUG] User ID do profissional:', profissionalUserId);
+        
+        // ✅ BUSCAR EMAIL DO PROFISSIONAL
+        const { data: profissional, error: profError } = await supabase.auth.admin.getUserById(
+            profissionalUserId
+        );
+        
+        if (profError || !profissional) {
+            return res.status(400).json({ 
+                success: false, 
+                msg: "Erro ao buscar dados do profissional" 
+            });
+        }
+        
+        const emailProfissional = profissional.user.email;
+        console.log('🔧 [DEBUG] Email do profissional:', emailProfissional);
         
         // ✅ VERIFICAR CONFLITO usando user_id
         const { data: conflito } = await supabase
             .from('agendamentos')
             .select('id')
-            .eq('cliente', profissionalUserId) // ✅ user_id do profissional
+            .eq("user_id", profissionalUserId) // ✅ user_id do profissional
             .eq('data', data)
             .eq('horario', horario)
             .neq('status', 'cancelado')
@@ -199,11 +213,12 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ CRIAR AGENDAMENTO com user_id
+        // ✅ CRIAR AGENDAMENTO com AMBOS os campos
         const { data: agendamento, error: agendamentoError } = await supabase
             .from('agendamentos')
             .insert({
-                cliente: profissionalUserId, // ✅ user_id do profissional
+                user_id: profissionalUserId,    // ✅ NOVA coluna user_id
+                cliente: emailProfissional,     // ✅ coluna original cliente (email)
                 nome: nome || link.nome_cliente,
                 email: email || link.email_cliente,
                 telefone: telefone || link.telefone_cliente,
@@ -248,6 +263,8 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
         });
     }
 });
+
+
 // 🔥 CORREÇÃO: Adicionar função para gerar sugestões inteligentes faltante
 async function gerarSugestoesInteligentes(agendamentos, userId) {
     try {
@@ -675,7 +692,7 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("cliente", userId)
+      .eq("user_id", userId)
       .order("data", { ascending: false })
       .limit(5);
 
@@ -714,7 +731,7 @@ app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
         const { data: agendamentos, error } = await supabase
             .from("agendamentos")
             .select("*")
-            .eq("cliente", userId)
+            .eq("user_id", userId)
             .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
             .order("data", { ascending: true })
             .order("horario", { ascending: true });
@@ -794,7 +811,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("user_id", userId)
         .order("data", { ascending: true });
 
       if (error) throw error;
@@ -840,7 +857,7 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-       .eq("cliente", userId)
+       .eq("user_id", userId)
 
       if (error) throw error;
 
@@ -1006,18 +1023,18 @@ app.get("/warmup", async (req, res) => {
 
 // ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
-// Rota principal
+// ✅ CORREÇÃO: Buscar por user_id (nova coluna) em vez de cliente
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const cacheKey = `agendamentos_${userId}`;
     
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
-      console.log('🔄 Buscando agendamentos do DB para:', userId);
+      console.log('🔄 Buscando agendamentos do DB para user_id:', userId);
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-       .eq("cliente", userId) // 🔥 MUDANÇA: Busca por 'cliente'
+        .eq("user_id", userId) // ✅ CORREÇÃO: Buscar pela NOVA coluna user_id
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1124,47 +1141,40 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔥 AGENDAR COM CACHE E INVALIDAÇÃO
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
-   if (!Nome || !Telefone || !Data || !Horario)
+    if (!Nome || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
     const userId = req.user.id;
+    const userEmail = req.user.email; // ✅ PEGAR EMAIL DO USUÁRIO
     const cacheKey = `agendamentos_${userId}`;
     
-    // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
-    const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("cliente", userId)
-        .order("data", { ascending: true })
-        .order("horario", { ascending: true });
+    // ✅ VERIFICA CONFLITO usando user_id
+    const { data: conflito } = await supabase
+      .from("agendamentos")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("data", Data)
+      .eq("horario", Horario)
+      .neq("status", "cancelado")
+      .single();
 
-      if (error) throw error;
-      return data || [];
-    });
-
-    // Verifica conflito usando dados em cache
-    const conflito = agendamentosExistentes.find(a => 
-      a.data === Data && a.horario === Horario
-    );
-    
     if (conflito) {
       return res.status(400).json({ 
         msg: "Você já possui um agendamento para esta data e horário" 
       });
     }
 
- // Se não há conflito, cria o agendamento
+    // ✅ CRIAR AGENDAMENTO com AMBOS os campos
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
-       cliente: userId,           // 🔥 SEMPRE o email do usuário logado (PARA BUSCA)
+        user_id: userId,           // ✅ NOVA coluna user_id
+        cliente: userEmail,        // ✅ coluna original cliente (email)
         nome: Nome,
-        email: Email || null,         // 🔥 Email do cliente (pode ser null)
+        email: Email || null,
         telefone: Telefone,
         data: Data,
         horario: Horario,
@@ -1211,7 +1221,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("user_id", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1229,7 +1239,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-     .eq("cliente", userId)
+     .eq("user_id", userId)
       .select()
       .single();
     
@@ -1266,7 +1276,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("user_id", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1284,7 +1294,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-     .eq("cliente", userId)
+     .eq("user_id", userId)
       .select()
       .single();
     
@@ -1325,7 +1335,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("user_id", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1359,7 +1369,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
         confirmado: false
       })
       .eq("id", id)
-      .eq("cliente", userId)
+     .eq("user_id", userId)
       .select()
       .single();
     
@@ -1402,6 +1412,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
