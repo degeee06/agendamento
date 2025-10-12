@@ -227,7 +227,7 @@ Estatísticas dos agendamentos do usuário ${userEmail}:
 - Confirmados: ${estatisticas.confirmados}
 - Pendentes: ${estatisticas.pendentes}
 - Cancelados: ${estatisticas.cancelados}
-- Criados via IA: ${estatisticas.via_ia}
+
 
 Forneça uma análise inteligente sobre:
 1. Comportamento de agendamento do usuário
@@ -266,7 +266,7 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("email", userEmail)
+      .eq("cliente", req.userId)
       .order("data", { ascending: false })
       .limit(5);
 
@@ -305,7 +305,7 @@ app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
         const { data: agendamentos, error } = await supabase
             .from("agendamentos")
             .select("*")
-            .eq("email", userEmail)
+            .eq("cliente", req.userId)
             .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
             .order("data", { ascending: true })
             .order("horario", { ascending: true });
@@ -385,7 +385,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", req.userId)
         .order("data", { ascending: true });
 
       if (error) throw error;
@@ -431,7 +431,7 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail);
+        .eq("cliente", req.userId)
 
       if (error) throw error;
 
@@ -503,10 +503,9 @@ async function createSpreadsheetForUser(userEmail, userName) {
     console.log('📊 Planilha criada, ID:', doc.spreadsheetId);
     
     const sheet = doc.sheetsByIndex[0];
-    await sheet.setHeaderRow([
-      'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em', 'descricao'
-    ]);
-    
+   await sheet.setHeaderRow([
+  'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'created_at', 'descricao'
+]);
     try {
       await doc.shareWithEmail(userEmail, {
         role: 'writer',
@@ -561,6 +560,7 @@ async function authMiddleware(req, res, next) {
   if (error || !data.user) return res.status(401).json({ msg: "Token inválido" });
 
   req.user = data.user;
+  req.userId = data.user.id;
   next();
 }
 
@@ -608,7 +608,7 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+       .eq("cliente", req.userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -730,7 +730,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", req.userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -750,18 +750,19 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     }
 
     // Se não há conflito, cria o agendamento
-    const { data: novoAgendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente: userEmail,
-        nome: Nome,
-        email: userEmail,
-        telefone: Telefone,
-        data: Data,
-        horario: Horario,
-        status: "pendente",
-        confirmado: false,
-      }])
+   const { data: novoAgendamento, error } = await supabase
+  .from("agendamentos")
+  .insert([{
+    cliente: req.userId, // ✅ CORRETO (UUID)
+    user_id: req.userId, // ✅ ADICIONE TAMBÉM
+    nome: Nome,
+    email: userEmail,
+    telefone: Telefone,
+    data: Data,
+    horario: Horario,
+    status: "pendente",
+    confirmado: false,
+  }])
       .select()
       .single();
 
@@ -802,7 +803,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", req.userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -820,7 +821,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-      .eq("email", userEmail)
+      .eq("cliente", req.userId)
       .select()
       .single();
     
@@ -857,7 +858,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", req.userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -875,7 +876,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-      .eq("email", userEmail)
+      .eq("cliente", req.userId)
       .select()
       .single();
     
@@ -916,7 +917,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("email", userEmail)
+        .eq("cliente", req.userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -950,7 +951,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
         confirmado: false
       })
       .eq("id", id)
-      .eq("email", userEmail)
+      .eq("cliente", req.userId)
       .select()
       .single();
     
@@ -993,6 +994,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
