@@ -965,32 +965,31 @@ app.get("/warmup", async (req, res) => {
 // ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
 
-// ✅ CORRIGIR: Adicionar authMiddleware na rota /agendamentos
+// ✅ ROTA AGENDAMENTOS SEM CACHE (ATUALIZAÇÃO EM TEMPO REAL)
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id; // ✅ AGORA req.user existe
-    const cacheKey = `agendamentos_${userId}`;
+    const userId = req.user.id;
     
-    const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
-      console.log('🔄 Buscando agendamentos do DB para:', userId);
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("cliente", userId)
-        .order("data", { ascending: true })
-        .order("horario", { ascending: true });
+    console.log('🔄 Buscando agendamentos EM TEMPO REAL para:', userId);
+    
+    // ✅ SEM CACHE - sempre busca direto do banco
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", userId)
+      .order("data", { ascending: true })
+      .order("horario", { ascending: true });
 
-       if (error) throw error;
-      return data;
-    }, 30 * 1000); // 🔥 ADICIONE ESTA PARTE: 30 * 1000
+    if (error) throw error;
 
-    res.json({ agendamentos });
+    console.log(`✅ ${data?.length || 0} agendamentos encontrados`);
+    res.json({ agendamentos: data || [] });
+    
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
-
 // 🔥 CONFIGURAÇÃO SHEETS COM CACHE
 app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   try {
@@ -1361,6 +1360,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
