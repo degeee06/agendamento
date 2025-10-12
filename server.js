@@ -2,8 +2,6 @@ import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import crypto from 'crypto';
-
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -11,7 +9,7 @@ const app = express();
 app.use(cors({
   origin: [
     'https://frontrender-iota.vercel.app',
-    'https://oubook.vercel.app',
+    'https://frontrender.netlify.app',
     'http://localhost:3000',
     'http://localhost:5173',
     'https://localhost:3000'
@@ -37,8 +35,6 @@ app.options('*', cors());
 
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
-
-
 
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
@@ -85,369 +81,6 @@ const cacheManager = {
     cache.clear();
   }
 };
-function invalidarCacheAgendamentos(userId) {
-    const cacheKey = `agendamentos_${userId}`;
-    cacheManager.delete(cacheKey);
-    console.log(`🗑️ Cache invalidado para usuário: ${userId}`);
-}
-// ✅ ADICIONAR NO BACKEND: Rota para invalidar cache
-app.post("/api/invalidar-cache", authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    invalidarCacheAgendamentos(userId);
-    
-    res.json({ 
-      success: true, 
-      msg: "Cache invalidado com sucesso!",
-      userId 
-    });
-  } catch (error) {
-    console.error("Erro ao invalidar cache:", error);
-    res.status(500).json({ success: false, msg: "Erro interno" });
-  }
-});
-
-// Rota pública para agendamento por link personalizado
-app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
-    try {
-        const { username, token } = req.params;
-        
-        console.log('🔧 [DEBUG] Buscando link:', { username, token });
-        
-        // ✅ CORREÇÃO: Usar ISO string para a data de comparação
-        const dataAtualISO = new Date().toISOString();
-        console.log('🔧 [DEBUG] Data atual para comparação:', dataAtualISO);
-        
-        // Primeiro busca sem o join complexo
-        const { data: link, error } = await supabase
-            .from('links_agendamento')
-            .select('*')
-            .eq('token', token)
-            .eq('username', username)
-            .gt('expira_em', dataAtualISO) // ✅ CORREÇÃO AQUI!
-            .eq('utilizado', false)
-            .single();
-
-        console.log('🔧 [DEBUG] Link encontrado:', link);
-        console.log('🔧 [DEBUG] Erro na query:', error);
-
-        if (error) {
-            console.log('❌ Erro detalhado:', error);
-        }
-
-        if (error || !link) {
-            return res.status(404).json({ 
-                success: false, 
-                msg: "Link inválido, expirado ou já utilizado" 
-            });
-        }
-
-        // Depois busca o perfil separadamente se precisar
-        const { data: perfil } = await supabase
-            .from('perfis_usuarios')
-            .select('username, nome_empresa')
-            .eq('username', username)
-            .single();
-
-        console.log('🔧 [DEBUG] Perfil encontrado:', perfil);
-        
-        res.json({
-            success: true,
-            dados_predefinidos: {
-                nome: link.nome_cliente,
-                email: link.email_cliente,
-                telefone: link.telefone_cliente,
-                data: link.data,
-                horario: link.horario
-            },
-            personalizacao: {
-                nome_empresa: perfil?.nome_empresa,
-                username: perfil?.username
-            }
-        });
-        
-    } catch (error) {
-        console.error("❌ Erro no link de agendamento:", error);
-        res.status(500).json({ 
-            success: false, 
-            msg: "Erro interno",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-});
-
-// ✅ ATUALIZAR a rota /api/confirmar-agendamento-link
-app.post("/api/confirmar-agendamento-link", async (req, res) => {
-    try {
-        const { token, nome, email, telefone, data, horario } = req.body;
-        
-        console.log('🔧 [DEBUG] Confirmando agendamento:', { token, data, horario });
-        
-        // Validar token
-        const dataAtualISO = new Date().toISOString();
-        const { data: link, error: linkError } = await supabase
-            .from('links_agendamento')
-            .select('*')
-            .eq('token', token)
-            .gt('expira_em', dataAtualISO)
-            .eq('utilizado', false)
-            .single();
-        
-        if (linkError || !link) {
-            return res.status(400).json({ 
-                success: false, 
-                msg: "Link inválido ou expirado" 
-            });
-        }
-        
-        const profissionalUserId = link.criador_id;
-        console.log('🔧 [DEBUG] User ID do profissional:', profissionalUserId);
-        
-        // Verificar conflito
-        const { data: conflito } = await supabase
-            .from('agendamentos')
-            .select('id')
-            .eq('cliente', profissionalUserId)
-            .eq('data', data)
-            .eq('horario', horario)
-            .neq('status', 'cancelado')
-            .single();
-            
-        if (conflito) {
-            return res.status(400).json({
-                success: false,
-                msg: "Este horário já foi ocupado. Por favor, escolha outro horário."
-            });
-        }
-        
-        // Criar agendamento
-        const { data: agendamento, error: agendamentoError } = await supabase
-            .from('agendamentos')
-            .insert({
-                cliente: profissionalUserId,
-                nome: nome || link.nome_cliente,
-                email: email || link.email_cliente,
-                telefone: telefone || link.telefone_cliente,
-                data: data,
-                horario: horario,
-                status: 'confirmado',
-                confirmado: true
-            })
-            .select()
-            .single();
-        
-        if (agendamentoError) {
-            console.error('❌ Erro ao criar agendamento:', agendamentoError);
-            if (agendamentoError.code === '23505') {
-                return res.status(400).json({
-                    success: false,
-                    msg: "Conflito de horário. Este horário já está ocupado."
-                });
-            }
-            throw agendamentoError;
-        }
-        
-        // ✅ CORREÇÃO CRÍTICA: Invalidar cache do profissional
-        invalidarCacheAgendamentos(profissionalUserId);
-        
-        // Marcar link como utilizado
-        await supabase
-            .from('links_agendamento')
-            .update({ utilizado: true })
-            .eq('token', token);
-        
-        console.log('✅ Agendamento criado via link:', agendamento);
-        
-        res.json({ 
-            success: true, 
-            msg: "Agendamento confirmado com sucesso!",
-            agendamento 
-        });
-        
-    } catch (error) {
-        console.error("❌ Erro ao confirmar agendamento:", error);
-        res.status(500).json({ 
-            success: false, 
-            msg: "Erro interno"
-        });
-    }
-});
-
-// Rota para verificar perfil
-app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
-    try {
-        const { data: perfil, error } = await supabase
-            .from('perfis_usuarios')
-            .select('*')
-            .eq('user_id', req.user.id)
-            .single();
-
-        if (error || !perfil) {
-            return res.json({ 
-                success: false, 
-                temPerfil: false 
-            });
-        }
-
-        res.json({ 
-            success: true, 
-            temPerfil: true,
-            perfil 
-        });
-
-    } catch (error) {
-        console.error("Erro ao verificar perfil:", error);
-        res.status(500).json({ success: false, msg: "Erro interno" });
-    }
-});
-
-// Rota para criar perfil (já existe, só garantir que está funcionando)
-app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
-    try {
-        const { username, nome_empresa } = req.body;
-        
-        const { data: perfil, error } = await supabase
-            .from('perfis_usuarios')
-            .insert({
-                user_id: req.user.id,
-                username: username.toLowerCase(),
-                nome_empresa
-            })
-            .select()
-            .single();
-        
-        if (error) {
-            if (error.code === '23505') {
-                return res.status(400).json({ 
-                    success: false, 
-                    msg: "Username já está em uso" 
-                });
-            }
-            throw error;
-        }
-        
-        res.json({ success: true, perfil });
-        
-    } catch (error) {
-        console.error("Erro ao criar perfil:", error);
-        res.status(500).json({ success: false, msg: "Erro interno" });
-    }
-});
-
-// 🔥 CORRIGIR a rota de gerar link
-app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
-    try {
-        console.log('🔧 [DEBUG GERAR-LINK] Iniciando...');
-        const { nome, email, telefone } = req.body; // ✅ REMOVER data, horario
-        
-        // ✅ BUSCAR PERFIL DO USUÁRIO
-        const { data: perfis, error: perfilError } = await supabase
-            .from('perfis_usuarios')
-            .select('username')
-            .eq('user_id', req.user.id);
-        
-        if (perfilError || !perfis || perfis.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                msg: "Configure seu perfil primeiro" 
-            });
-        }
-
-        const perfil = perfis[0];
-        const token = crypto.randomBytes(32).toString('hex');
-        
-        // ✅ EXPIRAÇÃO SIMPLES (24h)
-        const expiracao = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        
-        console.log('🔧 [DEBUG] Inserindo link no banco...');
-        const { data: link, error: linkError } = await supabase
-            .from('links_agendamento')
-            .insert({
-                token: token,
-                criador_id: req.user.id,
-                username: perfil.username,
-                nome_cliente: nome,
-                email_cliente: email || null,
-                telefone_cliente: telefone,
-                // ✅ REMOVIDO: data, horario
-                expira_em: expiracao.toISOString(),
-                utilizado: false
-            })
-            .select();
-
-        if (linkError) throw linkError;
-
-        const linkPersonalizado = `https://oubook.vercel.app/agendar.html?username=${perfil.username}&token=${token}`;
-        
-        console.log('🔧 [DEBUG] Link gerado com sucesso:', linkPersonalizado);
-        
-        res.json({ 
-            success: true,
-            link: linkPersonalizado,
-            expira_em: '24h'
-        });
-        
-    } catch (error) {
-        console.error('❌ Erro ao gerar link:', error);
-        res.status(500).json({ 
-            success: false, 
-            msg: "Erro interno no servidor"
-        });
-    }
-});
-// ✅ NOVA ROTA: Buscar horários disponíveis
-// ✅ CORREÇÃO NA ROTA: /api/horarios-disponiveis/:username
-app.get("/api/horarios-disponiveis/:username", async (req, res) => {
-    try {
-        const { username } = req.params;
-        const { data } = req.query;
-        
-        console.log('🔧 [DEBUG] Buscando horários para:', { username, data });
-        
-        // Buscar perfil do profissional
-        const { data: perfil } = await supabase
-            .from('perfis_usuarios')
-            .select('user_id')
-            .eq('username', username)
-            .single();
-            
-        if (!perfil) {
-            return res.status(404).json({ success: false, msg: "Profissional não encontrado" });
-        }
-        
-        // ✅ CORREÇÃO: Buscar agendamentos usando user_id CORRETO
-        const { data: agendamentos } = await supabase
-            .from('agendamentos')
-            .select('horario')
-            .eq('cliente', perfil.user_id) // ✅ user_id do profissional
-            .eq('data', data)
-            .neq('status', 'cancelado'); // ✅ Inclui pendentes e confirmados
-        
-        const horariosOcupados = agendamentos?.map(a => a.horario) || [];
-        
-        // Horários disponíveis (9h às 18h, de hora em hora)
-        const todosHorarios = [
-            '09:00', '10:00', '11:00', '12:00', 
-            '13:00', '14:00', '15:00', '16:00', '17:00'
-        ];
-        
-        const horariosDisponiveis = todosHorarios.filter(
-            horario => !horariosOcupados.includes(horario)
-        );
-        
-        res.json({
-            success: true,
-            horarios_disponiveis: horariosDisponiveis,
-            horarios_ocupados: horariosOcupados
-        });
-        
-    } catch (error) {
-        console.error('❌ Erro ao buscar horários:', error);
-        res.status(500).json({ success: false, msg: "Erro interno" });
-    }
-});
-
-
 
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -507,7 +140,7 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
     throw error;
   }
 }
-async function analisarDescricaoNatural(descricao, userId) {
+async function analisarDescricaoNatural(descricao, userEmail) {
   try {
     const hoje = new Date();
     const amanha = new Date(hoje);
@@ -526,7 +159,7 @@ Analise a seguinte descrição de agendamento e extraia as informações no form
 
 DESCRIÇÃO: "${descricao}"
 
-USUÁRIO: ${userId}
+USUÁRIO: ${userEmail}
 DATA ATUAL: ${hoje.toISOString().split('T')[0]}
 
 Extraia as seguintes informações:
@@ -571,7 +204,7 @@ Responda APENAS com o JSON válido, sem nenhum texto adicional.
 }
 
 // Função para analisar estatísticas pessoais
-async function analisarEstatisticasPessoais(agendamentos, userId) {
+async function analisarEstatisticasPessoais(agendamentos, userEmail) {
   try {
     const estatisticas = {
       total: agendamentos.length,
@@ -584,11 +217,10 @@ async function analisarEstatisticasPessoais(agendamentos, userId) {
       confirmados: agendamentos.filter(a => a.status === 'confirmado').length,
       pendentes: agendamentos.filter(a => a.status === 'pendente').length,
       cancelados: agendamentos.filter(a => a.status === 'cancelado').length,
-      via_ia: agendamentos.filter(a => a.criado_via_ia).length
     };
 
     const contexto = `
-Estatísticas dos agendamentos do usuário ${userId}:
+Estatísticas dos agendamentos do usuário ${userEmail}:
 
 - Total de agendamentos: ${estatisticas.total}
 - Agendamentos este mês: ${estatisticas.este_mes}
@@ -624,7 +256,7 @@ Seja encorajador e prático. Máximo de 200 palavras.
 app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
   try {
     const { mensagem } = req.body;
-    const userId = req.user.id;
+    const userEmail = req.user.email;
 
     if (!mensagem) {
       return res.status(400).json({ success: false, msg: "Mensagem é obrigatória" });
@@ -634,7 +266,7 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("cliente", userId)
+      .eq("email", userEmail)
       .order("data", { ascending: false })
       .limit(5);
 
@@ -667,13 +299,13 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
 // Rota para sugerir horários livres
 app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userEmail = req.user.email;
 
         // Busca todos os agendamentos
         const { data: agendamentos, error } = await supabase
             .from("agendamentos")
             .select("*")
-            .eq("cliente", userId)
+            .eq("email", userEmail)
             .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
             .order("data", { ascending: true })
             .order("horario", { ascending: true });
@@ -681,7 +313,7 @@ app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
         if (error) throw error;
 
         // Análise inteligente com IA
-        const sugestoes = await analisarHorariosLivres(agendamentos || [], userId);
+        const sugestoes = await analisarHorariosLivres(agendamentos || [], userEmail);
 
         res.json({
             success: true,
@@ -700,12 +332,12 @@ app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
 });
 
 // Função para analisar horários livres
-async function analisarHorariosLivres(agendamentos, userId) {
+async function analisarHorariosLivres(agendamentos, userEmail) {
     try {
         const contexto = `
 ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
 
-Dados da agenda do usuário ${userId}:
+Dados da agenda do usuário ${userEmail}:
 
 AGENDAMENTOS EXISTENTES (próximos 7 dias):
 ${agendamentos.length > 0 ? 
@@ -745,15 +377,15 @@ return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horário
 // Rota de sugestões inteligentes
 app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const cacheKey = `sugestoes_${userId}`;
+    const userEmail = req.user.email;
+    const cacheKey = `sugestoes_${userEmail}`;
 
     const resultado = await cacheManager.getOrSet(cacheKey, async () => {
       // Busca todos os agendamentos
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("email", userEmail)
         .order("data", { ascending: true });
 
       if (error) throw error;
@@ -765,7 +397,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
         };
       }
 
-      const sugestoes = await gerarSugestoesInteligentes(agendamentos, userId);
+      const sugestoes = await gerarSugestoesInteligentes(agendamentos, userEmail);
 
       return {
         sugestoes,
@@ -791,19 +423,20 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
 // Rota de estatísticas pessoais com IA
 app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const cacheKey = `estatisticas_${userId}`;
+    const userEmail = req.user.email;
+    const cacheKey = `estatisticas_${userEmail}`;
 
     const resultado = await cacheManager.getOrSet(cacheKey, async () => {
       // Busca todos os agendamentos
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-       .eq("cliente", userId)
+        .eq("email", userEmail);
 
       if (error) throw error;
-      return await analisarEstatisticasPessoais(agendamentos || [], userId);
-    }, 60 * 1000); // 🔥 1 MINUTO
+
+      return await analisarEstatisticasPessoais(agendamentos || [], userEmail);
+    }, 5 * 60 * 1000); // Cache de 5 minutos para estatísticas
 
     res.json({
       success: true,
@@ -835,12 +468,12 @@ try {
 }
 
 // ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
-async function accessUserSpreadsheet(userId, userMetadata) {
+async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
     const spreadsheetId = userMetadata?.spreadsheet_id;
     
     if (!spreadsheetId) {
-      console.log(`📝 Usuário ${userId} não configurou Sheets`);
+      console.log(`📝 Usuário ${userEmail} não configurou Sheets`);
       return null;
     }
     
@@ -848,43 +481,43 @@ async function accessUserSpreadsheet(userId, userMetadata) {
     await doc.useServiceAccountAuth(creds);
     await doc.loadInfo();
     
-    console.log(`✅ Acessando planilha do usuário: ${userId}`);
+    console.log(`✅ Acessando planilha do usuário: ${userEmail}`);
     return doc;
   } catch (error) {
-    console.error(`❌ Erro ao acessar planilha do usuário ${userId}:`, error.message);
+    console.error(`❌ Erro ao acessar planilha do usuário ${userEmail}:`, error.message);
     return null;
   }
 }
 
-async function createSpreadsheetForUser(userId, userName) {
+async function createSpreadsheetForUser(userEmail, userName) {
   try {
-    console.log('🔧 Iniciando criação de planilha para:', userId);
+    console.log('🔧 Iniciando criação de planilha para:', userEmail);
     
     const doc = new GoogleSpreadsheet();
     await doc.useServiceAccountAuth(creds);
     
     await doc.createNewSpreadsheetDocument({
-      title: `Agendamentos - ${userName || userId}`.substring(0, 100),
+      title: `Agendamentos - ${userName || userEmail}`.substring(0, 100),
     });
     
     console.log('📊 Planilha criada, ID:', doc.spreadsheetId);
     
     const sheet = doc.sheetsByIndex[0];
     await sheet.setHeaderRow([
-      'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em', 'criado_via_ia', 'descricao'
+      'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'criado_em', 'descricao'
     ]);
     
     try {
-      await doc.shareWithEmail(userId, {
+      await doc.shareWithEmail(userEmail, {
         role: 'writer',
         emailMessage: 'Planilha de agendamentos compartilhada com você!'
       });
-      console.log('✅ Planilha compartilhada com:', userId);
+      console.log('✅ Planilha compartilhada com:', userEmail);
     } catch (shareError) {
       console.warn('⚠️ Não foi possível compartilhar a planilha:', shareError.message);
     }
     
-    console.log(`📊 Nova planilha criada para ${userId}: ${doc.spreadsheetId}`);
+    console.log(`📊 Nova planilha criada para ${userEmail}: ${doc.spreadsheetId}`);
     return doc.spreadsheetId;
     
   } catch (error) {
@@ -964,37 +597,37 @@ app.get("/warmup", async (req, res) => {
 
 // ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
-
-// ✅ ROTA AGENDAMENTOS SEM CACHE (ATUALIZAÇÃO EM TEMPO REAL)
+// 🔥 AGENDAMENTOS COM CACHE
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
-    console.log('🔄 Buscando agendamentos EM TEMPO REAL para:', userId);
-    
-    // ✅ SEM CACHE - sempre busca direto do banco
-    const { data, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("cliente", userId)
-      .order("data", { ascending: true })
-      .order("horario", { ascending: true });
+    const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
+      console.log('🔄 Buscando agendamentos do DB para:', userEmail);
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("email", userEmail)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
 
-    if (error) throw error;
+      if (error) throw error;
+      return data;
+    });
 
-    console.log(`✅ ${data?.length || 0} agendamentos encontrados`);
-    res.json({ agendamentos: data || [] });
-    
+    res.json({ agendamentos });
   } catch (err) {
     console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 // 🔥 CONFIGURAÇÃO SHEETS COM CACHE
 app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const cacheKey = `config_${userId}`;
+    const userEmail = req.user.email;
+    const cacheKey = `config_${userEmail}`;
     
     const config = await cacheManager.getOrSet(cacheKey, async () => {
       return {
@@ -1003,7 +636,7 @@ app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
       };
     }, 5 * 60 * 1000);
     
-    console.log(`📊 Configuração do usuário ${userId}:`, config);
+    console.log(`📊 Configuração do usuário ${userEmail}:`, config);
     res.json(config);
     
   } catch (err) {
@@ -1016,15 +649,15 @@ app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
 app.post("/configurar-sheets", authMiddleware, async (req, res) => {
   try {
     const { spreadsheetId, criarAutomatico } = req.body;
-    const userId = req.user.id;
+    const userEmail = req.user.email;
     
-    console.log('🔧 Configurando Sheets para:', userId, { spreadsheetId, criarAutomatico });
+    console.log('🔧 Configurando Sheets para:', userEmail, { spreadsheetId, criarAutomatico });
     
     let finalSpreadsheetId = spreadsheetId;
 
     if (criarAutomatico) {
-      console.log('🔧 Criando planilha automática para:', userId);
-      finalSpreadsheetId = await createSpreadsheetForUser(userId, req.user.user_metadata?.name);
+      console.log('🔧 Criando planilha automática para:', userEmail);
+      finalSpreadsheetId = await createSpreadsheetForUser(userEmail, req.user.user_metadata?.name);
       console.log('✅ Planilha criada com ID:', finalSpreadsheetId);
     }
 
@@ -1063,10 +696,10 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
     console.log('✅ Usuário atualizado com sucesso:', updatedUser.user.email);
     
     // 🔥 INVALIDA CACHE CORRETAMENTE
-    cacheManager.delete(`config_${userId}`);
-    cacheManager.delete(`agendamentos_${userId}`);
+    cacheManager.delete(`config_${userEmail}`);
+    cacheManager.delete(`agendamentos_${userEmail}`);
     
-    console.log('✅ Sheets configurado com sucesso para:', userId);
+    console.log('✅ Sheets configurado com sucesso para:', userEmail);
     
     res.json({ 
       msg: criarAutomatico ? "✅ Planilha criada e configurada com sucesso!" : "✅ Spreadsheet configurado com sucesso!",
@@ -1086,18 +719,18 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
-   if (!Nome || !Telefone || !Data || !Horario)
+    if (!Nome || !Email || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const userId = req.user.id;
-    const cacheKey = `agendamentos_${userId}`;
+    const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
     // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
     const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("email", userEmail)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1116,13 +749,13 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
- // Se não há conflito, cria o agendamento
+    // Se não há conflito, cria o agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
-       cliente: userId,           // 🔥 SEMPRE o email do usuário logado (PARA BUSCA)
+        cliente: userEmail,
         nome: Nome,
-        email: Email || null,         // 🔥 Email do cliente (pode ser null)
+        email: userEmail,
         telefone: Telefone,
         data: Data,
         horario: Horario,
@@ -1135,12 +768,12 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     if (error) throw error;
 
     try {
-      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
         await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
         await sheet.addRow(novoAgendamento);
-        console.log(`✅ Agendamento salvo na planilha do usuário ${userId}`);
+        console.log(`✅ Agendamento salvo na planilha do usuário ${userEmail}`);
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -1157,19 +790,19 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   }
 });
 
-// Atualize também as outras rotas (confirmar, cancelar, reagendar):
+// 🔥 CONFIRMAR COM CACHE E INVALIDAÇÃO
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
-    const cacheKey = `agendamentos_${userId}`;
+    const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
-    // ✅ BUSCA POR CLIENTE
+    // ✅ PRIMEIRO BUSCA O AGENDAMENTO USANDO CACHE
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("email", userEmail)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1183,11 +816,11 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       return res.status(404).json({ msg: "Agendamento não encontrado" });
     }
 
-     // ... resto do código
+    // Atualiza no banco
     const { data, error } = await supabase.from("agendamentos")
       .update({ confirmado: true, status: "confirmado" })
       .eq("id", id)
-     .eq("cliente", userId)
+      .eq("email", userEmail)
       .select()
       .single();
     
@@ -1195,7 +828,7 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
       }
@@ -1216,15 +849,15 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
 app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
-    const cacheKey = `agendamentos_${userId}`;
+    const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
     // ✅ PRIMEIRO BUSCA O AGENDAMENTO USANDO CACHE
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("email", userEmail)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1242,7 +875,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     const { data, error } = await supabase.from("agendamentos")
       .update({ status: "cancelado", confirmado: false })
       .eq("id", id)
-     .eq("cliente", userId)
+      .eq("email", userEmail)
       .select()
       .single();
     
@@ -1250,7 +883,7 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
     try {
-      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
       }
@@ -1273,8 +906,8 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
   try {
     const { id } = req.params;
     const { novaData, novoHorario } = req.body;
-   const userId = req.user.id;
-    const cacheKey = `agendamentos_${userId}`;
+    const userEmail = req.user.email;
+    const cacheKey = `agendamentos_${userEmail}`;
     
     if (!novaData || !novoHorario) return res.status(400).json({ msg: "Data e horário obrigatórios" });
     
@@ -1283,7 +916,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", userId)
+        .eq("email", userEmail)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
@@ -1317,14 +950,14 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
         confirmado: false
       })
       .eq("id", id)
-      .eq("cliente", userId)
+      .eq("email", userEmail)
       .select()
       .single();
     
     if (error) throw error;
 
     try {
-      const doc = await accessUserSpreadsheet(userId, req.user.user_metadata);
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         await updateRowInSheet(doc.sheetsByIndex[0], id, data);
       }
@@ -1360,41 +993,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
