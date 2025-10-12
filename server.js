@@ -90,7 +90,22 @@ function invalidarCacheAgendamentos(userId) {
     cacheManager.delete(cacheKey);
     console.log(`🗑️ Cache invalidado para usuário: ${userId}`);
 }
-
+// ✅ ADICIONAR NO BACKEND: Rota para invalidar cache
+app.post("/api/invalidar-cache", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    invalidarCacheAgendamentos(userId);
+    
+    res.json({ 
+      success: true, 
+      msg: "Cache invalidado com sucesso!",
+      userId 
+    });
+  } catch (error) {
+    console.error("Erro ao invalidar cache:", error);
+    res.status(500).json({ success: false, msg: "Erro interno" });
+  }
+});
 
 // Rota pública para agendamento por link personalizado
 app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
@@ -787,6 +802,9 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
        .eq("cliente", userId)
 
       if (error) throw error;
+      return await analisarEstatisticasPessoais(agendamentos || [], userId);
+    }, 60 * 1000); // 🔥 1 MINUTO
+
 
       return await analisarEstatisticasPessoais(agendamentos || [], userId);
     }, 5 * 60 * 1000); // Cache de 5 minutos para estatísticas
@@ -966,9 +984,9 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
-      if (error) throw error;
+       if (error) throw error;
       return data;
-    });
+    }, 30 * 1000); // 🔥 ADICIONE ESTA PARTE: 30 * 1000
 
     res.json({ agendamentos });
   } catch (err) {
@@ -1347,6 +1365,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
