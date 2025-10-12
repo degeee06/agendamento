@@ -248,7 +248,73 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
         });
     }
 });
+// 🔥 CORREÇÃO: Adicionar função para gerar sugestões inteligentes faltante
+async function gerarSugestoesInteligentes(agendamentos, userId) {
+    try {
+        const contexto = `
+ANÁLISE DE AGENDA - SUGESTÕES INTELIGENTES
 
+Dados da agenda do usuário ${userId}:
+
+TOTAL DE AGENDAMENTOS: ${agendamentos.length}
+AGENDAMENTOS RECENTES:
+${agendamentos.slice(0, 10).map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}
+
+DATA ATUAL: ${new Date().toISOString().split('T')[0]}
+
+INSTRUÇÕES:
+Analise os padrões de agendamento e forneça sugestões úteis para:
+1. Otimização de horários
+2. Redução de conflitos
+3. Melhores práticas de agendamento
+4. Insights sobre a distribuição temporal
+
+Seja prático, útil e ofereça conselhos acionáveis. Máximo de 200 palavras.
+`;
+
+        return await chamarDeepSeekIA("Analise estes agendamentos e forneça sugestões inteligentes:", contexto, "ECONOMICO");
+    } catch (error) {
+        console.error("Erro na geração de sugestões:", error);
+        return "💡 **Sugestões Gerais:**\n\n- Considere agrupar compromissos similares no mesmo dia\n- Deixe intervalos de 15-30 minutos entre reuniões\n- Revise agendamentos pendentes regularmente\n- Use horários da manhã para tarefas importantes";
+    }
+}
+
+// 🔥 CORREÇÃO: Melhorar tratamento de erros nas rotas IA
+app.use((err, req, res, next) => {
+    console.error('❌ Erro não tratado:', err);
+    res.status(500).json({ 
+        success: false, 
+        msg: "Erro interno do servidor",
+        ...(process.env.NODE_ENV === 'development' && { details: err.message })
+    });
+});
+
+// 🔥 CORREÇÃO: Adicionar rota de fallback para IA
+app.post("/api/agendamento-ia", authMiddleware, async (req, res) => {
+    try {
+        const { descricao } = req.body;
+        const userId = req.user.id;
+
+        if (!descricao) {
+            return res.status(400).json({ success: false, msg: "Descrição é obrigatória" });
+        }
+
+        const dadosAgendamento = await analisarDescricaoNatural(descricao, userId);
+        
+        res.json({
+            success: true,
+            dados_agendamento: dadosAgendamento
+        });
+
+    } catch (error) {
+        console.error("Erro no agendamento por IA:", error);
+        res.status(500).json({ 
+            success: false, 
+            msg: "Erro ao processar agendamento com IA",
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
 // Rota para verificar perfil
 app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
     try {
@@ -1336,6 +1402,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
