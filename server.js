@@ -63,47 +63,46 @@ app.post("/agendamento-publico", async (req, res) => {
       return res.status(400).json({ msg: "Horário indisponível" });
     }
 
-    // Cria agendamento
-    const { data: novoAgendamento, error } = await supabase
-      .from("agendamentos")
-      .insert([{
-        cliente: user_id,
-        user_id: user_id,
-        nome: nome,
-        email: email,
-        telefone: telefone,
-        data: data,
-        horario: horario,
-        status: "pendente",
-        confirmado: false,
-      }])
-      .select()
-      .single();
+     // Cria agendamento (código existente)
+        const { data: novoAgendamento, error } = await supabase
+            .from("agendamentos")
+            .insert([{
+                cliente: user_id,
+                user_id: user_id,
+                nome: nome,
+                email: email,
+                telefone: telefone,
+                data: data,
+                horario: horario,
+                status: "pendente",
+                confirmado: false,
+            }])
+            .select()
+            .single();
 
-    if (error) throw error;
+        if (error) throw error;
 
-    // Atualiza Google Sheets
-    try {
-      const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
-      if (doc) {
-        const sheet = doc.sheetsByIndex[0];
-        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-        await sheet.addRow(novoAgendamento);
-      }
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
+        // 🔥 NOVO: Notifica em tempo real
+        notificarClientes(user_id, {
+            type: 'novo_agendamento',
+            agendamento: novoAgendamento,
+            message: 'Novo agendamento recebido!'
+        });
+
+        // 🔥 INVALIDA CACHE no backend também
+        const cacheKey = `agendamentos_${user_id}`;
+        cacheManager.delete(cacheKey);
+
+        res.json({ 
+            success: true, 
+            msg: "Agendamento realizado com sucesso!", 
+            agendamento: novoAgendamento 
+        });
+
+    } catch (err) {
+        console.error("Erro no agendamento público:", err);
+        res.status(500).json({ msg: "Erro interno no servidor" });
     }
-
-    res.json({ 
-      success: true, 
-      msg: "Agendamento realizado com sucesso!", 
-      agendamento: novoAgendamento 
-    });
-
-  } catch (err) {
-    console.error("Erro no agendamento público:", err);
-    res.status(500).json({ msg: "Erro interno no servidor" });
-  }
 });
 
 // ROTA para gerar link único
@@ -129,6 +128,8 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
+
 
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
@@ -175,6 +176,58 @@ const cacheManager = {
     cache.clear();
   }
 };
+
+// ==================== SSE PARA TEMPO REAL ====================
+const clients = new Map(); // Armazena conexões dos usuários
+
+// Rota SSE para atualizações em tempo real
+app.get("/api/updates", authMiddleware, async (req, res) => {
+    const userId = req.userId;
+    
+    console.log(`🔔 Nova conexão SSE para usuário: ${userId}`);
+    
+    // Configura headers para SSE
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+    });
+    
+    // Envia um ping inicial
+    res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Conectado' })}\n\n`);
+    
+    // Armazena a conexão
+    const clientId = Date.now();
+    clients.set(clientId, { userId, res });
+    
+    // Remove conexão quando o cliente desconectar
+    req.on('close', () => {
+        console.log(`🔔 Cliente ${clientId} desconectado`);
+        clients.delete(clientId);
+    });
+});
+
+// 🔥 FUNÇÃO: Notificar todos os clientes de um usuário
+function notificarClientes(userId, mensagem) {
+    console.log(`🔔 Notificando usuário ${userId}:`, mensagem);
+    
+    let notificados = 0;
+    clients.forEach((client, clientId) => {
+        if (client.userId === userId) {
+            try {
+                client.res.write(`data: ${JSON.stringify(mensagem)}\n\n`);
+                notificados++;
+            } catch (error) {
+                console.log(`❌ Erro ao notificar cliente ${clientId}:`, error);
+                clients.delete(clientId);
+            }
+        }
+    });
+    
+    console.log(`🔔 ${notificados} clientes notificados`);
+}
+
 
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -1112,6 +1165,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
