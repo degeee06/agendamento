@@ -491,13 +491,12 @@ Seja prático e use emojis. Máximo 150 palavras.
     return "💡 **Sugestões Inteligentes:**\n\n- Considere agendar compromissos importantes no período da manhã\n- Mantenha intervalos de 15-30 minutos entre reuniões\n- Revise sua agenda semanalmente para ajustes\n\n📊 Dica: Use o agendamento por IA para otimizar seu tempo!";
   }
 }
-// ---------------- GOOGLE SHEETS POR USUÁRIO ----------------
 async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
     const spreadsheetId = userMetadata?.spreadsheet_id;
     
     if (!spreadsheetId) {
-      console.log(`📝 Usuário ${userEmail} não configurou Sheets`);
+      console.log(`📝 Usuário ${userEmail} não configurou Sheets`); // ✅ Use userEmail
       return null;
     }
     
@@ -505,10 +504,10 @@ async function accessUserSpreadsheet(userEmail, userMetadata) {
     await doc.useServiceAccountAuth(creds);
     await doc.loadInfo();
     
-    console.log(`✅ Acessando planilha do usuário: ${req.userId}`);
+    console.log(`✅ Acessando planilha do usuário: ${userEmail}`); // ✅ Use userEmail
     return doc;
   } catch (error) {
-    console.error(`❌ Erro ao acessar planilha do usuário ${req.userId}:`, error.message);
+    console.error(`❌ Erro ao acessar planilha do usuário ${userEmail}:`, error.message); // ✅ Use userEmail
     return null;
   }
 }
@@ -527,9 +526,10 @@ async function createSpreadsheetForUser(userEmail, userName) {
     console.log('📊 Planilha criada, ID:', doc.spreadsheetId);
     
     const sheet = doc.sheetsByIndex[0];
-   await sheet.setHeaderRow([
-  'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'created_at', 'descricao'
-]);
+    await sheet.setHeaderRow([
+      'id', 'nome', 'email', 'telefone', 'data', 'horario', 'status', 'confirmado', 'created_at', 'descricao'
+    ]);
+    
     try {
       await doc.shareWithEmail(userEmail, {
         role: 'writer',
@@ -540,7 +540,7 @@ async function createSpreadsheetForUser(userEmail, userName) {
       console.warn('⚠️ Não foi possível compartilhar a planilha:', shareError.message);
     }
     
-    console.log(`📊 Nova planilha criada para ${userEmail}`);
+    console.log(`📊 Nova planilha criada para ${userEmail}: ${doc.spreadsheetId}`); // ✅ Use userEmail
     return doc.spreadsheetId;
     
   } catch (error) {
@@ -1018,6 +1018,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
