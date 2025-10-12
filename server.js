@@ -155,6 +155,7 @@ app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
     }
 });
 
+// ✅ CORREÇÃO NA ROTA: /api/confirmar-agendamento-link
 app.post("/api/confirmar-agendamento-link", async (req, res) => {
     try {
         const { token, nome, email, telefone, data, horario } = req.body;
@@ -178,11 +179,11 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ MANTER cliente como user_id (NÃO buscar email)
+        // ✅ CORREÇÃO CRÍTICA: Usar o criador_id do link como user_id
         const profissionalUserId = link.criador_id;
         console.log('🔧 [DEBUG] User ID do profissional:', profissionalUserId);
         
-        // ✅ VERIFICAR CONFLITO usando user_id
+        // ✅ VERIFICAR CONFLITO usando user_id CORRETO
         const { data: conflito } = await supabase
             .from('agendamentos')
             .select('id')
@@ -199,11 +200,11 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ CRIAR AGENDAMENTO com user_id
+        // ✅ CRIAR AGENDAMENTO com user_id CORRETO
         const { data: agendamento, error: agendamentoError } = await supabase
             .from('agendamentos')
             .insert({
-                cliente: profissionalUserId, // ✅ user_id do profissional
+                cliente: profissionalUserId, // ✅ user_id do profissional (CORRETO)
                 nome: nome || link.nome_cliente,
                 email: email || link.email_cliente,
                 telefone: telefone || link.telefone_cliente,
@@ -372,10 +373,11 @@ app.post("/gerar-link-agendamento", authMiddleware, async (req, res) => {
     }
 });
 // ✅ NOVA ROTA: Buscar horários disponíveis
+// ✅ CORREÇÃO NA ROTA: /api/horarios-disponiveis/:username
 app.get("/api/horarios-disponiveis/:username", async (req, res) => {
     try {
         const { username } = req.params;
-        const { data } = req.query; // Data para verificar
+        const { data } = req.query;
         
         console.log('🔧 [DEBUG] Buscando horários para:', { username, data });
         
@@ -390,13 +392,13 @@ app.get("/api/horarios-disponiveis/:username", async (req, res) => {
             return res.status(404).json({ success: false, msg: "Profissional não encontrado" });
         }
         
-        // Buscar agendamentos do profissional na data específica
+        // ✅ CORREÇÃO: Buscar agendamentos usando user_id CORRETO
         const { data: agendamentos } = await supabase
             .from('agendamentos')
             .select('horario')
-            .eq('cliente', perfil.user_id) // Email do profissional
+            .eq('cliente', perfil.user_id) // ✅ user_id do profissional
             .eq('data', data)
-            .eq('status', 'confirmado');
+            .neq('status', 'cancelado'); // ✅ Inclui pendentes e confirmados
         
         const horariosOcupados = agendamentos?.map(a => a.horario) || [];
         
@@ -1336,6 +1338,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
