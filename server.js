@@ -1023,7 +1023,6 @@ app.get("/warmup", async (req, res) => {
 
 // ==================== ROTAS COM CACHE CORRIGIDAS ====================
 
-// ✅ CORREÇÃO: Buscar por user_id (nova coluna) em vez de cliente
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1031,15 +1030,37 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
     
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
       console.log('🔄 Buscando agendamentos do DB para user_id:', userId);
-      const { data, error } = await supabase
+      
+      // ✅ PRIMEIRO: Tentar buscar por user_id (nova coluna)
+      let { data, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("user_id", userId) // ✅ CORREÇÃO: Buscar pela NOVA coluna user_id
+        .eq("user_id", userId) // ✅ NOVA coluna
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
+      // ✅ SE NÃO ENCONTRAR, buscar pela coluna cliente (compatibilidade)
+      if (!data || data.length === 0) {
+        console.log('🔍 Nenhum agendamento por user_id, tentando por cliente...');
+        const { data: userData } = await supabase.auth.getUser(req.headers["authorization"]?.split("Bearer ")[1]);
+        const userEmail = userData.user.email;
+        
+        ({ data, error } = await supabase
+          .from("agendamentos")
+          .select("*")
+          .eq("cliente", userEmail) // ✅ Coluna original
+          .order("data", { ascending: true })
+          .order("horario", { ascending: true }));
+      }
+
       if (error) throw error;
-      return data;
+      
+      console.log('✅ Agendamentos encontrados:', data?.length || 0);
+      if (data && data.length > 0) {
+        console.log('📋 Primeiros agendamentos:', data.slice(0, 3));
+      }
+      
+      return data || [];
     });
 
     res.json({ agendamentos });
@@ -1048,7 +1069,23 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+// 🔥 ADICIONAR: Função formatarData faltante
+function formatarData(dataString) {
+    if (!dataString) return 'Data inválida';
+    
+    try {
+        const [ano, mes, dia] = dataString.split('-');
+        return `${dia}/${mes}/${ano}`;
+    } catch (error) {
+        console.error('Erro ao formatar data:', error);
+        return dataString;
+    }
+}
 
+// 🔥 ATUALIZAR: A função formatData existente para manter compatibilidade
+function formatData(data) {
+    return formatarData(data); // Reutiliza a nova função
+}
 // 🔥 CONFIGURAÇÃO SHEETS COM CACHE
 app.get("/configuracao-sheets", authMiddleware, async (req, res) => {
   try {
@@ -1412,6 +1449,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
