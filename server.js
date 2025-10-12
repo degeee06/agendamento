@@ -38,6 +38,12 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
+function invalidarCacheAgendamentos(userId) {
+    const cacheKey = `agendamentos_${userId}`;
+    cacheManager.delete(cacheKey);
+    console.log(`🗑️ Cache invalidado para usuário: ${userId}`);
+}
+
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
 
@@ -155,7 +161,7 @@ app.get("/api/agendar-convidado/:username/:token", async (req, res) => {
     }
 });
 
-// ✅ CORREÇÃO NA ROTA: /api/confirmar-agendamento-link
+// ✅ ATUALIZAR a rota /api/confirmar-agendamento-link
 app.post("/api/confirmar-agendamento-link", async (req, res) => {
     try {
         const { token, nome, email, telefone, data, horario } = req.body;
@@ -179,15 +185,14 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ CORREÇÃO CRÍTICA: Usar o criador_id do link como user_id
         const profissionalUserId = link.criador_id;
         console.log('🔧 [DEBUG] User ID do profissional:', profissionalUserId);
         
-        // ✅ VERIFICAR CONFLITO usando user_id CORRETO
+        // Verificar conflito
         const { data: conflito } = await supabase
             .from('agendamentos')
             .select('id')
-            .eq('cliente', profissionalUserId) // ✅ user_id do profissional
+            .eq('cliente', profissionalUserId)
             .eq('data', data)
             .eq('horario', horario)
             .neq('status', 'cancelado')
@@ -200,11 +205,11 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             });
         }
         
-        // ✅ CRIAR AGENDAMENTO com user_id CORRETO
+        // Criar agendamento
         const { data: agendamento, error: agendamentoError } = await supabase
             .from('agendamentos')
             .insert({
-                cliente: profissionalUserId, // ✅ user_id do profissional (CORRETO)
+                cliente: profissionalUserId,
                 nome: nome || link.nome_cliente,
                 email: email || link.email_cliente,
                 telefone: telefone || link.telefone_cliente,
@@ -226,6 +231,9 @@ app.post("/api/confirmar-agendamento-link", async (req, res) => {
             }
             throw agendamentoError;
         }
+        
+        // ✅ CORREÇÃO CRÍTICA: Invalidar cache do profissional
+        invalidarCacheAgendamentos(profissionalUserId);
         
         // Marcar link como utilizado
         await supabase
@@ -1338,6 +1346,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
