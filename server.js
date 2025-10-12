@@ -1026,41 +1026,72 @@ app.get("/warmup", async (req, res) => {
 app.get("/agendamentos", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
+    const userEmail = req.user.email; // ✅ PEGAR EMAIL DO USUÁRIO LOGADO
     const cacheKey = `agendamentos_${userId}`;
     
     const agendamentos = await cacheManager.getOrSet(cacheKey, async () => {
-      console.log('🔄 Buscando agendamentos do DB para user_id:', userId);
+      console.log('🔄 Buscando agendamentos para:', { userId, userEmail });
       
-      // ✅ PRIMEIRO: Tentar buscar por user_id (nova coluna)
-      let { data, error } = await supabase
+      // ✅ BUSCAR POR USER_ID (nova coluna)
+      let { data: agendamentosUserId, error: error1 } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("user_id", userId) // ✅ NOVA coluna
+        .eq("user_id", userId)
         .order("data", { ascending: true })
         .order("horario", { ascending: true });
 
-      // ✅ SE NÃO ENCONTRAR, buscar pela coluna cliente (compatibilidade)
-      if (!data || data.length === 0) {
-        console.log('🔍 Nenhum agendamento por user_id, tentando por cliente...');
-        const { data: userData } = await supabase.auth.getUser(req.headers["authorization"]?.split("Bearer ")[1]);
-        const userEmail = userData.user.email;
-        
-        ({ data, error } = await supabase
-          .from("agendamentos")
-          .select("*")
-          .eq("cliente", userEmail) // ✅ Coluna original
-          .order("data", { ascending: true })
-          .order("horario", { ascending: true }));
+      if (error1) {
+        console.error('❌ Erro ao buscar por user_id:', error1);
+        // Não throw aqui, continua para tentar por cliente
       }
 
-      if (error) throw error;
-      
-      console.log('✅ Agendamentos encontrados:', data?.length || 0);
-      if (data && data.length > 0) {
-        console.log('📋 Primeiros agendamentos:', data.slice(0, 3));
+      // ✅ BUSCAR POR CLIENTE/EMAIL (coluna antiga - compatibilidade)
+      let { data: agendamentosCliente, error: error2 } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("cliente", userEmail)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
+
+      if (error2) {
+        console.error('❌ Erro ao buscar por cliente:', error2);
+        // Não throw aqui, usa o que conseguiu buscar
       }
+
+      // ✅ COMBINAR E REMOVER DUPLICATAS
+      const todosAgendamentos = [
+        ...(agendamentosUserId || []), 
+        ...(agendamentosCliente || [])
+      ];
       
-      return data || [];
+      // Remover duplicatas por ID
+      const agendamentosUnicos = todosAgendamentos.filter((ag, index, self) => 
+        index === self.findIndex(a => a.id === ag.id)
+      );
+
+      console.log('📊 Resultado da busca:', {
+        por_user_id: agendamentosUserId?.length || 0,
+        por_cliente: agendamentosCliente?.length || 0,
+        unicos: agendamentosUnicos.length
+      });
+
+      // ✅ ATUALIZAR AGENDAMENTOS ANTIGOS com user_id faltante
+      if (agendamentosCliente && agendamentosCliente.length > 0) {
+        const agendamentosSemUserId = agendamentosCliente.filter(ag => !ag.user_id);
+        
+        if (agendamentosSemUserId.length > 0) {
+          console.log('🔄 Atualizando agendamentos sem user_id:', agendamentosSemUserId.length);
+          
+          for (const ag of agendamentosSemUserId) {
+            await supabase
+              .from("agendamentos")
+              .update({ user_id: userId })
+              .eq("id", ag.id);
+          }
+        }
+      }
+
+      return agendamentosUnicos;
     });
 
     res.json({ agendamentos });
@@ -1069,6 +1100,8 @@ app.get("/agendamentos", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
+
 // 🔥 ADICIONAR: Função formatarData faltante
 function formatarData(dataString) {
     if (!dataString) return 'Data inválida';
@@ -1449,6 +1482,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
