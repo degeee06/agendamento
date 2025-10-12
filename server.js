@@ -180,31 +180,51 @@ const cacheManager = {
 // ==================== SSE PARA TEMPO REAL ====================
 const clients = new Map(); // Armazena conexões dos usuários
 
-// Rota SSE para atualizações em tempo real
+// 🔥 ATUALIZE a rota SSE para lidar com CORS
 app.get("/api/updates", authMiddleware, async (req, res) => {
     const userId = req.userId;
     
     console.log(`🔔 Nova conexão SSE para usuário: ${userId}`);
     
-    // Configura headers para SSE
+    // 🔥 CORREÇÃO: Headers CORS para SSE
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+        'Access-Control-Allow-Credentials': 'true'
     });
     
+    // 🔥 CORREÇÃO: Envia dados imediatamente para manter conexão
+    res.write(':\n\n'); // Empty comment to prevent timeout
+    
     // Envia um ping inicial
-    res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Conectado' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Conectado', userId })}\n\n`);
     
     // Armazena a conexão
     const clientId = Date.now();
     clients.set(clientId, { userId, res });
+    console.log(`🔔 Cliente ${clientId} conectado. Total: ${clients.size}`);
     
     // Remove conexão quando o cliente desconectar
     req.on('close', () => {
-        console.log(`🔔 Cliente ${clientId} desconectado`);
+        console.log(`🔔 Cliente ${clientId} desconectado. Restantes: ${clients.size - 1}`);
         clients.delete(clientId);
+    });
+    
+    // 🔥 CORREÇÃO: Envia ping a cada 30 segundos para manter conexão
+    const pingInterval = setInterval(() => {
+        if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: Date.now() })}\n\n`);
+        } else {
+            clearInterval(pingInterval);
+        }
+    }, 30000);
+    
+    // Limpa intervalo quando conexão fechar
+    req.on('close', () => {
+        clearInterval(pingInterval);
     });
 });
 
@@ -1165,6 +1185,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
