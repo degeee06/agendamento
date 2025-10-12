@@ -159,7 +159,7 @@ Analise a seguinte descrição de agendamento e extraia as informações no form
 
 DESCRIÇÃO: "${descricao}"
 
-USUÁRIO: ${req.userId}
+USUÁRIO: ${userEmail}
 DATA ATUAL: ${hoje.toISOString().split('T')[0]}
 
 Extraia as seguintes informações:
@@ -220,7 +220,7 @@ async function analisarEstatisticasPessoais(agendamentos, userEmail) {
     };
 
     const contexto = `
-Estatísticas dos agendamentos do usuário ${req.userId}:
+Estatísticas dos agendamentos do usuário ${userEmail}
 
 - Total de agendamentos: ${estatisticas.total}
 - Agendamentos este mês: ${estatisticas.este_mes}
@@ -387,7 +387,7 @@ app.get("/api/sugestoes-inteligentes", authMiddleware, async (req, res) => {
         .select("*")
         .eq("cliente", req.userId)
         .order("data", { ascending: true });
-        .eq("cliente", req.userId);
+
 
       if (error) throw error;
 
@@ -432,7 +432,7 @@ app.get("/api/estatisticas-pessoais", authMiddleware, async (req, res) => {
       const { data: agendamentos, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("cliente", req.userId)
+        .eq("cliente", req.userId);
 
       if (error) throw error;
 
@@ -1018,6 +1018,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
