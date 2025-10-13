@@ -65,8 +65,9 @@ app.post("/agendamento-publico", async (req, res) => {
       .select("*")
       .eq("user_id", user_id)
       .eq("data", data)
-      .eq("horario", horario);
+      .eq("horario", horario)
       .neq("status", "cancelado"); // Ignora agendamentos cancelados
+    
     if (conflito && conflito.length > 0) {
       return res.status(400).json({ msg: "Horário indisponível" });
     }
@@ -1183,6 +1184,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
