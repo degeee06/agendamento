@@ -703,14 +703,25 @@ async function updateRowInSheet(sheet, rowId, updatedData) {
   await sheet.loadHeaderRow();
   const rows = await sheet.getRows();
   const row = rows.find(r => r.id === rowId);
+  
+  // 🆕 FILTRA APENAS OS CAMPOS DESEJADOS
+  const dadosFiltrados = {
+    nome: updatedData.nome,
+    email: updatedData.email || '',
+    telefone: updatedData.telefone,
+    data: updatedData.data,
+    horario: updatedData.horario,
+    status: updatedData.status
+  };
+  
   if (row) {
-    Object.keys(updatedData).forEach(key => {
-      if (sheet.headerValues.includes(key)) row[key] = updatedData[key];
+    Object.keys(dadosFiltrados).forEach(key => {
+      if (sheet.headerValues.includes(key)) row[key] = dadosFiltrados[key];
     });
     await row.save();
   } else {
-    await ensureDynamicHeaders(sheet, Object.keys(updatedData));
-    await sheet.addRow(updatedData);
+    await ensureDynamicHeaders(sheet, Object.keys(dadosFiltrados));
+    await sheet.addRow(dadosFiltrados);
   }
 }
 
@@ -944,8 +955,19 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
-        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-        await sheet.addRow(novoAgendamento);
+        
+        // 🆕 USA DADOS FILTRADOS (igual ao agendamento público)
+        const dadosSheets = {
+          nome: novoAgendamento.nome,
+          email: novoAgendamento.email || '',
+          telefone: novoAgendamento.telefone,
+          data: novoAgendamento.data,
+          horario: novoAgendamento.horario,
+          status: novoAgendamento.status
+        };
+        
+        await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
+        await sheet.addRow(dadosSheets);
         console.log(`✅ Agendamento salvo na planilha do usuário ${req.userId}`);
       }
     } catch (sheetError) {
@@ -1013,7 +1035,15 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
-        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+        const dadosFiltrados = {
+  nome: data.nome,
+  email: data.email || '',
+  telefone: data.telefone,
+  data: data.data,
+  horario: data.horario,
+  status: data.status
+};
+await updateRowInSheet(doc.sheetsByIndex[0], id, dadosFiltrados);
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -1086,7 +1116,15 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
-        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+       const dadosFiltrados = {
+  nome: data.nome,
+  email: data.email || '',
+  telefone: data.telefone,
+  data: data.data,
+  horario: data.horario,
+  status: data.status
+};
+await updateRowInSheet(doc.sheetsByIndex[0], id, dadosFiltrados);
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -1179,7 +1217,15 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
-        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+        const dadosFiltrados = {
+  nome: data.nome,
+  email: data.email || '',
+  telefone: data.telefone,
+  data: data.data,
+  horario: data.horario,
+  status: data.status
+};
+await updateRowInSheet(doc.sheetsByIndex[0], id, dadosFiltrados);
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
@@ -1219,6 +1265,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
