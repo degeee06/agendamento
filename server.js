@@ -955,7 +955,6 @@ app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) 
       .update({ 
         confirmado: true, 
         status: "confirmado",
-        confirmado_por: req.userId // Registra quem confirmou
       })
       .eq("id", id)
       .select()
@@ -1029,7 +1028,6 @@ app.post("/agendamentos/:email/cancelar/:id", authMiddleware, async (req, res) =
       .update({ 
         status: "cancelado", 
         confirmado: false,
-        cancelado_por: req.userId // Registra quem cancelou
       })
       .eq("id", id)
       .select()
@@ -1157,6 +1155,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
