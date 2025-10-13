@@ -39,10 +39,19 @@ app.use(express.json());
 // ROTA PÚBLICA para agendamento via link
 app.post("/agendamento-publico", async (req, res) => {
   try {
-    const { nome, email, telefone, data, horario, user_id } = req.body;
+    const { nome, email, telefone, data, horario, user_id, t } = req.body; // 🆕 Recebe timestamp
     
-    if (!nome || !telefone || !data || !horario || !user_id) {
-      return res.status(400).json({ msg: "Preencha todos os campos obrigatórios" });
+    if (!nome || !telefone || !data || !horario || !user_id || !t) { // 🆕 Verifica timestamp
+      return res.status(400).json({ msg: "Link inválido ou expirado" });
+    }
+
+    // 🆕 VERIFICA EXPIRAÇÃO (24 horas)
+    const agora = Date.now();
+    const diferenca = agora - parseInt(t);
+    const horas = diferenca / (1000 * 60 * 60);
+    
+    if (horas > 24) {
+      return res.status(400).json({ msg: "Link expirado. Gere um novo link de agendamento." });
     }
 
     // Verifica se o user_id existe
@@ -50,7 +59,6 @@ app.post("/agendamento-publico", async (req, res) => {
     if (userError || !user) {
       return res.status(400).json({ msg: "Link inválido" });
     }
-
     // Verifica conflitos
     const { data: conflito } = await supabase
       .from("agendamentos")
@@ -59,7 +67,6 @@ app.post("/agendamento-publico", async (req, res) => {
       .eq("data", data)
       .eq("horario", horario);
       .neq("status", "cancelado"); // Ignora agendamentos cancelados
-
     if (conflito && conflito.length > 0) {
       return res.status(400).json({ msg: "Horário indisponível" });
     }
@@ -107,7 +114,6 @@ app.post("/agendamento-publico", async (req, res) => {
   }
 });
 
-// ROTA para gerar link único
 app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
   try {
     const user_id = req.params.user_id;
@@ -117,12 +123,15 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
       return res.status(403).json({ msg: "Não autorizado" });
     }
 
-    const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}`;
+    // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
+    const timestamp = Date.now();
+    const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
     
     res.json({ 
       success: true, 
       link: link,
-      qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`
+      qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
+      expira_em: "24 horas" // 🆕 Informa quando expira
     });
 
   } catch (error) {
@@ -1174,8 +1183,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
 
 
 
