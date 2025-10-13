@@ -832,7 +832,15 @@ app.post("/configurar-sheets", authMiddleware, async (req, res) => {
     });
   }
 });
-
+// 🔥 FUNÇÃO AUXILIAR: Verifica se usuário pode gerenciar agendamento
+function usuarioPodeGerenciarAgendamento(agendamento, userId) {
+  // ✅ Pode gerenciar se:
+  // 1. É o dono do agendamento (cliente) OU
+  // 2. É o dono do link que criou o agendamento (user_id) OU  
+  // 3. É um administrador (se quiser implementar depois)
+  return agendamento.cliente === userId || 
+         agendamento.user_id === userId;
+}
 // 🔥 AGENDAR COM CACHE E INVALIDAÇÃO
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
@@ -1112,6 +1120,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
