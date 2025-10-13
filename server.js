@@ -91,6 +91,16 @@ app.post("/agendamento-publico", async (req, res) => {
 
     if (error) throw error;
 
+// 🆕 MARCA LINK COMO USADO (APÓS AGENDAMENTO BEM-SUCEDIDO)
+    await supabase
+      .from('links_uso')
+      .insert([{
+        user_id: user_id,
+        token: t,
+        usado_em: new Date(),
+        agendamento_id: novoAgendamento.id
+      }]);
+    
     // Atualiza Google Sheets
    try {
   const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
@@ -1196,6 +1206,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
