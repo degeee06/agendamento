@@ -92,16 +92,28 @@ app.post("/agendamento-publico", async (req, res) => {
     if (error) throw error;
 
     // Atualiza Google Sheets
-    try {
-      const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
-      if (doc) {
-        const sheet = doc.sheetsByIndex[0];
-        await ensureDynamicHeaders(sheet, Object.keys(novoAgendamento));
-        await sheet.addRow(novoAgendamento);
-      }
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
+   try {
+  const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
+  if (doc) {
+    const sheet = doc.sheetsByIndex[0];
+    
+    // 🆕 DADOS FILTRADOS PARA SHEETS
+    const dadosSheets = {
+      nome: novoAgendamento.nome,
+      email: novoAgendamento.email || '',
+      telefone: novoAgendamento.telefone,
+      data: novoAgendamento.data,
+      horario: novoAgendamento.horario,
+      status: novoAgendamento.status
+    };
+    
+    await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
+    await sheet.addRow(dadosSheets);
+    console.log('✅ Dados filtrados salvos no Sheets');
+  }
+} catch (sheetError) {
+  console.error("Erro ao atualizar Google Sheets:", sheetError);
+}
 
     res.json({ 
       success: true, 
@@ -1184,6 +1196,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
