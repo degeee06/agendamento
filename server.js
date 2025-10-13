@@ -890,10 +890,11 @@ function usuarioPodeGerenciarAgendamento(agendamento, userId) {
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
+    // 👇 removido o Email da validação obrigatória
     if (!Nome || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Preencha os campos obrigatórios" });
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    const userEmail = req.user.email;
+    const userEmail = req.user?.email || Email || null; // ✅ usa email do usuário logado, do corpo, ou null
     const cacheKey = `agendamentos_${req.userId}`;
     
     // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
@@ -921,19 +922,19 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     }
 
     // Se não há conflito, cria o agendamento
-   const { data: novoAgendamento, error } = await supabase
-  .from("agendamentos")
-  .insert([{
-    cliente: req.userId, // ✅ CORRETO (UUID)
-    user_id: req.userId, // ✅ ADICIONE TAMBÉM
-    nome: Nome,
-    email: userEmail,
-    telefone: Telefone,
-    data: Data,
-    horario: Horario,
-    status: "pendente",
-    confirmado: false,
-  }])
+    const { data: novoAgendamento, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        cliente: req.userId,
+        user_id: req.userId,
+        nome: Nome,
+        email: userEmail, // ✅ agora pode ser null ou opcional
+        telefone: Telefone,
+        data: Data,
+        horario: Horario,
+        status: "pendente",
+        confirmado: false,
+      }])
       .select()
       .single();
 
@@ -1218,6 +1219,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
