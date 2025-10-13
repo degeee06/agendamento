@@ -36,19 +36,27 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
-// ROTA PÚBLICA para agendamento via link
+
+// ROTA PÚBLICA para agendamento via link - EMAIL OPCIONAL
 app.post("/agendamento-publico", async (req, res) => {
   try {
     const { nome, email, telefone, data, horario, user_id } = req.body;
     
-    if (!nome || !email || !telefone || !data || !horario || !user_id) {
-      return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
+    // ✅ EMAIL É OPCIONAL AGORA
+    if (!nome || !telefone || !data || !horario || !user_id) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Todos os campos obrigatórios devem ser preenchidos" 
+      });
     }
+
+    // ✅ Define email como vazio se não foi enviado
+    const emailFinal = email || '';
 
     // Verifica se o user_id existe
     const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id);
     if (userError || !user) {
-      return res.status(400).json({ msg: "Link inválido" });
+      return res.status(400).json({ success: false, msg: "Link inválido" });
     }
 
     // Verifica conflitos
@@ -60,7 +68,7 @@ app.post("/agendamento-publico", async (req, res) => {
       .eq("horario", horario);
 
     if (conflito && conflito.length > 0) {
-      return res.status(400).json({ msg: "Horário indisponível" });
+      return res.status(400).json({ success: false, msg: "Horário indisponível" });
     }
 
     // Cria agendamento
@@ -70,7 +78,7 @@ app.post("/agendamento-publico", async (req, res) => {
         cliente: user_id,
         user_id: user_id,
         nome: nome,
-        email: email,
+        email: emailFinal, // ⬅️ Pode ser string vazia
         telefone: telefone,
         data: data,
         horario: horario,
@@ -102,7 +110,7 @@ app.post("/agendamento-publico", async (req, res) => {
 
   } catch (err) {
     console.error("Erro no agendamento público:", err);
-    res.status(500).json({ msg: "Erro interno no servidor" });
+    res.status(500).json({ success: false, msg: "Erro interno no servidor" });
   }
 });
 
@@ -1173,6 +1181,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
