@@ -45,6 +45,19 @@ app.post("/agendamento-publico", async (req, res) => {
       return res.status(400).json({ msg: "Link inválido ou expirado" });
     }
 
+  // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
+    const { data: linkUsado } = await supabase
+      .from('links_uso')
+      .select('*')
+      .eq('token', t)
+      .eq('user_id', user_id)
+      .single();
+
+    if (linkUsado) {
+      return res.status(400).json({ msg: "Este link já foi utilizado. Solicite um novo link de agendamento." });
+    }
+
+    
     // 🆕 VERIFICA EXPIRAÇÃO (24 horas)
     const agora = Date.now();
     const diferenca = agora - parseInt(t);
@@ -100,7 +113,6 @@ app.post("/agendamento-publico", async (req, res) => {
         usado_em: new Date(),
         agendamento_id: novoAgendamento.id
       }]);
-    
     // Atualiza Google Sheets
    try {
   const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
@@ -1206,6 +1218,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
