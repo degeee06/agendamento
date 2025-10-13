@@ -1209,6 +1209,205 @@ app.post("/agendamentos/gerenciar/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+
+// ==================== ROTAS PARA AGENDAMENTOS PÚBLICOS ====================
+
+// 🔥 CONFIRMAR AGENDAMENTO PÚBLICO (sem verificação de ownership)
+app.post("/agendamentos/confirmar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user.email;
+    
+    console.log('✅ Confirmando agendamento público ID:', id, 'por usuário:', userEmail);
+
+    // Busca o agendamento sem verificar ownership
+    const { data: agendamento, error: fetchError } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !agendamento) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+    }
+
+    // Atualiza no banco sem verificar cliente
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ 
+        confirmado: true, 
+        status: "confirmado",
+        confirmado_por: req.userId // 🔥 Registra quem confirmou
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+
+    // Atualiza Google Sheets se possível
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE DE AMBOS OS USUÁRIOS
+    cacheManager.delete(`agendamentos_${req.userId}`);
+    if (agendamento.cliente) {
+      cacheManager.delete(`agendamentos_${agendamento.cliente}`);
+    }
+    
+    res.json({ 
+      msg: "Agendamento confirmado com sucesso!", 
+      agendamento: data 
+    });
+  } catch (err) {
+    console.error("Erro ao confirmar agendamento público:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 CANCELAR AGENDAMENTO PÚBLICO (sem verificação de ownership)
+app.post("/agendamentos/cancelar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user.email;
+    
+    console.log('❌ Cancelando agendamento público ID:', id, 'por usuário:', userEmail);
+
+    // Busca o agendamento sem verificar ownership
+    const { data: agendamento, error: fetchError } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !agendamento) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+    }
+
+    // Atualiza no banco sem verificar cliente
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ 
+        status: "cancelado", 
+        confirmado: false,
+        cancelado_por: req.userId // 🔥 Registra quem cancelou
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+
+    // Atualiza Google Sheets se possível
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE DE AMBOS OS USUÁRIOS
+    cacheManager.delete(`agendamentos_${req.userId}`);
+    if (agendamento.cliente) {
+      cacheManager.delete(`agendamentos_${agendamento.cliente}`);
+    }
+    
+    res.json({ 
+      msg: "Agendamento cancelado com sucesso!", 
+      agendamento: data 
+    });
+  } catch (err) {
+    console.error("Erro ao cancelar agendamento público:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// 🔥 REAGENDAR AGENDAMENTO PÚBLICO
+app.post("/agendamentos/reagendar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { novaData, novoHorario } = req.body;
+    const userEmail = req.user.email;
+    
+    if (!novaData || !novoHorario) {
+      return res.status(400).json({ msg: "Data e horário obrigatórios" });
+    }
+
+    console.log('🔄 Reagendando agendamento público ID:', id, 'por usuário:', userEmail);
+
+    // Busca o agendamento sem verificar ownership
+    const { data: agendamento, error: fetchError } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !agendamento) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+    }
+
+    // Verifica conflito de horário
+    const { data: conflito, error: conflitoError } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("data", novaData)
+      .eq("horario", novoHorario)
+      .neq("id", id);
+
+    if (conflitoError) throw conflitoError;
+    
+    if (conflito && conflito.length > 0) {
+      return res.status(400).json({ 
+        msg: "Já existe um agendamento para esta nova data e horário" 
+      });
+    }
+
+    // Atualiza no banco sem verificar cliente
+    const { data, error } = await supabase.from("agendamentos")
+      .update({ 
+        data: novaData, 
+        horario: novoHorario,
+        status: "pendente",
+        confirmado: false,
+        reagendado_por: req.userId // 🔥 Registra quem reagendou
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+
+    // Atualiza Google Sheets se possível
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE DE AMBOS OS USUÁRIOS
+    cacheManager.delete(`agendamentos_${req.userId}`);
+    if (agendamento.cliente) {
+      cacheManager.delete(`agendamentos_${agendamento.cliente}`);
+    }
+    
+    res.json({ 
+      msg: "Agendamento reagendado com sucesso!", 
+      agendamento: data 
+    });
+  } catch (err) {
+    console.error("Erro ao reagendar agendamento público:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -1227,6 +1426,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
