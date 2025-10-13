@@ -1093,7 +1093,122 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     res.status(500).json({ msg: "Erro interno" });
   }
 });
+// 🔥 ROTA HÍBRIDA - Verifica se usuário tem permissão
+app.post("/agendamentos/gerenciar/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { acao, novaData, novoHorario } = req.body;
+    const userEmail = req.user.email;
+    
+    if (!acao) {
+      return res.status(400).json({ msg: "Ação é obrigatória (confirmar, cancelar, reagendar)" });
+    }
 
+    console.log(`🎯 ${acao} agendamento ID:`, id, 'por usuário:', userEmail);
+
+    // Busca o agendamento
+    const { data: agendamento, error: fetchError } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !agendamento) {
+      return res.status(404).json({ msg: "Agendamento não encontrado" });
+    }
+
+    // 🔥 VERIFICA SE USUÁRIO TEM PERMISSÃO:
+    // 1. É o dono do agendamento? OU
+    // 2. É o dono do link que criou o agendamento?
+    const podeGerenciar = agendamento.cliente === req.userId || 
+                         agendamento.user_id === req.userId;
+
+    if (!podeGerenciar) {
+      return res.status(403).json({ 
+        msg: "Você não tem permissão para gerenciar este agendamento" 
+      });
+    }
+
+    let updateData = {};
+    let mensagem = "";
+
+    switch (acao) {
+      case "confirmar":
+        updateData = { confirmado: true, status: "confirmado" };
+        mensagem = "Agendamento confirmado com sucesso!";
+        break;
+        
+      case "cancelar":
+        updateData = { status: "cancelado", confirmado: false };
+        mensagem = "Agendamento cancelado com sucesso!";
+        break;
+        
+      case "reagendar":
+        if (!novaData || !novoHorario) {
+          return res.status(400).json({ msg: "Data e horário obrigatórios para reagendar" });
+        }
+        
+        // Verifica conflito
+        const { data: conflito } = await supabase
+          .from("agendamentos")
+          .select("*")
+          .eq("data", novaData)
+          .eq("horario", novoHorario)
+          .neq("id", id);
+
+        if (conflito && conflito.length > 0) {
+          return res.status(400).json({ 
+            msg: "Já existe um agendamento para esta nova data e horário" 
+          });
+        }
+        
+        updateData = { 
+          data: novaData, 
+          horario: novoHorario,
+          status: "pendente",
+          confirmado: false
+        };
+        mensagem = "Agendamento reagendado com sucesso!";
+        break;
+        
+      default:
+        return res.status(400).json({ msg: "Ação inválida" });
+    }
+
+    // Atualiza no banco
+    const { data, error } = await supabase.from("agendamentos")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+
+    // Atualiza Google Sheets
+    try {
+      const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
+      if (doc) {
+        await updateRowInSheet(doc.sheetsByIndex[0], id, data);
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
+
+    // 🔥 INVALIDA CACHE
+    cacheManager.delete(`agendamentos_${req.userId}`);
+    if (agendamento.cliente && agendamento.cliente !== req.userId) {
+      cacheManager.delete(`agendamentos_${agendamento.cliente}`);
+    }
+    
+    res.json({ 
+      msg: mensagem, 
+      agendamento: data 
+    });
+  } catch (err) {
+    console.error("Erro ao gerenciar agendamento:", err);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -1112,6 +1227,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
