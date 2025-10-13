@@ -1074,7 +1074,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
 
     console.log('🔄 Reagendando agendamento ID:', id, 'por usuário:', userEmail, 'userId:', req.userId);
 
-    // ✅ BUSCA O AGENDAMENTO SEM FILTRAR POR CLIENTE
+    // ✅ BUSCA O AGENDAMENTO SEM FILTRAR POR CLIENTE (igual aos outros endpoints)
     const { data: agendamento, error: fetchError } = await supabase
       .from("agendamentos")
       .select("*")
@@ -1085,25 +1085,36 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       return res.status(404).json({ msg: "Agendamento não encontrado" });
     }
 
-    // ✅ VERIFICA SE USUÁRIO TEM PERMISSÃO
+    console.log('📋 Agendamento encontrado:', {
+      id: agendamento.id,
+      cliente: agendamento.cliente,
+      user_id: agendamento.user_id,
+      nome: agendamento.nome
+    });
+
+    // ✅ VERIFICA SE USUÁRIO TEM PERMISSÃO (igual aos outros endpoints)
     if (!usuarioPodeGerenciarAgendamento(agendamento, req.userId)) {
       return res.status(403).json({ 
         msg: "Você não tem permissão para reagendar este agendamento" 
       });
     }
 
-    // Verifica conflito com novo horário (excluindo o próprio agendamento)
-    const conflito = agendamentos.find(a => 
-      a.id != id && a.data === novaData && a.horario === novoHorario
-    );
-    
-    if (conflito) {
+    // ✅ VERIFICA CONFLITO DIRETAMENTE NO BANCO (corrigido)
+    const { data: conflito, error: conflitoError } = await supabase
+      .from("agendamentos")
+      .select("id")
+      .eq("data", novaData)
+      .eq("horario", novoHorario)
+      .neq("id", id)
+      .single();
+
+    if (conflito && !conflitoError) {
       return res.status(400).json({ 
-        msg: "Você já possui um agendamento para esta nova data e horário" 
+        msg: "Já existe um agendamento para esta nova data e horário" 
       });
     }
 
-    // Se não há conflito, atualiza no banco
+    // ✅ ATUALIZA SEM FILTRAR POR CLIENTE (já verificamos permissão)
     const { data, error } = await supabase.from("agendamentos")
       .update({ 
         data: novaData, 
@@ -1112,12 +1123,13 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
         confirmado: false
       })
       .eq("id", id)
-      .eq("cliente", req.userId)
       .select()
       .single();
     
     if (error) throw error;
+    if (!data) return res.status(404).json({ msg: "Agendamento não encontrado" });
 
+    // Atualiza Google Sheets
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
@@ -1127,12 +1139,18 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
-    cacheManager.delete(cacheKey);
+    // 🔥 INVALIDA CACHE DE AMBOS OS USUÁRIOS (igual aos outros endpoints)
+    cacheManager.delete(`agendamentos_${req.userId}`);
+    if (agendamento.cliente && agendamento.cliente !== req.userId) {
+      cacheManager.delete(`agendamentos_${agendamento.cliente}`);
+    }
     
-    res.json({ msg: "Agendamento reagendado com sucesso", agendamento: data });
+    res.json({ 
+      msg: "Agendamento reagendado com sucesso!", 
+      agendamento: data 
+    });
   } catch (err) {
-    console.error("Erro ao reagendar:", err);
+    console.error("Erro ao reagendar agendamento:", err);
     res.status(500).json({ msg: "Erro interno" });
   }
 });
@@ -1155,6 +1173,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
