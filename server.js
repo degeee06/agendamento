@@ -891,7 +891,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
     if (!Nome || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+      return res.status(400).json({ msg: "Preencha os campos obrigatórios" });
 
     const userEmail = req.user.email;
     const cacheKey = `agendamentos_${req.userId}`;
@@ -1218,6 +1218,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
