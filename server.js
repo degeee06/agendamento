@@ -42,7 +42,7 @@ app.post("/agendamento-publico", async (req, res) => {
     const { nome, email, telefone, data, horario, user_id } = req.body;
     
     if (!nome || !telefone || !data || !horario || !user_id) {
-      return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
+      return res.status(400).json({ msg: "Preencha todos os campos obrigatórios" });
     }
 
     // Verifica se o user_id existe
@@ -1173,6 +1173,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
