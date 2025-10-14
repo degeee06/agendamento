@@ -122,7 +122,7 @@ app.post("/agendamento-publico", async (req, res) => {
     // 🆕 DADOS FILTRADOS PARA SHEETS
     const dadosSheets = {
       nome: novoAgendamento.nome,
-      email: novoAgendamento.email || '',
+      email: email || '', 
       telefone: novoAgendamento.telefone,
       data: novoAgendamento.data,
       horario: novoAgendamento.horario,
@@ -476,7 +476,7 @@ async function analisarHorariosLivres(agendamentos, userEmail) {
         const contexto = `
 ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
 
-Dados da agenda do usuário ${req.userId}:
+Dados da agenda do usuário ${userEmail}:
 
 AGENDAMENTOS EXISTENTES (próximos 7 dias):
 ${agendamentos.length > 0 ? 
@@ -612,7 +612,7 @@ async function gerarSugestoesInteligentes(agendamentos, userEmail) {
     const contexto = `
 ANÁLISE DE AGENDA PARA SUGESTÕES INTELIGENTES
 
-Agendamentos do usuário ${req.userId}:
+Agendamentos do usuário: 
 ${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}
 
 Forneça insights úteis sobre:
@@ -939,7 +939,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         cliente: req.userId,
         user_id: req.userId,
         nome: Nome,
-        email: userEmail, // ✅ agora pode ser null ou opcional
+        email: Email || null, // ✅ agora pode ser null ou opcional
         telefone: Telefone,
         data: Data,
         horario: Horario,
@@ -959,7 +959,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         // 🆕 USA DADOS FILTRADOS (igual ao agendamento público)
         const dadosSheets = {
           nome: novoAgendamento.nome,
-          email: novoAgendamento.email || '',
+          email: Email || '',
           telefone: novoAgendamento.telefone,
           data: novoAgendamento.data,
           horario: novoAgendamento.horario,
@@ -1201,7 +1201,7 @@ app.post("/agendamentos/:email/reagendar/:id", authMiddleware, async (req, res) 
     // ✅ ATUALIZA SEM FILTRAR POR CLIENTE (já verificamos permissão)
     const { data, error } = await supabase.from("agendamentos")
       .update({ 
-        data: novaData, 
+        data: novaData,
         horario: novoHorario,
         status: "pendente",
         confirmado: false
@@ -1265,6 +1265,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
