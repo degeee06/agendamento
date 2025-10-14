@@ -45,6 +45,12 @@ app.post("/agendamento-publico", async (req, res) => {
       return res.status(400).json({ msg: "Link inválido ou expirado" });
     }
 
+      const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
+    if (!validacaoHorario.valido) {
+      return res.status(400).json({ 
+        msg: `Horário indisponível: ${validacaoHorario.motivo}` 
+      });
+    }
   // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
     const { data: linkUsado } = await supabase
       .from('links_uso')
@@ -433,47 +439,88 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
   }
 });
 
+
+// Função para validar se o horário está dentro do funcionamento
+async function validarHorarioFuncionamento(userId, data, horario) {
+  try {
+    const perfil = await obterHorariosPerfil(userId);
+    
+    if (!perfil) {
+      return { valido: true }; // Sem perfil, aceita qualquer horário
+    }
+
+    // Converte data para dia da semana
+    const dataObj = new Date(data);
+    const diasSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+    const diaSemana = diasSemana[dataObj.getDay()];
+
+    // Verifica se o dia está nos dias de funcionamento
+    if (!perfil.dias_funcionamento.includes(diaSemana)) {
+      return { 
+        valido: false, 
+        motivo: `Não atendemos aos ${diaSemana}s` 
+      };
+    }
+
+    // Verifica se o horário está dentro do funcionamento
+    const horarioFuncionamento = perfil.horarios_funcionamento[diaSemana];
+    if (!horarioFuncionamento) {
+      return { valido: true }; // Dia sem configuração específica
+    }
+
+    if (horario < horarioFuncionamento.inicio || horario > horarioFuncionamento.fim) {
+      return { 
+        valido: false, 
+        motivo: `Horário fora do funcionamento (${horarioFuncionamento.inicio} - ${horarioFuncionamento.fim})` 
+      };
+    }
+
+    return { valido: true };
+  } catch (error) {
+    console.error("Erro ao validar horário:", error);
+    return { valido: true }; // Em caso de erro, permite o agendamento
+  }
+}
 // ==================== ROTA SUGERIR HORÁRIOS ====================
 
-// Rota para sugerir horários livres
+// Substitua a rota /api/sugerir-horarios por esta versão atualizada
 app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
-    try {
-        const userEmail = req.user.email;
+  try {
+    const userEmail = req.user.email;
 
-        // Busca todos os agendamentos
-        const { data: agendamentos, error } = await supabase
-            .from("agendamentos")
-            .select("*")
-            .eq("cliente", req.userId)
-            .gte("data", new Date().toISOString().split('T')[0]) // Só futuros
-            .order("data", { ascending: true })
-            .order("horario", { ascending: true });
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("cliente", req.userId)
+      .gte("data", new Date().toISOString().split('T')[0])
+      .order("data", { ascending: true })
+      .order("horario", { ascending: true });
 
-        if (error) throw error;
+    if (error) throw error;
 
-        // Análise inteligente com IA
-        const sugestoes = await analisarHorariosLivres(agendamentos || [], userEmail);
+    // 🆕 USA A NOVA FUNÇÃO COM PERFIL
+    const sugestoes = await analisarHorariosLivresComPerfil(agendamentos || [], userEmail, req.userId);
 
-        res.json({
-            success: true,
-            sugestoes: sugestoes,
-            total_agendamentos: agendamentos?.length || 0
-        });
+    res.json({
+      success: true,
+      sugestoes: sugestoes,
+      total_agendamentos: agendamentos?.length || 0
+    });
 
-    } catch (error) {
-        console.error("Erro ao sugerir horários:", error);
-        res.status(500).json({ 
-            success: false, 
-            msg: "Erro ao analisar horários livres",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
+  } catch (error) {
+    console.error("Erro ao sugerir horários:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro ao analisar horários livres"
+    });
+  }
 });
 
-// Função para analisar horários livres
-async function analisarHorariosLivres(agendamentos, userEmail) {
-    try {
-        const contexto = `
+async function analisarHorariosLivresComPerfil(agendamentos, userEmail, userId) {
+  try {
+    const perfil = await obterHorariosPerfil(userId);
+    
+    let contexto = `
 ANÁLISE DE AGENDA - SUGERIR HORÁRIOS LIVRES
 
 Dados da agenda do usuário ${userEmail}:
@@ -483,34 +530,45 @@ ${agendamentos.length > 0 ?
     agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome}`).join('\n') 
     : 'Nenhum agendamento futuro encontrado.'
 }
+`;
+
+    // Adiciona informações do perfil se existir
+    if (perfil) {
+      contexto += `
+
+CONFIGURAÇÃO DO NEGÓCIO:
+- Horários de funcionamento: ${JSON.stringify(perfil.horarios_funcionamento)}
+- Dias de funcionamento: ${perfil.dias_funcionamento.join(', ')}
+
+IMPORTANTE: Sugira apenas horários dentro do funcionamento do negócio!
+`;
+    } else {
+      contexto += `
+
+OBSERVAÇÃO: Negócio não configurado. Use horários comerciais padrão (9h-18h).
+`;
+    }
+
+    contexto += `
 
 DATA ATUAL: ${new Date().toISOString().split('T')[0]}
 
 INSTRUÇÕES:
 Analise a agenda acima e sugira os MELHORES horários livres para os próximos 7 dias.
-Considere:
-- Horários comerciais (9h-18h)
-- Evitar início/fim de dia
-- Espaçamento entre compromissos
-- Balancear dias da semana
+${perfil ? 'RESPEITE os horários de funcionamento configurados!' : 'Use horários comerciais padrão (9h-18h).'}
 
 FORMATO DA RESPOSTA:
 Forneça uma lista de 3-5 sugestões de horários no formato:
 "📅 [DIA] às [HORÁRIO] - [CONTEXTO/SUGESTÃO]"
 
-Exemplo:
-"📅 Segunda-feira às 14:00 - Período da tarde, bom para reuniões
-📅 Quarta-feira às 10:30 - Horário produtivo para trabalho focado"
-
 Seja prático, útil e use emojis. Máximo de 150 palavras.
 `;
 
-        // No backend, na função analisarHorariosLivres:
-return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horários livres:", contexto, "ECONOMICO");
-    } catch (error) {
-        console.error("Erro na análise de horários:", error);
-        return "📅 **Sugestões de Horários:**\n\n- Segunda-feira: 14h-16h (tarde)\n- Quarta-feira: 10h-12h (manhã)\n- Sexta-feira: 15h-17h (final de semana próximo)\n\n💡 **Dica:** Estes são horários typically produtivos com boa disponibilidade.";
-    }
+    return await chamarDeepSeekIA("Analise esta agenda e sugira os melhores horários livres:", contexto, "ECONOMICO");
+  } catch (error) {
+    console.error("Erro na análise de horários com perfil:", error);
+    return "📅 **Sugestões de Horários:**\n\nConsidere configurar seu horário de funcionamento para sugestões personalizadas.";
+  }
 }
 
 // Rota de sugestões inteligentes
@@ -908,6 +966,14 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const userEmail = req.user?.email || Email || null; // ✅ usa email do usuário logado, do corpo, ou null
     const cacheKey = `agendamentos_${req.userId}`;
     
+     // 🆕 VALIDA HORÁRIO DE FUNCIONAMENTO
+    const validacaoHorario = await validarHorarioFuncionamento(req.userId, Data, Horario);
+    if (!validacaoHorario.valido) {
+      return res.status(400).json({ 
+        msg: `Horário indisponível: ${validacaoHorario.motivo}` 
+      });
+    }
+    
     // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
     const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
@@ -1247,6 +1313,125 @@ await updateRowInSheet(doc.sheetsByIndex[0], id, dadosFiltrados);
   }
 });
 
+// Rota para criar/atualizar perfil
+app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
+  try {
+    const { nome_negocio, tipo_negocio, horarios_funcionamento, dias_funcionamento } = req.body;
+    
+    if (!nome_negocio || !tipo_negocio || !horarios_funcionamento || !dias_funcionamento) {
+      return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
+    }
+
+    // Verifica se já existe perfil
+    const { data: perfilExistente } = await supabase
+      .from("perfis_negocio")
+      .select("*")
+      .eq("user_id", req.userId)
+      .single();
+
+    let resultado;
+    
+    if (perfilExistente) {
+      // Atualiza perfil existente
+      const { data, error } = await supabase
+        .from("perfis_negocio")
+        .update({
+          nome_negocio,
+          tipo_negocio,
+          horarios_funcionamento,
+          dias_funcionamento,
+          updated_at: new Date()
+        })
+        .eq("user_id", req.userId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      resultado = data;
+    } else {
+      // Cria novo perfil
+      const { data, error } = await supabase
+        .from("perfis_negocio")
+        .insert([{
+          user_id: req.userId,
+          nome_negocio,
+          tipo_negocio,
+          horarios_funcionamento,
+          dias_funcionamento
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      resultado = data;
+    }
+
+    // Invalida cache
+    cacheManager.delete(`perfil_${req.userId}`);
+    
+    res.json({
+      success: true,
+      msg: perfilExistente ? "Perfil atualizado com sucesso!" : "Perfil criado com sucesso!",
+      perfil: resultado
+    });
+
+  } catch (error) {
+    console.error("Erro ao criar perfil:", error);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// Rota para obter perfil
+app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
+  try {
+    const cacheKey = `perfil_${req.userId}`;
+    
+    const perfil = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("perfis_negocio")
+        .select("*")
+        .eq("user_id", req.userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = não encontrado
+      return data || null;
+    }, 10 * 60 * 1000); // 10 minutos cache
+
+    res.json({
+      success: true,
+      perfil: perfil
+    });
+
+  } catch (error) {
+    console.error("Erro ao buscar perfil:", error);
+    res.status(500).json({ msg: "Erro interno" });
+  }
+});
+
+// ==================== FUNÇÃO AUXILIAR: Obter horários do perfil ====================
+
+async function obterHorariosPerfil(userId) {
+  try {
+    const cacheKey = `perfil_${userId}`;
+    
+    const perfil = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("perfis_negocio")
+        .select("horarios_funcionamento, dias_funcionamento")
+        .eq("user_id", userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    }, 10 * 60 * 1000);
+
+    return perfil;
+  } catch (error) {
+    console.error("Erro ao obter horários do perfil:", error);
+    return null;
+  }
+}
+
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -1265,6 +1450,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
