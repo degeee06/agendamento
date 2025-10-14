@@ -250,6 +250,18 @@ const MODELOS_IA = {
 };
 
 
+// ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
+
+// Configuração dos modelos
+const MODELOS_IA = {
+  PADRAO: "deepseek-chat",           // ✅ Balanceado (atual)
+  RACIOCINIO: "deepseek-reasoner",   // 🎯 MELHOR para agendamentos
+  ECONOMICO: "deepseek-chat"         // 💰 Mais econômico
+};
+
+
 // Função para chamar a API da DeepSeek
 async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
   try {
@@ -1424,6 +1436,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
