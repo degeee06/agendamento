@@ -92,7 +92,7 @@ app.post("/agendamento-publico", async (req, res) => {
         cliente: user_id,
         user_id: user_id,
         nome: nome,
-        email: email,
+        email: email || 'Não informado',
         telefone: telefone,
         data: data,
         horario: horario,
@@ -122,7 +122,7 @@ app.post("/agendamento-publico", async (req, res) => {
     // 🆕 DADOS FILTRADOS PARA SHEETS
     const dadosSheets = {
       nome: novoAgendamento.nome,
-      email: email || '', 
+      email: email || 'Não informado',
       telefone: novoAgendamento.telefone,
       data: novoAgendamento.data,
       horario: novoAgendamento.horario,
@@ -1265,6 +1265,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
