@@ -238,6 +238,18 @@ const MODELOS_IA = {
   ECONOMICO: "deepseek-chat"         // 💰 Mais econômico
 };
 
+// ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
+
+// Configuração dos modelos
+const MODELOS_IA = {
+  PADRAO: "deepseek-chat",           // ✅ Balanceado (atual)
+  RACIOCINIO: "deepseek-reasoner",   // 🎯 MELHOR para agendamentos
+  ECONOMICO: "deepseek-chat"         // 💰 Mais econômico
+};
+
+
 // Função para chamar a API da DeepSeek
 async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
   try {
@@ -250,6 +262,30 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
 
     console.log(`🤖 Usando modelo: ${modelo} para: ${tipo}`);
 
+    // 🔥 NOVO SYSTEM PROMPT COM LIMITES CLAROS
+    const systemPrompt = contexto || `
+Você é um assistente de agenda INTELIGENTE mas com LIMITES CLAROS.
+
+📍 SUAS FUNÇÕES:
+- Analisar agendamentos existentes
+- Sugerir horários livres baseado na agenda
+- Explicar estatísticas e padrões
+- Responder perguntas sobre compromissos
+
+🚫 SUAS LIMITAÇÕES (NÃO PODE):
+- Confirmar, cancelar ou reagendar agendamentos
+- Criar novos agendamentos diretamente
+- Acessar funções do sistema
+- Executar ações no banco de dados
+
+💡 COMO AJUDAR:
+- "Vejo que tem horário livre às 14:00 na quarta-feira"
+- "Sugiro verificar o formulário de agendamento para esse horário"
+- "Posso analisar sua agenda, mas você precisa usar o sistema para ações"
+
+Seja útil mas SEMPRE claro sobre suas limitações. Não ofereça funcionalidades que não existem.
+`;
+
     const response = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
       headers: {
@@ -257,11 +293,11 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
         "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
       },
       body: JSON.stringify({
-        model: modelo,  // 🔥 AGORA VARIÁVEL
+        model: modelo,
         messages: [
           {
             role: "system",
-            content: contexto || "Você é um assistente de agenda inteligente. Ajude os usuários a gerenciarem seus compromissos de forma eficiente. Seja útil, amigável e direto ao ponto."
+            content: systemPrompt  // 🔥 USA O NOVO PROMPT
           },
           {
             role: "user",
@@ -282,68 +318,6 @@ async function chamarDeepSeekIA(mensagem, contexto = "", tipo = "PADRAO") {
     return data.choices[0].message.content;
   } catch (error) {
     console.error("Erro ao chamar DeepSeek IA:", error);
-    throw error;
-  }
-}
-async function analisarDescricaoNatural(descricao, userEmail) {
-  try {
-    const hoje = new Date();
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
-
-    // ✅ AGORA DOMINGOS SÃO PERMITIDOS (não há mais bloqueio)
-    function calcularDataValida(data) {
-      const dataObj = new Date(data);
-      // ⚠️ REMOVIDO: A lógica que pulava domingos foi retirada
-      // Agora domingos são tratados como dias normais da semana
-      return dataObj.toISOString().split('T')[0];
-    }
-
-    const prompt = `
-Analise a seguinte descrição de agendamento e extraia as informações no formato JSON:
-
-DESCRIÇÃO: "${descricao}"
-
-USUÁRIO: ${userEmail}
-DATA ATUAL: ${hoje.toISOString().split('T')[0]}
-
-Extraia as seguintes informações:
-- nome (string): Nome da pessoa ou evento
-- data (string no formato YYYY-MM-DD): Data do compromisso
-- horario (string no formato HH:MM): Horário do compromisso
-- descricao (string): Descrição detalhada do compromisso
-
-🔔 REGRAS IMPORTANTES:
-- Se não mencionar data específica, use "${calcularDataValida(amanha.toISOString().split('T')[0])}"
-- Se não mencionar horário, use "09:00" (horário padrão)
-- Para datas relativas: "hoje" = data atual, "amanhã" = data atual + 1 dia
-- Para dias da semana: converta para a próxima ocorrência
-- ✅ DOMINGOS SÃO PERMITIDOS: Agende normalmente para domingos
-- Use o ano atual para todas as datas
-
-Exemplo de resposta:
-{"nome": "Reunião com João", "data": "2024-01-14", "horario": "14:00", "descricao": "Reunião dominical"}
-
-Responda APENAS com o JSON válido, sem nenhum texto adicional.
-`;
-
-    const resposta = await chamarDeepSeekIA(prompt, "", "RACIOCINIO");
-    
-    // Tenta extrair JSON da resposta
-    const jsonMatch = resposta.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const dados = JSON.parse(jsonMatch[0]);
-      
-      // ✅ REMOVIDO: A validação que corrigia domingos
-      // Agora domingos são aceitos normalmente
-      
-      console.log('✅ Agendamento processado (domingos permitidos):', dados.data);
-      return dados;
-    }
-    
-    throw new Error("Não foi possível extrair dados estruturados da descrição");
-  } catch (error) {
-    console.error("Erro ao analisar descrição natural:", error);
     throw error;
   }
 }
@@ -1450,6 +1424,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
