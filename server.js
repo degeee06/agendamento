@@ -1,4 +1,4 @@
-import express from "express";
+noimport express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
@@ -226,29 +226,6 @@ const cacheManager = {
     cache.clear();
   }
 };
-
-// ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
-
-// Configuração dos modelos
-const MODELOS_IA = {
-  PADRAO: "deepseek-chat",           // ✅ Balanceado (atual)
-  RACIOCINIO: "deepseek-reasoner",   // 🎯 MELHOR para agendamentos
-  ECONOMICO: "deepseek-chat"         // 💰 Mais econômico
-};
-
-// ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
-
-// Configuração dos modelos
-const MODELOS_IA = {
-  PADRAO: "deepseek-chat",           // ✅ Balanceado (atual)
-  RACIOCINIO: "deepseek-reasoner",   // 🎯 MELHOR para agendamentos
-  ECONOMICO: "deepseek-chat"         // 💰 Mais econômico
-};
-
 
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -1436,6 +1413,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
