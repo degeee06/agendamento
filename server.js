@@ -403,8 +403,8 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
 });
 
 
-// Função para validar se o horário está dentro do funcionamento
-// 🔥 SUBSTITUIR: Nova função de validação com períodos bloqueados
+
+// 🔥 SUBSTITUIR: Nova função de validação com bloqueios por DATA ESPECÍFICA
 async function validarHorarioFuncionamento(userId, data, horario) {
   try {
     const perfil = await obterHorariosPerfil(userId);
@@ -439,21 +439,24 @@ async function validarHorarioFuncionamento(userId, data, horario) {
       };
     }
 
-    // 🎯 3. 🔥 NOVO: VERIFICA SE ESTÁ EM PERÍODO BLOQUEADO
+    // 🎯 3. 🔥 ATUALIZADO: VERIFICA SE ESTÁ EM PERÍODO BLOQUEADO POR DATA ESPECÍFICA
     if (perfil.horarios_bloqueados && perfil.horarios_bloqueados.length > 0) {
       const horarioCompleto = `${data}T${horario}`;
       const dataHorarioAgendamento = new Date(horarioCompleto);
       
       for (const periodo of perfil.horarios_bloqueados) {
-        const inicioPeriodo = new Date(`${data}T${periodo.inicio}`);
-        const fimPeriodo = new Date(`${data}T${periodo.fim}`);
-        
-        // Verifica se o horário está dentro do período bloqueado
-        if (dataHorarioAgendamento >= inicioPeriodo && dataHorarioAgendamento < fimPeriodo) {
-          return { 
-            valido: false, 
-            motivo: `Horário dentro do período bloqueado (${periodo.inicio} - ${periodo.fim})` 
-          };
+        // 🆕 VERIFICA SE O BLOQUEIO É PARA ESTA DATA ESPECÍFICA
+        if (periodo.data === data) {
+          const inicioPeriodo = new Date(`${data}T${periodo.inicio}`);
+          const fimPeriodo = new Date(`${data}T${periodo.fim}`);
+          
+          // Verifica se o horário está dentro do período bloqueado
+          if (dataHorarioAgendamento >= inicioPeriodo && dataHorarioAgendamento < fimPeriodo) {
+            return { 
+              valido: false, 
+              motivo: `Horário dentro do período bloqueado (${periodo.inicio} - ${periodo.fim})` 
+            };
+          }
         }
       }
     }
@@ -1449,7 +1452,7 @@ app.get("/api/perfil-publico/:user_id", async (req, res) => {
         res.json({ success: true, perfil: null });
     }
 });
-// 🔥 ROTA PARA HORÁRIOS DISPONÍVEIS REAIS (ADICIONE ISSO)
+// 🔥 SUBSTITUIR: Rota para horários disponíveis considerando bloqueios por DATA ESPECÍFICA
 app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
     try {
         const { user_id } = req.params;
@@ -1465,7 +1468,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
         // 🎯 1. BUSCA PERFIL DO NEGÓCIO
         const { data: perfil, error: perfilError } = await supabase
             .from("perfis_negocio")
-            .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados") // 🆕 Inclui bloqueados
+            .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados")
             .eq("user_id", user_id)
             .single();
 
@@ -1501,7 +1504,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             .select("horario")
             .eq("user_id", user_id)
             .eq("data", data)
-            .neq("status", "cancelado"); // Ignora cancelados
+            .neq("status", "cancelado");
 
         if (agendamentosError) {
             console.error("Erro ao buscar agendamentos:", agendamentosError);
@@ -1527,34 +1530,42 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
         const todosHorarios = gerarHorariosIntervalo(
             horarioDia.inicio, 
             horarioDia.fim, 
-            30 // 🆕 Intervalo de 30 minutos (padrão)
+            30
         );
 
-        // 🎯 5. 🔥 NOVO: FILTRA HORÁRIOS BLOQUEADOS POR PERÍODO
+        // 🎯 5. 🔥 ATUALIZADO: FILTRA HORÁRIOS BLOQUEADOS POR DATA ESPECÍFICA
         let horariosDisponiveis = todosHorarios.filter(horario => {
             // Remove horários ocupados
             if (horariosOcupados.includes(horario)) {
                 return false;
             }
             
-            // 🔥 VERIFICA SE ESTÁ EM PERÍODO BLOQUEADO
+            // 🔥 VERIFICA SE ESTÁ EM PERÍODO BLOQUEADO PARA ESTA DATA ESPECÍFICA
             if (perfil.horarios_bloqueados && perfil.horarios_bloqueados.length > 0) {
                 const horarioCompleto = `${data}T${horario}`;
                 const dataHorario = new Date(horarioCompleto);
                 
                 for (const periodo of perfil.horarios_bloqueados) {
-                    const inicioPeriodo = new Date(`${data}T${periodo.inicio}`);
-                    const fimPeriodo = new Date(`${data}T${periodo.fim}`);
-                    
-                    // Verifica se o horário está dentro do período bloqueado
-                    if (dataHorario >= inicioPeriodo && dataHorario < fimPeriodo) {
-                        return false; // Horário bloqueado
+                    // 🆕 SÓ APLICA BLOQUEIO SE FOR PARA ESTA DATA
+                    if (periodo.data === data) {
+                        const inicioPeriodo = new Date(`${data}T${periodo.inicio}`);
+                        const fimPeriodo = new Date(`${data}T${periodo.fim}`);
+                        
+                        // Verifica se o horário está dentro do período bloqueado
+                        if (dataHorario >= inicioPeriodo && dataHorario < fimPeriodo) {
+                            return false; // Horário bloqueado
+                        }
                     }
                 }
             }
             
             return true; // Horário disponível
         });
+
+        // 🆕 FILTRA APENAS OS BLOQUEIOS PARA ESTA DATA ESPECÍFICA
+        const periodosBloqueadosEstaData = perfil.horarios_bloqueados 
+            ? perfil.horarios_bloqueados.filter(periodo => periodo.data === data)
+            : [];
 
         res.json({
             success: true,
@@ -1563,7 +1574,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             totalDisponiveis: horariosDisponiveis.length,
             totalOcupados: horariosOcupados.length,
             horarioFuncionamento: horarioDia,
-            periodosBloqueados: perfil.horarios_bloqueados || [] // 🆕 Informa períodos bloqueados
+            periodosBloqueados: periodosBloqueadosEstaData // 🆕 Só bloqueios desta data
         });
 
     } catch (error) {
@@ -1574,6 +1585,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
         });
     }
 });
+
 
 // 🆕 NOVA ROTA: Gerenciar horários bloqueados
 app.post("/api/horarios-bloqueados", authMiddleware, async (req, res) => {
@@ -1696,6 +1708,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
