@@ -1394,7 +1394,30 @@ async function obterHorariosPerfil(userId) {
     return null;
   }
 }
+// 🔥 ADICIONE ESTA ROTA NO SEU BACKEND (app.js)
+app.get("/api/perfil-publico/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params;
+        
+        // Busca perfil REAL da tabela perfis_negocio
+        const { data: perfil, error } = await supabase
+            .from("perfis_negocio")
+            .select("*")
+            .eq("user_id", user_id)
+            .single();
 
+        if (error && error.code !== 'PGRST116') throw error;
+        
+        res.json({ 
+            success: true, 
+            perfil: perfil || null 
+        });
+        
+    } catch (error) {
+        console.error("Erro no perfil público:", error);
+        res.json({ success: true, perfil: null });
+    }
+});
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -1413,6 +1436,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
