@@ -1418,6 +1418,133 @@ app.get("/api/perfil-publico/:user_id", async (req, res) => {
         res.json({ success: true, perfil: null });
     }
 });
+// 🔥 ROTA PARA HORÁRIOS DISPONÍVEIS REAIS (ADICIONE ISSO)
+app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
+    try {
+        const { user_id } = req.params;
+        const { data } = req.query; // Data no formato YYYY-MM-DD
+        
+        if (!user_id || !data) {
+            return res.status(400).json({ 
+                success: false, 
+                msg: "user_id e data são obrigatórios" 
+            });
+        }
+
+        // 🎯 1. BUSCA PERFIL DO NEGÓCIO
+        const { data: perfil, error: perfilError } = await supabase
+            .from("perfis_negocio")
+            .select("horarios_funcionamento, dias_funcionamento")
+            .eq("user_id", user_id)
+            .single();
+
+        if (perfilError && perfilError.code !== 'PGRST116') {
+            console.error("Erro ao buscar perfil:", perfilError);
+        }
+
+        // Se não tem perfil, retorna vazio
+        if (!perfil) {
+            return res.json({ 
+                success: true, 
+                horariosDisponiveis: [],
+                motivo: "Perfil não configurado"
+            });
+        }
+
+        // 🎯 2. VERIFICA SE É DIA DE FUNCIONAMENTO
+        const dataObj = new Date(data);
+        const diasSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+        const diaSemana = diasSemana[dataObj.getDay()];
+
+        if (!perfil.dias_funcionamento.includes(diaSemana)) {
+            return res.json({ 
+                success: true, 
+                horariosDisponiveis: [],
+                motivo: `Não atendemos aos ${diaSemana}s`
+            });
+        }
+
+        // 🎯 3. BUSCA HORÁRIOS JÁ AGENDADOS NESTA DATA
+        const { data: agendamentos, error: agendamentosError } = await supabase
+            .from("agendamentos")
+            .select("horario")
+            .eq("user_id", user_id)
+            .eq("data", data)
+            .neq("status", "cancelado"); // Ignora cancelados
+
+        if (agendamentosError) {
+            console.error("Erro ao buscar agendamentos:", agendamentosError);
+            return res.status(500).json({ 
+                success: false, 
+                msg: "Erro ao verificar agendamentos" 
+            });
+        }
+
+        const horariosOcupados = agendamentos?.map(a => a.horario) || [];
+
+        // 🎯 4. GERA HORÁRIOS DISPONÍVEIS BASEADO NO PERFIL
+        const horarioDia = perfil.horarios_funcionamento[diaSemana];
+        if (!horarioDia) {
+            return res.json({ 
+                success: true, 
+                horariosDisponiveis: [],
+                motivo: "Horário não configurado para este dia"
+            });
+        }
+
+        // Gera todos horários possíveis do dia
+        const todosHorarios = gerarHorariosIntervalo(
+            horarioDia.inicio, 
+            horarioDia.fim, 
+            60 // Intervalo de 60 minutos
+        );
+
+        // Filtra horários disponíveis (não ocupados)
+        const horariosDisponiveis = todosHorarios.filter(
+            horario => !horariosOcupados.includes(horario)
+        );
+
+        res.json({
+            success: true,
+            horariosDisponiveis: horariosDisponiveis,
+            horariosOcupados: horariosOcupados,
+            totalDisponiveis: horariosDisponiveis.length,
+            totalOcupados: horariosOcupados.length,
+            horarioFuncionamento: horarioDia
+        });
+
+    } catch (error) {
+        console.error("Erro na rota horários-disponiveis:", error);
+        res.status(500).json({ 
+            success: false, 
+            msg: "Erro interno ao verificar horários" 
+        });
+    }
+});
+
+// 🔥 FUNÇÃO AUXILIAR - GERA HORÁRIOS EM INTERVALO (JÁ EXISTE NO FRONT, ADICIONE NO BACKEND TAMBÉM)
+function gerarHorariosIntervalo(inicio, fim, intervaloMinutos) {
+    const horarios = [];
+    const [horaInicio, minutoInicio] = inicio.split(':').map(Number);
+    const [horaFim, minutoFim] = fim.split(':').map(Number);
+    
+    let horaAtual = horaInicio;
+    let minutoAtual = minutoInicio;
+    
+    while (horaAtual < horaFim || (horaAtual === horaFim && minutoAtual < minutoFim)) {
+        const horario = `${horaAtual.toString().padStart(2, '0')}:${minutoAtual.toString().padStart(2, '0')}`;
+        horarios.push(horario);
+        
+        // Adiciona intervalo
+        minutoAtual += intervaloMinutos;
+        if (minutoAtual >= 60) {
+            horaAtual += Math.floor(minutoAtual / 60);
+            minutoAtual = minutoAtual % 60;
+        }
+    }
+    
+    return horarios;
+}
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -1436,6 +1563,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
