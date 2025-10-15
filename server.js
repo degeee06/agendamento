@@ -403,7 +403,8 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
 });
 
 
-// Função para validar se o horário está dentro do funcionamento - VERSÃO ATUALIZADA
+// Função para validar se o horário está dentro do funcionamento
+// 🔥 SUBSTITUIR: Nova função de validação com períodos bloqueados
 async function validarHorarioFuncionamento(userId, data, horario) {
   try {
     const perfil = await obterHorariosPerfil(userId);
@@ -417,7 +418,7 @@ async function validarHorarioFuncionamento(userId, data, horario) {
     const diasSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
     const diaSemana = diasSemana[dataObj.getDay()];
 
-    // Verifica se o dia está nos dias de funcionamento
+    // 🎯 1. VERIFICA SE O DIA ESTÁ NOS DIAS DE FUNCIONAMENTO
     if (!perfil.dias_funcionamento.includes(diaSemana)) {
       return { 
         valido: false, 
@@ -425,16 +426,7 @@ async function validarHorarioFuncionamento(userId, data, horario) {
       };
     }
 
-    // 🆕 VERIFICA SE O HORÁRIO ESTÁ BLOQUEADO
-    const horariosBloqueados = perfil.horarios_bloqueados || [];
-    if (horariosBloqueados.includes(horario)) {
-      return { 
-        valido: false, 
-        motivo: `Horário ${horario} está bloqueado para agendamentos` 
-      };
-    }
-
-    // Verifica se o horário está dentro do funcionamento
+    // 🎯 2. VERIFICA SE O HORÁRIO ESTÁ DENTRO DO FUNCIONAMENTO
     const horarioFuncionamento = perfil.horarios_funcionamento[diaSemana];
     if (!horarioFuncionamento) {
       return { valido: true }; // Dia sem configuração específica
@@ -445,6 +437,25 @@ async function validarHorarioFuncionamento(userId, data, horario) {
         valido: false, 
         motivo: `Horário fora do funcionamento (${horarioFuncionamento.inicio} - ${horarioFuncionamento.fim})` 
       };
+    }
+
+    // 🎯 3. 🔥 NOVO: VERIFICA SE ESTÁ EM PERÍODO BLOQUEADO
+    if (perfil.horarios_bloqueados && perfil.horarios_bloqueados.length > 0) {
+      const horarioCompleto = `${data}T${horario}`;
+      const dataHorarioAgendamento = new Date(horarioCompleto);
+      
+      for (const periodo of perfil.horarios_bloqueados) {
+        const inicioPeriodo = new Date(`${data}T${periodo.inicio}`);
+        const fimPeriodo = new Date(`${data}T${periodo.fim}`);
+        
+        // Verifica se o horário está dentro do período bloqueado
+        if (dataHorarioAgendamento >= inicioPeriodo && dataHorarioAgendamento < fimPeriodo) {
+          return { 
+            valido: false, 
+            motivo: `Horário dentro do período bloqueado (${periodo.inicio} - ${periodo.fim})` 
+          };
+        }
+      }
     }
 
     return { valido: true };
@@ -1286,9 +1297,16 @@ await updateRowInSheet(doc.sheetsByIndex[0], id, dadosFiltrados);
 });
 
 // Rota para criar/atualizar perfil
+// 🔥 ATUALIZAR: Rota para criar/atualizar perfil com horários_bloqueados
 app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
   try {
-    const { nome_negocio, tipo_negocio, horarios_funcionamento, dias_funcionamento } = req.body;
+    const { 
+      nome_negocio, 
+      tipo_negocio, 
+      horarios_funcionamento, 
+      dias_funcionamento,
+      horarios_bloqueados = [] // 🆕 Campo novo para períodos bloqueados
+    } = req.body;
     
     if (!nome_negocio || !tipo_negocio || !horarios_funcionamento || !dias_funcionamento) {
       return res.status(400).json({ msg: "Todos os campos são obrigatórios" });
@@ -1312,6 +1330,7 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
           tipo_negocio,
           horarios_funcionamento,
           dias_funcionamento,
+          horarios_bloqueados, // 🆕 Inclui períodos bloqueados
           updated_at: new Date()
         })
         .eq("user_id", req.userId)
@@ -1329,7 +1348,8 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
           nome_negocio,
           tipo_negocio,
           horarios_funcionamento,
-          dias_funcionamento
+          dias_funcionamento,
+          horarios_bloqueados // 🆕 Inclui períodos bloqueados
         }])
         .select()
         .single();
@@ -1380,8 +1400,9 @@ app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
   }
 });
 
-
 // ==================== FUNÇÃO AUXILIAR: Obter horários do perfil ====================
+
+// 🔥 ATUALIZAR: Função para obter horários do perfil incluindo bloqueados
 async function obterHorariosPerfil(userId) {
   try {
     const cacheKey = `perfil_${userId}`;
@@ -1389,7 +1410,7 @@ async function obterHorariosPerfil(userId) {
     const perfil = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
         .from("perfis_negocio")
-        .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados") // 🆕 ADICIONA horarios_bloqueados
+        .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados") // 🆕 Inclui bloqueados
         .eq("user_id", userId)
         .single();
 
@@ -1403,6 +1424,7 @@ async function obterHorariosPerfil(userId) {
     return null;
   }
 }
+
 // 🔥 ADICIONE ESTA ROTA NO SEU BACKEND (app.js)
 app.get("/api/perfil-publico/:user_id", async (req, res) => {
     try {
@@ -1431,7 +1453,7 @@ app.get("/api/perfil-publico/:user_id", async (req, res) => {
 app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
     try {
         const { user_id } = req.params;
-        const { data } = req.query;
+        const { data } = req.query; // Data no formato YYYY-MM-DD
         
         if (!user_id || !data) {
             return res.status(400).json({ 
@@ -1440,10 +1462,10 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             });
         }
 
-        // 🎯 BUSCA PERFIL COMPLETO (INCLUINDO HORÁRIOS BLOQUEADOS)
+        // 🎯 1. BUSCA PERFIL DO NEGÓCIO
         const { data: perfil, error: perfilError } = await supabase
             .from("perfis_negocio")
-            .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados") // 🆕 ADICIONA horarios_bloqueados
+            .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados") // 🆕 Inclui bloqueados
             .eq("user_id", user_id)
             .single();
 
@@ -1451,6 +1473,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             console.error("Erro ao buscar perfil:", perfilError);
         }
 
+        // Se não tem perfil, retorna vazio
         if (!perfil) {
             return res.json({ 
                 success: true, 
@@ -1459,7 +1482,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             });
         }
 
-        // 🎯 VERIFICA SE É DIA DE FUNCIONAMENTO
+        // 🎯 2. VERIFICA SE É DIA DE FUNCIONAMENTO
         const dataObj = new Date(data);
         const diasSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
         const diaSemana = diasSemana[dataObj.getDay()];
@@ -1472,13 +1495,13 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             });
         }
 
-        // 🎯 BUSCA HORÁRIOS JÁ AGENDADOS
+        // 🎯 3. BUSCA HORÁRIOS JÁ AGENDADOS NESTA DATA
         const { data: agendamentos, error: agendamentosError } = await supabase
             .from("agendamentos")
             .select("horario")
             .eq("user_id", user_id)
             .eq("data", data)
-            .neq("status", "cancelado");
+            .neq("status", "cancelado"); // Ignora cancelados
 
         if (agendamentosError) {
             console.error("Erro ao buscar agendamentos:", agendamentosError);
@@ -1490,7 +1513,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
 
         const horariosOcupados = agendamentos?.map(a => a.horario) || [];
 
-        // 🎯 GERA HORÁRIOS DISPONÍVEIS
+        // 🎯 4. GERA HORÁRIOS DISPONÍVEIS BASEADO NO PERFIL
         const horarioDia = perfil.horarios_funcionamento[diaSemana];
         if (!horarioDia) {
             return res.json({ 
@@ -1504,27 +1527,43 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
         const todosHorarios = gerarHorariosIntervalo(
             horarioDia.inicio, 
             horarioDia.fim, 
-            60
+            30 // 🆕 Intervalo de 30 minutos (padrão)
         );
 
-        // 🎯 🔥 USA HORÁRIOS BLOQUEADOS DO PERFIL (ou array vazio se não existir)
-        const horariosBloqueados = perfil.horarios_bloqueados || [];
-        
-        // Filtra horários disponíveis
-        const horariosDisponiveis = todosHorarios.filter(horario => 
-            !horariosOcupados.includes(horario) && 
-            !horariosBloqueados.includes(horario) // 🔥 BLOQUEIA BASEADO NO PERFIL
-        );
+        // 🎯 5. 🔥 NOVO: FILTRA HORÁRIOS BLOQUEADOS POR PERÍODO
+        let horariosDisponiveis = todosHorarios.filter(horario => {
+            // Remove horários ocupados
+            if (horariosOcupados.includes(horario)) {
+                return false;
+            }
+            
+            // 🔥 VERIFICA SE ESTÁ EM PERÍODO BLOQUEADO
+            if (perfil.horarios_bloqueados && perfil.horarios_bloqueados.length > 0) {
+                const horarioCompleto = `${data}T${horario}`;
+                const dataHorario = new Date(horarioCompleto);
+                
+                for (const periodo of perfil.horarios_bloqueados) {
+                    const inicioPeriodo = new Date(`${data}T${periodo.inicio}`);
+                    const fimPeriodo = new Date(`${data}T${periodo.fim}`);
+                    
+                    // Verifica se o horário está dentro do período bloqueado
+                    if (dataHorario >= inicioPeriodo && dataHorario < fimPeriodo) {
+                        return false; // Horário bloqueado
+                    }
+                }
+            }
+            
+            return true; // Horário disponível
+        });
 
         res.json({
             success: true,
             horariosDisponiveis: horariosDisponiveis,
             horariosOcupados: horariosOcupados,
-            horariosBloqueados: horariosBloqueados, // 🆕 RETORNA HORÁRIOS BLOQUEADOS
             totalDisponiveis: horariosDisponiveis.length,
             totalOcupados: horariosOcupados.length,
-            totalBloqueados: horariosBloqueados.length,
-            horarioFuncionamento: horarioDia
+            horarioFuncionamento: horarioDia,
+            periodosBloqueados: perfil.horarios_bloqueados || [] // 🆕 Informa períodos bloqueados
         });
 
     } catch (error) {
@@ -1535,6 +1574,64 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
         });
     }
 });
+
+// 🆕 NOVA ROTA: Gerenciar horários bloqueados
+app.post("/api/horarios-bloqueados", authMiddleware, async (req, res) => {
+  try {
+    const { horarios_bloqueados } = req.body;
+    
+    if (!Array.isArray(horarios_bloqueados)) {
+      return res.status(400).json({ 
+        success: false, 
+        msg: "horarios_bloqueados deve ser um array" 
+      });
+    }
+
+    // Verifica se já existe perfil
+    const { data: perfilExistente } = await supabase
+      .from("perfis_negocio")
+      .select("id")
+      .eq("user_id", req.userId)
+      .single();
+
+    if (!perfilExistente) {
+      return res.status(400).json({ 
+        success: false, 
+        msg: "Crie um perfil do negócio primeiro" 
+      });
+    }
+
+    // Atualiza apenas os horários bloqueados
+    const { data, error } = await supabase
+      .from("perfis_negocio")
+      .update({
+        horarios_bloqueados,
+        updated_at: new Date()
+      })
+      .eq("user_id", req.userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Invalida cache
+    cacheManager.delete(`perfil_${req.userId}`);
+    
+    res.json({
+      success: true,
+      msg: "Horários bloqueados atualizados com sucesso!",
+      horarios_bloqueados: data.horarios_bloqueados
+    });
+
+  } catch (error) {
+    console.error("Erro ao atualizar horários bloqueados:", error);
+    res.status(500).json({ 
+      success: false, 
+      msg: "Erro interno" 
+    });
+  }
+});
+
 
 // 🔥 FUNÇÃO AUXILIAR - GERA HORÁRIOS EM INTERVALO (JÁ EXISTE NO FRONT, ADICIONE NO BACKEND TAMBÉM)
 function gerarHorariosIntervalo(inicio, fim, intervaloMinutos) {
@@ -1559,6 +1656,28 @@ function gerarHorariosIntervalo(inicio, fim, intervaloMinutos) {
     
     return horarios;
 }
+// 🔥 NOVA FUNÇÃO: Atualizar estrutura da tabela perfis_negocio
+async function atualizarEstruturaPerfis() {
+  try {
+    console.log('🔧 Verificando estrutura da tabela perfis_negocio...');
+    
+    // Verifica se a coluna horarios_bloqueados existe
+    const { data, error } = await supabase
+      .from('perfis_negocio')
+      .select('*')
+      .limit(1);
+    
+    if (error) throw error;
+    
+    console.log('✅ Estrutura atual da tabela:', Object.keys(data[0] || {}));
+    
+  } catch (error) {
+    console.log('ℹ️ Estrutura da tabela:', error.message);
+  }
+}
+
+// Chame esta função no startup
+atualizarEstruturaPerfis();
 // ---------------- Error Handling ----------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -1577,8 +1696,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
 
 
 
