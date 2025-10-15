@@ -403,7 +403,7 @@ app.post("/api/assistente-ia", authMiddleware, async (req, res) => {
 });
 
 
-// Função para validar se o horário está dentro do funcionamento
+// Função para validar se o horário está dentro do funcionamento - VERSÃO ATUALIZADA
 async function validarHorarioFuncionamento(userId, data, horario) {
   try {
     const perfil = await obterHorariosPerfil(userId);
@@ -422,6 +422,15 @@ async function validarHorarioFuncionamento(userId, data, horario) {
       return { 
         valido: false, 
         motivo: `Não atendemos aos ${diaSemana}s` 
+      };
+    }
+
+    // 🆕 VERIFICA SE O HORÁRIO ESTÁ BLOQUEADO
+    const horariosBloqueados = perfil.horarios_bloqueados || [];
+    if (horariosBloqueados.includes(horario)) {
+      return { 
+        valido: false, 
+        motivo: `Horário ${horario} está bloqueado para agendamentos` 
       };
     }
 
@@ -1371,8 +1380,8 @@ app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
   }
 });
 
-// ==================== FUNÇÃO AUXILIAR: Obter horários do perfil ====================
 
+// ==================== FUNÇÃO AUXILIAR: Obter horários do perfil ====================
 async function obterHorariosPerfil(userId) {
   try {
     const cacheKey = `perfil_${userId}`;
@@ -1380,7 +1389,7 @@ async function obterHorariosPerfil(userId) {
     const perfil = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
         .from("perfis_negocio")
-        .select("horarios_funcionamento, dias_funcionamento")
+        .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados") // 🆕 ADICIONA horarios_bloqueados
         .eq("user_id", userId)
         .single();
 
@@ -1422,7 +1431,7 @@ app.get("/api/perfil-publico/:user_id", async (req, res) => {
 app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
     try {
         const { user_id } = req.params;
-        const { data } = req.query; // Data no formato YYYY-MM-DD
+        const { data } = req.query;
         
         if (!user_id || !data) {
             return res.status(400).json({ 
@@ -1431,10 +1440,10 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             });
         }
 
-        // 🎯 1. BUSCA PERFIL DO NEGÓCIO
+        // 🎯 BUSCA PERFIL COMPLETO (INCLUINDO HORÁRIOS BLOQUEADOS)
         const { data: perfil, error: perfilError } = await supabase
             .from("perfis_negocio")
-            .select("horarios_funcionamento, dias_funcionamento")
+            .select("horarios_funcionamento, dias_funcionamento, horarios_bloqueados") // 🆕 ADICIONA horarios_bloqueados
             .eq("user_id", user_id)
             .single();
 
@@ -1442,7 +1451,6 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             console.error("Erro ao buscar perfil:", perfilError);
         }
 
-        // Se não tem perfil, retorna vazio
         if (!perfil) {
             return res.json({ 
                 success: true, 
@@ -1451,7 +1459,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             });
         }
 
-        // 🎯 2. VERIFICA SE É DIA DE FUNCIONAMENTO
+        // 🎯 VERIFICA SE É DIA DE FUNCIONAMENTO
         const dataObj = new Date(data);
         const diasSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
         const diaSemana = diasSemana[dataObj.getDay()];
@@ -1464,13 +1472,13 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
             });
         }
 
-        // 🎯 3. BUSCA HORÁRIOS JÁ AGENDADOS NESTA DATA
+        // 🎯 BUSCA HORÁRIOS JÁ AGENDADOS
         const { data: agendamentos, error: agendamentosError } = await supabase
             .from("agendamentos")
             .select("horario")
             .eq("user_id", user_id)
             .eq("data", data)
-            .neq("status", "cancelado"); // Ignora cancelados
+            .neq("status", "cancelado");
 
         if (agendamentosError) {
             console.error("Erro ao buscar agendamentos:", agendamentosError);
@@ -1482,7 +1490,7 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
 
         const horariosOcupados = agendamentos?.map(a => a.horario) || [];
 
-        // 🎯 4. GERA HORÁRIOS DISPONÍVEIS BASEADO NO PERFIL
+        // 🎯 GERA HORÁRIOS DISPONÍVEIS
         const horarioDia = perfil.horarios_funcionamento[diaSemana];
         if (!horarioDia) {
             return res.json({ 
@@ -1496,20 +1504,26 @@ app.get("/api/horarios-disponiveis/:user_id", async (req, res) => {
         const todosHorarios = gerarHorariosIntervalo(
             horarioDia.inicio, 
             horarioDia.fim, 
-            60 // Intervalo de 60 minutos
+            60
         );
 
-        // Filtra horários disponíveis (não ocupados)
-        const horariosDisponiveis = todosHorarios.filter(
-            horario => !horariosOcupados.includes(horario)
+        // 🎯 🔥 USA HORÁRIOS BLOQUEADOS DO PERFIL (ou array vazio se não existir)
+        const horariosBloqueados = perfil.horarios_bloqueados || [];
+        
+        // Filtra horários disponíveis
+        const horariosDisponiveis = todosHorarios.filter(horario => 
+            !horariosOcupados.includes(horario) && 
+            !horariosBloqueados.includes(horario) // 🔥 BLOQUEIA BASEADO NO PERFIL
         );
 
         res.json({
             success: true,
             horariosDisponiveis: horariosDisponiveis,
             horariosOcupados: horariosOcupados,
+            horariosBloqueados: horariosBloqueados, // 🆕 RETORNA HORÁRIOS BLOQUEADOS
             totalDisponiveis: horariosDisponiveis.length,
             totalOcupados: horariosOcupados.length,
+            totalBloqueados: horariosBloqueados.length,
             horarioFuncionamento: horarioDia
         });
 
@@ -1563,6 +1577,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
