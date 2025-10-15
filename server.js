@@ -45,6 +45,15 @@ app.post("/agendamento-publico", async (req, res) => {
       return res.status(400).json({ msg: "Link inválido ou expirado" });
     }
 
+ // 🆕 🔥 ADICIONE ESTA VALIDAÇÃO AQUI - HORA CHEIA APENAS PARA PÚBLICO
+    const minutos = horario.split(':')[1];
+    if (minutos !== '00') {
+        return res.status(400).json({ 
+            success: false,
+            msg: "Apenas horários de hora em hora são permitidos (ex: 09:00, 10:00, 11:00)" 
+        });
+    }
+    
       const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
     if (!validacaoHorario.valido) {
       return res.status(400).json({ 
@@ -1769,6 +1778,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
