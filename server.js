@@ -441,7 +441,7 @@ async function validarHorarioFuncionamento(userId, data, horario) {
       return { valido: true }; // Dia sem configuração específica
     }
 
-    if (horario < horarioFuncionamento.inicio || horario > horarioFuncionamento.fim) {
+    if (horario < horarioFuncionamento.inicio || horario >= horarioFuncionamento.fim) {
       return { 
         valido: false, 
         motivo: `Horário fora do funcionamento (${horarioFuncionamento.inicio} - ${horarioFuncionamento.fim})` 
@@ -1788,6 +1788,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
