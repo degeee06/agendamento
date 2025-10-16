@@ -504,65 +504,38 @@ async function validarHorarioFuncionamento(userId, data, horario) {
 
 // ==================== ROTA SUGERIR HORÁRIOS ====================
 
-// ==================== ROTA SUGERIR HORÁRIOS CORRIGIDA ====================
+// Substitua a rota /api/sugerir-horarios por esta versão atualizada
 app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
-
-    // 🎯 BUSCA AGENDAMENTOS DOS PRÓXIMOS 7 DIAS
-    const hoje = new Date();
-    const umaSemana = new Date();
-    umaSemana.setDate(hoje.getDate() + 7);
 
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("cliente", req.userId)
-      .gte("data", hoje.toISOString().split('T')[0])
-      .lte("data", umaSemana.toISOString().split('T')[0])
+      .gte("data", new Date().toISOString().split('T')[0])
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
     if (error) throw error;
 
-    console.log(`📊 Agendamentos encontrados: ${agendamentos?.length || 0}`);
-
-    // 🎯 BUSCA PERFIL PARA CONTEXTUALIZAR
-    let perfilInfo = null;
-    try {
-      const perfilResponse = await supabase
-        .from("perfis_negocio")
-        .select("*")
-        .eq("user_id", req.userId)
-        .single();
-
-      if (perfilResponse.data) {
-        perfilInfo = perfilResponse.data;
-      }
-    } catch (perfilError) {
-      console.log("Perfil não encontrado para sugestões:", perfilError);
-    }
-
-    // 🎯 ANALISA DISPONIBILIDADE REAL
-    const sugestoes = await gerarSugestoesInteligentes(agendamentos || [], perfilInfo);
+    // 🆕 USA A NOVA FUNÇÃO COM PERFIL
+    const sugestoes = await analisarHorariosLivresComPerfil(agendamentos || [], userEmail, req.userId);
 
     res.json({
       success: true,
       sugestoes: sugestoes,
-      total_agendamentos: agendamentos?.length || 0,
-      perfil_usado: !!perfilInfo
+      total_agendamentos: agendamentos?.length || 0
     });
 
   } catch (error) {
-    console.error("❌ Erro ao sugerir horários:", error);
+    console.error("Erro ao sugerir horários:", error);
     res.status(500).json({ 
       success: false, 
       msg: "Erro ao analisar horários livres"
     });
   }
 });
-
-
 
 async function analisarHorariosLivresComPerfil(agendamentos, userEmail, userId) {
   try {
@@ -787,107 +760,6 @@ async function gerarSugestoesInteligentes(agendamentos, perfilInfo) {
 }
 
 
-// 🎯 FUNÇÃO AUXILIAR: Gera texto das recomendações REAIS
-function gerarTextoRecomendacoesReais(diasAnalisados, perfilInfo) {
-  let sugestoesTexto = "";
-
-  // 🎯 DIAS COM MAIS DISPONIBILIDADE
-  const diasDisponiveis = diasAnalisados.filter(dia => dia.horariosDisponiveis > 0);
-  const diasOcupados = diasAnalisados.filter(dia => dia.horariosDisponiveis === 0);
-
-  if (diasDisponiveis.length > 0) {
-    sugestoesTexto += "🎯 **MELHORES DIAS PARA AGENDAR**\n\n";
-    
-    diasDisponiveis.slice(0, 3).forEach(dia => {
-      const emoji = dia.horariosDisponiveis > 4 ? "🟢" : dia.horariosDisponiveis > 2 ? "🟡" : "🟠";
-      const status = dia.horariosDisponiveis > 4 ? "Excelente" : dia.horariosDisponiveis > 2 ? "Boa" : "Pouca";
-      
-      sugestoesTexto += `${emoji} **${dia.diaSemana} (${dia.dataFormatada})** - ${dia.horariosDisponiveis} horários livres\n`;
-      
-      // 🎯 MOSTRA ALGUNS HORÁRIOS DISPONÍVEIS REAIS
-      if (dia.horariosDisponiveisLista.length > 0) {
-        sugestoesTexto += `   ⏰ Horários: ${dia.horariosDisponiveisLista.join(', ')}${dia.horariosDisponiveis > 3 ? '...' : ''}\n`;
-      }
-    });
-    sugestoesTexto += "\n";
-  }
-
-  // 🎯 DIAS OCUPADOS
-  if (diasOcupados.length > 0) {
-    sugestoesTexto += "📊 **DIAS COMPLETAMENTE OCUPADOS**\n\n";
-    
-    diasOcupados.slice(0, 3).forEach(dia => {
-      sugestoesTexto += `🔴 **${dia.diaSemana} (${dia.dataFormatada})** - ${dia.agendamentosOcupados} agendamentos - Dia cheio! ❌\n`;
-    });
-    sugestoesTexto += "\n";
-  }
-
-  // 🎯 CONTEXTO REAL DO NEGÓCIO
-  if (perfilInfo) {
-    sugestoesTexto += `🏪 **Perfil Real:** ${perfilInfo.nome_negocio} (${perfilInfo.tipo_negocio})\n`;
-    sugestoesTexto += `📅 **Dias de Atendimento:** ${perfilInfo.dias_funcionamento.join(', ')}\n`;
-    sugestoesTexto += `⏰ **Horário de Funcionamento:** ${Object.values(perfilInfo.horarios_funcionamento)[0]?.inicio || '08:00'} - ${Object.values(perfilInfo.horarios_funcionamento)[0]?.fim || '18:00'}\n\n`;
-  }
-
-  // 🎯 RESUMO REAL
-  sugestoesTexto += `📈 **Resumo da Semana:** ${diasDisponiveis.length} dias disponíveis, ${diasOcupados.length} dias ocupados\n\n`;
-
-  // 🎯 DICA INTELIGENTE BASEADA NA REALIDADE
-  if (diasDisponiveis.length === 0) {
-    sugestoesTexto += "💡 **Dica:** Todos os dias estão ocupados! Considere liberar mais horários. 📈";
-  } else if (diasDisponiveis.length >= 3) {
-    sugestoesTexto += "💡 **Dica:** Semana com boa disponibilidade! Agende com tranquilidade. ✅";
-  } else {
-    sugestoesTexto += "💡 **Dica:** Poucos dias disponíveis - agende com antecedência! ⚡";
-  }
-
-  return sugestoesTexto || "📅 Nenhuma recomendação disponível no momento.";
-}
-
-// 🎯 FUNÇÃO AUXILIAR: Gera horários em intervalo (para o backend)
-function gerarHorariosIntervaloBackend(inicio, fim, intervaloMinutos) {
-  const horarios = [];
-  const [horaInicio, minutoInicio] = inicio.split(':').map(Number);
-  const [horaFim, minutoFim] = fim.split(':').map(Number);
-  
-  let horaAtual = horaInicio;
-  let minutoAtual = minutoInicio;
-  
-  while (horaAtual < horaFim || (horaAtual === horaFim && minutoAtual < minutoFim)) {
-    const horario = `${horaAtual.toString().padStart(2, '0')}:${minutoAtual.toString().padStart(2, '0')}`;
-    horarios.push(horario);
-    
-    // Adiciona intervalo
-    minutoAtual += intervaloMinutos;
-    if (minutoAtual >= 60) {
-      horaAtual += Math.floor(minutoAtual / 60);
-      minutoAtual = minutoAtual % 60;
-    }
-  }
-  
-  return horarios;
-}
-
-async function accessUserSpreadsheet(userEmail, userMetadata) {
-  try {
-    const spreadsheetId = userMetadata?.spreadsheet_id;
-    
-    if (!spreadsheetId) {
-      console.log(`📝 Usuário ${userEmail} não configurou Sheets`); // ✅ Use userEmail
-      return null;
-    }
-    
-    const doc = new GoogleSpreadsheet(spreadsheetId);
-    await doc.useServiceAccountAuth(creds);
-    await doc.loadInfo();
-    
-    console.log(`✅ Acessando planilha do usuário: ${userEmail}`); // ✅ Use userEmail
-    return doc;
-  } catch (error) {
-    console.error(`❌ Erro ao acessar planilha do usuário ${userEmail}:`, error.message); // ✅ Use userEmail
-    return null;
-  }
-}
 
 async function createSpreadsheetForUser(userEmail, userName) {
   try {
@@ -1947,9 +1819,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
-
 
 
 
