@@ -984,6 +984,16 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     if (!Nome || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
+ // 🆕 VALIDAÇÃO DE DATA NO PASSADO (ADICIONADA)
+    const dataAgendamento = new Date(`${Data}T${Horario}`);
+    const agora = new Date();
+    if (dataAgendamento < agora) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Não é possível agendar no passado" 
+      });
+    }
+    
     const userEmail = req.user?.email || Email || null; // ✅ usa email do usuário logado, do corpo, ou null
     const cacheKey = `agendamentos_${req.userId}`;
     
@@ -1778,6 +1788,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
