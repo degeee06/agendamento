@@ -504,38 +504,65 @@ async function validarHorarioFuncionamento(userId, data, horario) {
 
 // ==================== ROTA SUGERIR HORÁRIOS ====================
 
-// Substitua a rota /api/sugerir-horarios por esta versão atualizada
+// ==================== ROTA SUGERIR HORÁRIOS CORRIGIDA ====================
 app.get("/api/sugerir-horarios", authMiddleware, async (req, res) => {
   try {
     const userEmail = req.user.email;
+
+    // 🎯 BUSCA AGENDAMENTOS DOS PRÓXIMOS 7 DIAS
+    const hoje = new Date();
+    const umaSemana = new Date();
+    umaSemana.setDate(hoje.getDate() + 7);
 
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("cliente", req.userId)
-      .gte("data", new Date().toISOString().split('T')[0])
+      .gte("data", hoje.toISOString().split('T')[0])
+      .lte("data", umaSemana.toISOString().split('T')[0])
       .order("data", { ascending: true })
       .order("horario", { ascending: true });
 
     if (error) throw error;
 
-    // 🆕 USA A NOVA FUNÇÃO COM PERFIL
-    const sugestoes = await analisarHorariosLivresComPerfil(agendamentos || [], userEmail, req.userId);
+    console.log(`📊 Agendamentos encontrados: ${agendamentos?.length || 0}`);
+
+    // 🎯 BUSCA PERFIL PARA CONTEXTUALIZAR
+    let perfilInfo = null;
+    try {
+      const perfilResponse = await supabase
+        .from("perfis_negocio")
+        .select("*")
+        .eq("user_id", req.userId)
+        .single();
+
+      if (perfilResponse.data) {
+        perfilInfo = perfilResponse.data;
+      }
+    } catch (perfilError) {
+      console.log("Perfil não encontrado para sugestões:", perfilError);
+    }
+
+    // 🎯 ANALISA DISPONIBILIDADE REAL
+    const sugestoes = await gerarSugestoesInteligentes(agendamentos || [], perfilInfo);
 
     res.json({
       success: true,
       sugestoes: sugestoes,
-      total_agendamentos: agendamentos?.length || 0
+      total_agendamentos: agendamentos?.length || 0,
+      perfil_usado: !!perfilInfo
     });
 
   } catch (error) {
-    console.error("Erro ao sugerir horários:", error);
+    console.error("❌ Erro ao sugerir horários:", error);
     res.status(500).json({ 
       success: false, 
       msg: "Erro ao analisar horários livres"
     });
   }
 });
+
+
 
 async function analisarHorariosLivresComPerfil(agendamentos, userEmail, userId) {
   try {
@@ -685,30 +712,97 @@ try {
   console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
   process.exit(1);
 }
-// ADICIONE ESTA FUNÇÃO ANTES DAS ROTAS IA:
-async function gerarSugestoesInteligentes(agendamentos, userEmail) {
-  try {
-    const contexto = `
-ANÁLISE DE AGENDA PARA SUGESTÕES INTELIGENTES
 
-Agendamentos do usuário: 
-${agendamentos.map(a => `- ${a.data} ${a.horario}: ${a.nome} (${a.status})`).join('\n')}
 
-Forneça insights úteis sobre:
-- Padrões de agendamento
-- Sugestões de melhor organização
-- Lembretes importantes
-- Otimizações de tempo
 
-Seja prático e use emojis. Máximo 150 palavras.
-`;
+// 🎯 FUNÇÃO CORRIGIDA: Gerar sugestões baseadas na disponibilidade REAL
+async function gerarSugestoesInteligentes(agendamentos, perfilInfo) {
+  const hoje = new Date();
+  const diasAnalise = 7;
+  
+  // 🎯 AGRUPA AGENDAMENTOS POR DATA
+  const agendamentosPorData = {};
+  agendamentos.forEach(ag => {
+    if (!agendamentosPorData[ag.data]) {
+      agendamentosPorData[ag.data] = [];
+    }
+    agendamentosPorData[ag.data].push(ag.horario);
+  });
 
-    return await chamarDeepSeekIA("Analise esta agenda e forneça sugestões úteis:", contexto, "ECONOMICO");
-  } catch (error) {
-    console.error("Erro ao gerar sugestões:", error);
-    return "💡 **Sugestões Inteligentes:**\n\n- Considere agendar compromissos importantes no período da manhã\n- Mantenha intervalos de 15-30 minutos entre reuniões\n- Revise sua agenda semanalmente para ajustes\n\n📊 Dica: Use o agendamento por IA para otimizar seu tempo!";
+  // 🎯 ANALISA CADA DIA
+  const diasDisponiveis = [];
+  const diasOcupados = [];
+
+  for (let i = 0; i < diasAnalise; i++) {
+    const data = new Date(hoje);
+    data.setDate(hoje.getDate() + i);
+    const dataStr = data.toISOString().split('T')[0];
+    
+    const agendamentosDoDia = agendamentosPorData[dataStr] || [];
+    const totalHorariosDia = 8; // Assume 8 horários possíveis por dia (09:00-17:00)
+    const ocupacao = (agendamentosDoDia.length / totalHorariosDia) * 100;
+
+    const diaInfo = {
+      data: dataStr,
+      dataFormatada: data.toLocaleDateString('pt-BR'),
+      diaSemana: data.toLocaleDateString('pt-BR', { weekday: 'long' }),
+      agendamentos: agendamentosDoDia.length,
+      ocupacao: Math.round(ocupacao)
+    };
+
+    if (agendamentosDoDia.length === 0) {
+      diasDisponiveis.push(diaInfo);
+    } else {
+      diasOcupados.push(diaInfo);
+    }
   }
+
+  // 🎯 GERA SUGESTÕES INTELIGENTES
+  let sugestoesTexto = "";
+
+  // 🔥 CORREÇÃO: Mostra dias DISPONÍVEIS primeiro (os mais vazios)
+  if (diasDisponiveis.length > 0) {
+    sugestoesTexto += "🎯 **DIAS MAIS DISPONÍVEIS (Recomendados)**\n\n";
+    
+    diasDisponiveis.slice(0, 3).forEach(dia => {
+      const emoji = dia.data === hoje.toISOString().split('T')[0] ? "🟢" : "🟡";
+      sugestoesTexto += `${emoji} **${dia.diaSemana} (${dia.dataFormatada})** - Dia completamente livre! 💯\n`;
+    });
+    sugestoesTexto += "\n";
+  }
+
+  // 🔥 CORREÇÃO: Mostra dias OCUPADOS com contexto real
+  if (diasOcupados.length > 0) {
+    sugestoesTexto += "📊 **DIAS COM COMPROMISSOS**\n\n";
+    
+    diasOcupados.forEach(dia => {
+      const emoji = dia.ocupacao > 70 ? "🔴" : dia.ocupacao > 40 ? "🟠" : "🔵";
+      const status = dia.ocupacao > 70 ? "Dia cheio" : dia.ocupacao > 40 ? "Dia moderado" : "Dia tranquilo";
+      
+      sugestoesTexto += `${emoji} **${dia.diaSemana} (${dia.dataFormatada})** - ${dia.agendamentos} agendamentos (${dia.ocupacao}% ocupado) - ${status}\n`;
+    });
+    sugestoesTexto += "\n";
+  }
+
+  // 🎯 ADICIONA CONTEXTO DO PERFIL
+  if (perfilInfo) {
+    sugestoesTexto += `🏪 **Contexto do Negócio:** ${perfilInfo.nome_negocio} (${perfilInfo.tipo_negocio})\n`;
+    sugestoesTexto += `⏰ **Horário de Funcionamento:** ${Object.values(perfilInfo.horarios_funcionamento)[0]?.inicio || '08:00'} - ${Object.values(perfilInfo.horarios_funcionamento)[0]?.fim || '18:00'}\n\n`;
+  }
+
+  // 🎯 DICA FINAL BASEADA NA ANÁLISE REAL
+  if (diasDisponiveis.length > diasOcupados.length) {
+    sugestoesTexto += "💡 **Dica:** Sua semana está bem tranquila! Ótimo momento para novos agendamentos. 🎉";
+  } else {
+    sugestoesTexto += "💡 **Dica:** Foque nos dias destacados em verde para melhor disponibilidade. ✅";
+  }
+
+  return sugestoesTexto || "📅 Analise sua agenda para ver os melhores horários disponíveis.";
 }
+
+
+
+
 async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
     const spreadsheetId = userMetadata?.spreadsheet_id;
@@ -1788,6 +1882,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
