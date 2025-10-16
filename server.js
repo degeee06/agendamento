@@ -715,12 +715,12 @@ try {
 
 
 
-// 🎯 FUNÇÃO CORRIGIDA: Gerar sugestões baseadas na disponibilidade REAL
+// 🎯 FUNÇÃO CORRIGIDA: Usa dados REAIS sem precisar do userId
 async function gerarSugestoesInteligentes(agendamentos, perfilInfo) {
   const hoje = new Date();
   const diasAnalise = 7;
   
-  // 🎯 AGRUPA AGENDAMENTOS POR DATA
+  // 🎯 AGRUPA AGENDAMENTOS POR DATA (REAIS)
   const agendamentosPorData = {};
   agendamentos.forEach(ag => {
     if (!agendamentosPorData[ag.data]) {
@@ -729,79 +729,144 @@ async function gerarSugestoesInteligentes(agendamentos, perfilInfo) {
     agendamentosPorData[ag.data].push(ag.horario);
   });
 
-  // 🎯 ANALISA CADA DIA
-  const diasDisponiveis = [];
-  const diasOcupados = [];
+  // 🎯 ANALISA CADA DIA COM DADOS REAIS
+  const diasAnalisados = [];
 
   for (let i = 0; i < diasAnalise; i++) {
     const data = new Date(hoje);
     data.setDate(hoje.getDate() + i);
     const dataStr = data.toISOString().split('T')[0];
     
+    // 🎯 CONVERTE PARA DIA DA SEMANA
+    const diasSemana = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+    const diaSemanaPortugues = diasSemana[data.getDay()];
+    
+    // 🔥 VERIFICA SE O DIA É DE FUNCIONAMENTO
+    const diaFuncionamento = perfilInfo?.dias_funcionamento?.includes(diaSemanaPortugues);
+    
+    if (!diaFuncionamento) {
+      continue; // Pula dias sem atendimento
+    }
+
     const agendamentosDoDia = agendamentosPorData[dataStr] || [];
-    const totalHorariosDia = 8; // Assume 8 horários possíveis por dia (09:00-17:00)
-    const ocupacao = (agendamentosDoDia.length / totalHorariosDia) * 100;
+    
+    // 🎯 CALCULA DISPONIBILIDADE REAL BASEADA NOS AGENDAMENTOS EXISTENTES
+    const horarioFuncionamento = perfilInfo.horarios_funcionamento[diaSemanaPortugues];
+    let horariosDisponiveisReais = [];
+    
+    if (horarioFuncionamento) {
+      // 🎯 GERA HORÁRIOS POSSÍVEIS BASEADO NO PERFIL (sem buscar do Supabase)
+      horariosDisponiveisReais = gerarHorariosIntervaloBackend(
+        horarioFuncionamento.inicio, 
+        horarioFuncionamento.fim, 
+        60 // Horas cheias apenas
+      ).filter(horario => {
+        // Remove horários já agendados
+        return !agendamentosDoDia.includes(horario);
+      });
+    }
 
     const diaInfo = {
       data: dataStr,
       dataFormatada: data.toLocaleDateString('pt-BR'),
       diaSemana: data.toLocaleDateString('pt-BR', { weekday: 'long' }),
-      agendamentos: agendamentosDoDia.length,
-      ocupacao: Math.round(ocupacao)
+      agendamentosOcupados: agendamentosDoDia.length,
+      horariosDisponiveis: horariosDisponiveisReais.length,
+      horariosDisponiveisLista: horariosDisponiveisReais.slice(0, 3), // Primeiros 3 horários
+      ocupacao: horariosDisponiveisReais.length === 0 ? 100 : Math.round((agendamentosDoDia.length / (agendamentosDoDia.length + horariosDisponiveisReais.length)) * 100)
     };
 
-    if (agendamentosDoDia.length === 0) {
-      diasDisponiveis.push(diaInfo);
-    } else {
-      diasOcupados.push(diaInfo);
-    }
+    diasAnalisados.push(diaInfo);
   }
 
-  // 🎯 GERA SUGESTÕES INTELIGENTES
-  let sugestoesTexto = "";
+  // 🎯 ORDENA POR DISPONIBILIDADE (mais horários livres primeiro)
+  diasAnalisados.sort((a, b) => b.horariosDisponiveis - a.horariosDisponiveis);
 
-  // 🔥 CORREÇÃO: Mostra dias DISPONÍVEIS primeiro (os mais vazios)
-  if (diasDisponiveis.length > 0) {
-    sugestoesTexto += "🎯 **DIAS MAIS DISPONÍVEIS (Recomendados)**\n\n";
-    
-    diasDisponiveis.slice(0, 3).forEach(dia => {
-      const emoji = dia.data === hoje.toISOString().split('T')[0] ? "🟢" : "🟡";
-      sugestoesTexto += `${emoji} **${dia.diaSemana} (${dia.dataFormatada})** - Dia completamente livre! 💯\n`;
-    });
-    sugestoesTexto += "\n";
-  }
-
-  // 🔥 CORREÇÃO: Mostra dias OCUPADOS com contexto real
-  if (diasOcupados.length > 0) {
-    sugestoesTexto += "📊 **DIAS COM COMPROMISSOS**\n\n";
-    
-    diasOcupados.forEach(dia => {
-      const emoji = dia.ocupacao > 70 ? "🔴" : dia.ocupacao > 40 ? "🟠" : "🔵";
-      const status = dia.ocupacao > 70 ? "Dia cheio" : dia.ocupacao > 40 ? "Dia moderado" : "Dia tranquilo";
-      
-      sugestoesTexto += `${emoji} **${dia.diaSemana} (${dia.dataFormatada})** - ${dia.agendamentos} agendamentos (${dia.ocupacao}% ocupado) - ${status}\n`;
-    });
-    sugestoesTexto += "\n";
-  }
-
-  // 🎯 ADICIONA CONTEXTO DO PERFIL
-  if (perfilInfo) {
-    sugestoesTexto += `🏪 **Contexto do Negócio:** ${perfilInfo.nome_negocio} (${perfilInfo.tipo_negocio})\n`;
-    sugestoesTexto += `⏰ **Horário de Funcionamento:** ${Object.values(perfilInfo.horarios_funcionamento)[0]?.inicio || '08:00'} - ${Object.values(perfilInfo.horarios_funcionamento)[0]?.fim || '18:00'}\n\n`;
-  }
-
-  // 🎯 DICA FINAL BASEADA NA ANÁLISE REAL
-  if (diasDisponiveis.length > diasOcupados.length) {
-    sugestoesTexto += "💡 **Dica:** Sua semana está bem tranquila! Ótimo momento para novos agendamentos. 🎉";
-  } else {
-    sugestoesTexto += "💡 **Dica:** Foque nos dias destacados em verde para melhor disponibilidade. ✅";
-  }
-
-  return sugestoesTexto || "📅 Analise sua agenda para ver os melhores horários disponíveis.";
+  // 🎯 GERA SUGESTÕES BASEADAS NA REALIDADE
+  return gerarTextoRecomendacoesReais(diasAnalisados, perfilInfo);
 }
 
 
+// 🎯 FUNÇÃO AUXILIAR: Gera texto das recomendações REAIS
+function gerarTextoRecomendacoesReais(diasAnalisados, perfilInfo) {
+  let sugestoesTexto = "";
 
+  // 🎯 DIAS COM MAIS DISPONIBILIDADE
+  const diasDisponiveis = diasAnalisados.filter(dia => dia.horariosDisponiveis > 0);
+  const diasOcupados = diasAnalisados.filter(dia => dia.horariosDisponiveis === 0);
+
+  if (diasDisponiveis.length > 0) {
+    sugestoesTexto += "🎯 **MELHORES DIAS PARA AGENDAR**\n\n";
+    
+    diasDisponiveis.slice(0, 3).forEach(dia => {
+      const emoji = dia.horariosDisponiveis > 4 ? "🟢" : dia.horariosDisponiveis > 2 ? "🟡" : "🟠";
+      const status = dia.horariosDisponiveis > 4 ? "Excelente" : dia.horariosDisponiveis > 2 ? "Boa" : "Pouca";
+      
+      sugestoesTexto += `${emoji} **${dia.diaSemana} (${dia.dataFormatada})** - ${dia.horariosDisponiveis} horários livres\n`;
+      
+      // 🎯 MOSTRA ALGUNS HORÁRIOS DISPONÍVEIS REAIS
+      if (dia.horariosDisponiveisLista.length > 0) {
+        sugestoesTexto += `   ⏰ Horários: ${dia.horariosDisponiveisLista.join(', ')}${dia.horariosDisponiveis > 3 ? '...' : ''}\n`;
+      }
+    });
+    sugestoesTexto += "\n";
+  }
+
+  // 🎯 DIAS OCUPADOS
+  if (diasOcupados.length > 0) {
+    sugestoesTexto += "📊 **DIAS COMPLETAMENTE OCUPADOS**\n\n";
+    
+    diasOcupados.slice(0, 3).forEach(dia => {
+      sugestoesTexto += `🔴 **${dia.diaSemana} (${dia.dataFormatada})** - ${dia.agendamentosOcupados} agendamentos - Dia cheio! ❌\n`;
+    });
+    sugestoesTexto += "\n";
+  }
+
+  // 🎯 CONTEXTO REAL DO NEGÓCIO
+  if (perfilInfo) {
+    sugestoesTexto += `🏪 **Perfil Real:** ${perfilInfo.nome_negocio} (${perfilInfo.tipo_negocio})\n`;
+    sugestoesTexto += `📅 **Dias de Atendimento:** ${perfilInfo.dias_funcionamento.join(', ')}\n`;
+    sugestoesTexto += `⏰ **Horário de Funcionamento:** ${Object.values(perfilInfo.horarios_funcionamento)[0]?.inicio || '08:00'} - ${Object.values(perfilInfo.horarios_funcionamento)[0]?.fim || '18:00'}\n\n`;
+  }
+
+  // 🎯 RESUMO REAL
+  sugestoesTexto += `📈 **Resumo da Semana:** ${diasDisponiveis.length} dias disponíveis, ${diasOcupados.length} dias ocupados\n\n`;
+
+  // 🎯 DICA INTELIGENTE BASEADA NA REALIDADE
+  if (diasDisponiveis.length === 0) {
+    sugestoesTexto += "💡 **Dica:** Todos os dias estão ocupados! Considere liberar mais horários. 📈";
+  } else if (diasDisponiveis.length >= 3) {
+    sugestoesTexto += "💡 **Dica:** Semana com boa disponibilidade! Agende com tranquilidade. ✅";
+  } else {
+    sugestoesTexto += "💡 **Dica:** Poucos dias disponíveis - agende com antecedência! ⚡";
+  }
+
+  return sugestoesTexto || "📅 Nenhuma recomendação disponível no momento.";
+}
+
+// 🎯 FUNÇÃO AUXILIAR: Gera horários em intervalo (para o backend)
+function gerarHorariosIntervaloBackend(inicio, fim, intervaloMinutos) {
+  const horarios = [];
+  const [horaInicio, minutoInicio] = inicio.split(':').map(Number);
+  const [horaFim, minutoFim] = fim.split(':').map(Number);
+  
+  let horaAtual = horaInicio;
+  let minutoAtual = minutoInicio;
+  
+  while (horaAtual < horaFim || (horaAtual === horaFim && minutoAtual < minutoFim)) {
+    const horario = `${horaAtual.toString().padStart(2, '0')}:${minutoAtual.toString().padStart(2, '0')}`;
+    horarios.push(horario);
+    
+    // Adiciona intervalo
+    minutoAtual += intervaloMinutos;
+    if (minutoAtual >= 60) {
+      horaAtual += Math.floor(minutoAtual / 60);
+      minutoAtual = minutoAtual % 60;
+    }
+  }
+  
+  return horarios;
+}
 
 async function accessUserSpreadsheet(userEmail, userMetadata) {
   try {
@@ -1882,6 +1947,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
