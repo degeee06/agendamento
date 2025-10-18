@@ -1779,6 +1779,124 @@ function gerarHorariosIntervalo(inicio, fim, intervaloMinutos) {
     
     return horarios;
 }
+
+// ✅ WEBHOOK HOTMART CORRETO
+app.post('/api/webhooks/hotmart', async (req, res) => {
+    try {
+        console.log('🔔 Webhook Hotmart recebido:', req.body);
+        
+        const { event, data } = req.body;
+        
+        // ⭐⭐ VALIDAÇÃO DE SEGURANÇA (IMPORTANTE!)
+        // Verificar se vem da Hotmart (opcional mas recomendado)
+        // Você pode validar IPs ou usar assinatura
+        
+        console.log('📦 Evento:', event);
+        console.log('📊 Dados:', JSON.stringify(data, null, 2));
+        
+        if (event === 'PURCHASE_APPROVED' || event === 'SUBSCRIPTION_ACTIVATED') {
+            const buyer = data.buyer || data.subscriber;
+            const subscription = data.subscription || data.plan;
+            
+            if (!buyer || !buyer.email) {
+                console.log('❌ Email do comprador não encontrado');
+                return res.status(400).json({ error: 'Email do comprador não encontrado' });
+            }
+            
+            console.log('🎯 Ativando assinatura para:', buyer.email);
+            
+            // Criar/atualizar assinatura
+            const { error } = await supabase
+                .from('user_subscriptions')
+                .upsert({
+                    user_email: buyer.email,
+                    hotmart_subscription_id: subscription?.subscription_code || `hotmart_${Date.now()}`,
+                    plan_type: 'pro',
+                    status: 'active',
+                    max_daily_schedules: 999, // Ilimitado
+                    starts_at: new Date().toISOString(),
+                    ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 dias
+                    updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'user_email'
+                });
+                
+            if (error) {
+                console.error('❌ Erro ao salvar no Supabase:', error);
+                return res.status(500).json({ error: 'Erro ao salvar assinatura' });
+            }
+            
+            console.log('✅ Assinatura ativada/atualizada para:', buyer.email);
+        }
+        
+        else if (event === 'SUBSCRIPTION_CANCELLED' || event === 'PURCHASE_REFUNDED') {
+            const subscriber = data.subscriber || data.buyer;
+            
+            if (!subscriber || !subscriber.email) {
+                console.log('❌ Email do assinante não encontrado');
+                return res.status(400).json({ error: 'Email do assinante não encontrado' });
+            }
+            
+            console.log('🛑 Cancelando assinatura para:', subscriber.email);
+            
+            // Marcar assinatura como cancelada
+            const { error } = await supabase
+                .from('user_subscriptions')
+                .update({
+                    status: 'canceled',
+                    ends_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('user_email', subscriber.email);
+                
+            if (error) {
+                console.error('❌ Erro ao cancelar no Supabase:', error);
+                return res.status(500).json({ error: 'Erro ao cancelar assinatura' });
+            }
+            
+            console.log('✅ Assinatura cancelada para:', subscriber.email);
+        }
+        
+        else if (event === 'SUBSCRIPTION_EXPIRED') {
+            const subscriber = data.subscriber;
+            
+            if (subscriber && subscriber.email) {
+                console.log('📅 Assinatura expirada para:', subscriber.email);
+                
+                const { error } = await supabase
+                    .from('user_subscriptions')
+                    .update({
+                        status: 'expired',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('user_email', subscriber.email);
+                    
+                if (error) console.error('Erro ao expirar assinatura:', error);
+            }
+        }
+        
+        else {
+            console.log('ℹ️ Evento não tratado:', event);
+        }
+        
+        // ⭐⭐ SEMPRE RESPONDA 200 PARA A HOTMART
+        res.status(200).json({ 
+            success: true, 
+            message: 'Webhook processado com sucesso',
+            event: event
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro no webhook Hotmart:', error);
+        // ⭐⭐ IMPORTANTE: Mesmo com erro, responda 200 para a Hotmart
+        res.status(200).json({ 
+            success: false, 
+            error: 'Erro interno mas webhook recebido' 
+        });
+    }
+});
+
+
 // 🔥 NOVA FUNÇÃO: Atualizar estrutura da tabela perfis_negocio
 async function atualizarEstruturaPerfis() {
   try {
@@ -1819,6 +1937,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
