@@ -759,7 +759,26 @@ async function gerarSugestoesInteligentes(agendamentos, perfilInfo) {
   return gerarTextoRecomendacoesReais(diasAnalisados, perfilInfo);
 }
 
-
+async function accessUserSpreadsheet(userEmail, userMetadata) {
+  try {
+    const spreadsheetId = userMetadata?.spreadsheet_id;
+    
+    if (!spreadsheetId) {
+      console.log(`📝 Usuário ${userEmail} não configurou Sheets`); // ✅ Use userEmail
+      return null;
+    }
+    
+    const doc = new GoogleSpreadsheet(spreadsheetId);
+    await doc.useServiceAccountAuth(creds);
+    await doc.loadInfo();
+    
+    console.log(`✅ Acessando planilha do usuário: ${userEmail}`); // ✅ Use userEmail
+    return doc;
+  } catch (error) {
+    console.error(`❌ Erro ao acessar planilha do usuário ${userEmail}:`, error.message); // ✅ Use userEmail
+    return null;
+  }
+}
 
 async function createSpreadsheetForUser(userEmail, userName) {
   try {
@@ -1937,6 +1956,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
