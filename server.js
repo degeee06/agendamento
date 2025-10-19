@@ -1471,36 +1471,36 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ ROTA CORRIGIDA - ADICIONE PARÂMETRO PARA FORÇAR SEM CACHE
+// 🎯 ROTA INTELIGENTE - CACHE APENAS QUANDO TEM PERFIL
 app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
   try {
-    const { forcado } = req.query; // 🆕 Parâmetro para forçar sem cache
+    const { forcado } = req.query;
     const cacheKey = `perfil_${req.userId}`;
     
-    // 🆕 SE FORÇADO, IGNORA CACHE
+    // Se forçado, limpa cache
     if (forcado) {
-      console.log('🔄 Modo forçado - ignorando cache');
       cacheManager.delete(cacheKey);
     }
     
-    const perfil = await cacheManager.getOrSet(cacheKey, async () => {
-      console.log('📡 Consultando banco de dados...');
-      const { data, error } = await supabase
-        .from("perfis_negocio")
-        .select("*")
-        .eq("user_id", req.userId)
-        .single();
+    // 🆕 CONSULTA DIRETA SEM CACHE MANAGER
+    console.log('📡 Consulta DIRETA ao banco (cache ignorado)');
+    const { data, error } = await supabase
+      .from("perfis_negocio")
+      .select("*")
+      .eq("user_id", req.userId)
+      .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-      
-      console.log('📊 Resultado do banco:', data ? 'PERFIL ENCONTRADO' : 'SEM PERFIL');
-      return data || null;
-    }, 10 * 60 * 1000);
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    const perfil = data || null;
+    
+    console.log('📊 Resultado REAL:', perfil ? `Perfil ${perfil.id}` : 'SEM PERFIL');
     
     res.json({
       success: true,
       perfil: perfil,
-      cache: !forcado // 🆕 Indica se veio do cache
+      cache: false, // 🆕 Sempre false agora
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
@@ -1967,6 +1967,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
