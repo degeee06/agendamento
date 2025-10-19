@@ -1471,25 +1471,36 @@ app.post("/api/criar-perfil", authMiddleware, async (req, res) => {
   }
 });
 
-// Rota para obter perfil
+// ✅ ROTA CORRIGIDA - ADICIONE PARÂMETRO PARA FORÇAR SEM CACHE
 app.get("/api/meu-perfil", authMiddleware, async (req, res) => {
   try {
+    const { forcado } = req.query; // 🆕 Parâmetro para forçar sem cache
     const cacheKey = `perfil_${req.userId}`;
     
+    // 🆕 SE FORÇADO, IGNORA CACHE
+    if (forcado) {
+      console.log('🔄 Modo forçado - ignorando cache');
+      cacheManager.delete(cacheKey);
+    }
+    
     const perfil = await cacheManager.getOrSet(cacheKey, async () => {
+      console.log('📡 Consultando banco de dados...');
       const { data, error } = await supabase
         .from("perfis_negocio")
         .select("*")
         .eq("user_id", req.userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = não encontrado
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      console.log('📊 Resultado do banco:', data ? 'PERFIL ENCONTRADO' : 'SEM PERFIL');
       return data || null;
-    }, 10 * 60 * 1000); // 10 minutos cache
-
+    }, 10 * 60 * 1000);
+    
     res.json({
       success: true,
-      perfil: perfil
+      perfil: perfil,
+      cache: !forcado // 🆕 Indica se veio do cache
     });
 
   } catch (error) {
@@ -1956,6 +1967,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
