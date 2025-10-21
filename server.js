@@ -36,6 +36,51 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
+// 🆕 FUNÇÃO: Buscar trial do usuário (BACKEND)
+async function getUserTrialBackend(userId) {
+    try {
+        const { data, error } = await supabase
+            .from('user_trials')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+            
+        if (error) {
+            if (error.code === 'PGRST116') return null;
+            throw error;
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('❌ Erro ao buscar trial (backend):', error);
+        return null;
+    }
+}
+
+// 🆕 FUNÇÃO: Verificar uso diário (BACKEND)  
+async function getDailyUsageBackend(trial, dailyLimit) {
+    if (!trial) return { dailyUsageCount: 0, dailyUsagesLeft: 0, lastUsageDate: null };
+    
+    const today = new Date().toISOString().split('T')[0];
+    const lastUsageDate = trial.last_usage_date ? new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
+    
+    let dailyUsageCount = trial.daily_usage_count || 0;
+    
+    // Reset diário se for um novo dia
+    if (lastUsageDate !== today) {
+        dailyUsageCount = 0;
+    }
+    
+    const dailyUsagesLeft = Math.max(0, dailyLimit - dailyUsageCount);
+    
+    return {
+        dailyUsageCount: dailyUsageCount,
+        dailyUsagesLeft: dailyUsagesLeft,
+        lastUsageDate: lastUsageDate
+    };
+}
 // ROTA PÚBLICA para agendamento via link
 app.post("/agendamento-publico", async (req, res) => {
   try {
@@ -45,7 +90,7 @@ app.post("/agendamento-publico", async (req, res) => {
       return res.status(400).json({ msg: "Link inválido ou expirado" });
     }
 
- // 🆕 🔥 ADICIONE ESTA VALIDAÇÃO AQUI - HORA CHEIA APENAS PARA PÚBLICO
+    // 🆕 🔥 ADICIONE ESTA VALIDAÇÃO AQUI - HORA CHEIA APENAS PARA PÚBLICO
     const minutos = horario.split(':')[1];
     if (minutos !== '00') {
         return res.status(400).json({ 
@@ -53,14 +98,52 @@ app.post("/agendamento-publico", async (req, res) => {
             msg: "Apenas horários de hora em hora são permitidos (ex: 09:00, 10:00, 11:00)" 
         });
     }
+
+    // 🆕 ✅ VERIFICAR E INCREMENTAR USO NO USER_TRIALS (ADICIONE ESTA PARTE)
+    const trial = await getUserTrialBackend(user_id);
+    if (trial && trial.status === 'active') {
+      const today = new Date().toISOString().split('T')[0];
+      const lastUsageDate = trial.last_usage_date ? 
+        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
+      
+      let dailyUsageCount = trial.daily_usage_count || 0;
+      
+      // Reset se for novo dia
+      if (lastUsageDate !== today) {
+        dailyUsageCount = 0;
+      }
+      
+      const dailyLimit = trial.max_usages || 5;
+      
+      // 🆕 ✅ VERIFICAR SE TEM USOS DISPONÍVEIS
+      if (dailyUsageCount >= dailyLimit) {
+        return res.status(400).json({ 
+          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+        });
+      }
+      
+      // 🆕 ✅ INCREMENTAR USO (se tiver disponível)
+      dailyUsageCount += 1;
+      
+      await supabase
+        .from('user_trials')
+        .update({
+          daily_usage_count: dailyUsageCount,
+          last_usage_date: new Date().toISOString()
+        })
+        .eq('user_id', user_id);
+        
+      console.log(`✅ Uso incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
+    }
     
-      const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
+    const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
     if (!validacaoHorario.valido) {
       return res.status(400).json({ 
         msg: `Horário indisponível: ${validacaoHorario.motivo}` 
       });
     }
-  // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
+    
+    // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
     const { data: linkUsado } = await supabase
       .from('links_uso')
       .select('*')
@@ -128,9 +211,6 @@ app.post("/agendamento-publico", async (req, res) => {
         usado_em: new Date(),
         agendamento_id: novoAgendamento.id
       }]);
-    // 🔥🔥🔥 ADICIONE APENAS ESTA LINHA - COPIE E COLE:
-cacheManager.delete(`agendamentos_${user_id}`);
-
     // Atualiza Google Sheets
    try {
   const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
@@ -1970,6 +2050,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
