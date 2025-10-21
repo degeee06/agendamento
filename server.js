@@ -170,10 +170,30 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
     
     // Verifica se é o próprio usuário
     if (req.userId !== user_id) {
-      return res.status(403).json({ msg: "Não autorizado" });
+      return res.status(403).json({ success: false, msg: "Não autorizado" });
     }
 
-    // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
+    // 🆕 ✅ VERIFICAR LIMITE DE USOS ANTES DE GERAR LINK
+    const trial = await getUserTrialBackend(user_id);
+    if (!trial || trial.status !== 'active') {
+      return res.status(400).json({ 
+        success: false, 
+        msg: "Plano inativo. Faça upgrade para gerar links." 
+      });
+    }
+
+    // 🆕 ✅ VERIFICAR USO DIÁRIO
+    const dailyLimit = trial.max_usages || 5;
+    const dailyUsage = await getDailyUsageBackend(trial, dailyLimit);
+    
+    if (dailyUsage.dailyUsagesLeft <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+      });
+    }
+
+    // ✅ SE CHEGOU AQUI, TEM USOS DISPONÍVEIS - GERAR LINK
     const timestamp = Date.now();
     const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
     
@@ -181,12 +201,13 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
       success: true, 
       link: link,
       qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
-      expira_em: "24 horas" // 🆕 Informa quando expira
+      expira_em: "24 horas",
+      usos_restantes: dailyUsage.dailyUsagesLeft // 🆕 Mostra usos restantes
     });
 
   } catch (error) {
     console.error("Erro ao gerar link:", error);
-    res.status(500).json({ msg: "Erro interno" });
+    res.status(500).json({ success: false, msg: "Erro interno" });
   }
 });
 
@@ -1967,6 +1988,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
