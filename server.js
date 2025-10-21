@@ -128,6 +128,9 @@ app.post("/agendamento-publico", async (req, res) => {
         usado_em: new Date(),
         agendamento_id: novoAgendamento.id
       }]);
+    // 🔥🔥🔥 ADICIONE APENAS ESTA LINHA - COPIE E COLE:
+cacheManager.delete(`agendamentos_${user_id}`);
+
     // Atualiza Google Sheets
    try {
   const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
@@ -1967,6 +1970,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
