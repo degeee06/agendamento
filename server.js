@@ -36,16 +36,18 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
-// ROTA PÚBLICA para agendamento via link
 app.post("/agendamento-publico", async (req, res) => {
   try {
-    const { nome, email, telefone, data, horario, user_id, t } = req.body; // 🆕 Recebe timestamp
+    const { nome, email, telefone, data, horario, user_id, t } = req.body;
     
-    if (!nome || !telefone || !data || !horario || !user_id || !t) { // 🆕 Verifica timestamp
-      return res.status(400).json({ msg: "Link inválido ou expirado" });
+    if (!nome || !telefone || !data || !horario || !user_id || !t) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Link inválido ou expirado" 
+      });
     }
 
-    // 🆕 🔥 ADICIONE ESTA VALIDAÇÃO AQUI - HORA CHEIA APENAS PARA PÚBLICO
+    // 🆕 🔥 VALIDAÇÃO DE HORA CHEIA APENAS PARA PÚBLICO
     const minutos = horario.split(':')[1];
     if (minutos !== '00') {
         return res.status(400).json({ 
@@ -54,7 +56,68 @@ app.post("/agendamento-publico", async (req, res) => {
         });
     }
 
-    // ✅ INCREMENTA USO APENAS QUANDO REALMENTE USADO
+    // ✅ 1. PRIMEIRO VALIDA TUDO (sem incrementar uso)
+    const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
+    if (!validacaoHorario.valido) {
+        return res.status(400).json({ 
+            success: false,
+            msg: `Horário indisponível: ${validacaoHorario.motivo}` 
+        });
+    }
+
+    // 🆕 VERIFICAÇÃO DE USO ÚNICO (ANTES de incrementar)
+    const { data: linkUsado } = await supabase
+      .from('links_uso')
+      .select('*')
+      .eq('token', t)
+      .eq('user_id', user_id)
+      .single();
+
+    if (linkUsado) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Este link já foi utilizado. Solicite um novo link de agendamento." 
+      });
+    }
+
+    // 🆕 VERIFICA EXPIRAÇÃO (24 horas) - ANTES de incrementar
+    const agora = Date.now();
+    const diferenca = agora - parseInt(t);
+    const horas = diferenca / (1000 * 60 * 60);
+    
+    if (horas > 24) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Link expirado. Gere um novo link de agendamento." 
+      });
+    }
+
+    // Verifica se o user_id existe
+    const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id);
+    if (userError || !user) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Link inválido" 
+      });
+    }
+
+    // Verifica conflitos
+    const { data: conflito } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("user_id", user_id)
+      .eq("data", data)
+      .eq("horario", horario)
+      .neq("status", "cancelado");
+    
+    if (conflito && conflito.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Horário indisponível" 
+      });
+    }
+
+    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
     const trial = await getUserTrialBackend(user_id);
     if (trial && trial.status === 'active') {
       const today = new Date().toISOString().split('T')[0];
@@ -73,11 +136,12 @@ app.post("/agendamento-publico", async (req, res) => {
       // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
       if (dailyUsageCount >= dailyLimit) {
         return res.status(400).json({ 
+          success: false,
           msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
         });
       }
       
-      // ✅ INCREMENTA USO (AGORA SIM - no uso real)
+      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
       dailyUsageCount += 1;
       
       await supabase
@@ -91,54 +155,7 @@ app.post("/agendamento-publico", async (req, res) => {
       console.log(`✅ Uso REAL incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
     }
     
-    const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
-    if (!validacaoHorario.valido) {
-      return res.status(400).json({ 
-        msg: `Horário indisponível: ${validacaoHorario.motivo}` 
-      });
-    }
-    
-    // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
-    const { data: linkUsado } = await supabase
-      .from('links_uso')
-      .select('*')
-      .eq('token', t)
-      .eq('user_id', user_id)
-      .single();
-
-    if (linkUsado) {
-      return res.status(400).json({ msg: "Este link já foi utilizado. Solicite um novo link de agendamento." });
-    }
-
-    
-    // 🆕 VERIFICA EXPIRAÇÃO (24 horas)
-    const agora = Date.now();
-    const diferenca = agora - parseInt(t);
-    const horas = diferenca / (1000 * 60 * 60);
-    
-    if (horas > 24) {
-      return res.status(400).json({ msg: "Link expirado. Gere um novo link de agendamento." });
-    }
-
-    // Verifica se o user_id existe
-    const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id);
-    if (userError || !user) {
-      return res.status(400).json({ msg: "Link inválido" });
-    }
-    // Verifica conflitos
-    const { data: conflito } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("user_id", user_id)
-      .eq("data", data)
-      .eq("horario", horario)
-      .neq("status", "cancelado"); // Ignora agendamentos cancelados
-    
-    if (conflito && conflito.length > 0) {
-      return res.status(400).json({ msg: "Horário indisponível" });
-    }
-
-    // Cria agendamento
+    // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -157,7 +174,7 @@ app.post("/agendamento-publico", async (req, res) => {
 
     if (error) throw error;
 
-// 🆕 MARCA LINK COMO USADO (APÓS AGENDAMENTO BEM-SUCEDIDO)
+    // 🆕 MARCA LINK COMO USADO (APÓS AGENDAMENTO BEM-SUCEDIDO)
     await supabase
       .from('links_uso')
       .insert([{
@@ -166,29 +183,30 @@ app.post("/agendamento-publico", async (req, res) => {
         usado_em: new Date(),
         agendamento_id: novoAgendamento.id
       }]);
+
     // Atualiza Google Sheets
-   try {
-  const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
-  if (doc) {
-    const sheet = doc.sheetsByIndex[0];
-    
-    // 🆕 DADOS FILTRADOS PARA SHEETS
-    const dadosSheets = {
-      nome: novoAgendamento.nome,
-      email: email || 'Não informado',
-      telefone: novoAgendamento.telefone,
-      data: novoAgendamento.data,
-      horario: novoAgendamento.horario,
-      status: novoAgendamento.status
-    };
-    
-    await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
-    await sheet.addRow(dadosSheets);
-    console.log('✅ Dados filtrados salvos no Sheets');
-  }
-} catch (sheetError) {
-  console.error("Erro ao atualizar Google Sheets:", sheetError);
-}
+    try {
+      const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
+      if (doc) {
+        const sheet = doc.sheetsByIndex[0];
+        
+        // 🆕 DADOS FILTRADOS PARA SHEETS
+        const dadosSheets = {
+          nome: novoAgendamento.nome,
+          email: email || 'Não informado',
+          telefone: novoAgendamento.telefone,
+          data: novoAgendamento.data,
+          horario: novoAgendamento.horario,
+          status: novoAgendamento.status
+        };
+        
+        await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
+        await sheet.addRow(dadosSheets);
+        console.log('✅ Dados filtrados salvos no Sheets');
+      }
+    } catch (sheetError) {
+      console.error("Erro ao atualizar Google Sheets:", sheetError);
+    }
 
     res.json({ 
       success: true, 
@@ -198,64 +216,13 @@ app.post("/agendamento-publico", async (req, res) => {
 
   } catch (err) {
     console.error("Erro no agendamento público:", err);
-    res.status(500).json({ msg: "Erro interno no servidor" });
-  }
-});
-
-
-app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
-  try {
-    const user_id = req.params.user_id;
-    
-    // Verifica se é o próprio usuário
-    if (req.userId !== user_id) {
-      return res.status(403).json({ msg: "Não autorizado" });
-    }
-
-    // ✅ APENAS VERIFICA SE TEM USOS DISPONÍVEIS (SEM INCREMENTAR)
-    const trial = await getUserTrialBackend(user_id);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      // ✅ APENAS VERIFICA (SEM INCREMENTAR)
-      if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-          success: false,
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-        });
-      }
-      
-      // 🚫 NÃO INCREMENTA AQUI - só no uso real
-      console.log(`✅ Usos disponíveis: ${dailyLimit - dailyUsageCount}/${dailyLimit}`);
-    }
-
-    // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
-    const timestamp = Date.now();
-    const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
-    
-    res.json({ 
-      success: true, 
-      link: link,
-      qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
-      expira_em: "24 horas" // 🆕 Informa quando expira
+    res.status(500).json({ 
+      success: false,
+      msg: "Erro interno no servidor" 
     });
-
-  } catch (error) {
-    console.error("Erro ao gerar link:", error);
-    res.status(500).json({ success: false, msg: "Erro interno" });
   }
 });
+
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
 
@@ -2117,6 +2084,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
