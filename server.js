@@ -256,6 +256,44 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
       return res.status(403).json({ msg: "Não autorizado" });
     }
 
+    // 🆕 🔥 ADICIONE ESTA VERIFICAÇÃO DE LIMITE (ANTES de gerar o link)
+    const trial = await getUserTrialBackend(user_id);
+    if (trial && trial.status === 'active') {
+      const today = new Date().toISOString().split('T')[0];
+      const lastUsageDate = trial.last_usage_date ? 
+        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
+      
+      let dailyUsageCount = trial.daily_usage_count || 0;
+      
+      // Reset se for novo dia
+      if (lastUsageDate !== today) {
+        dailyUsageCount = 0;
+      }
+      
+      const dailyLimit = trial.max_usages || 5;
+      
+      // 🆕 ✅ VERIFICAR SE TEM USOS DISPONÍVEIS
+      if (dailyUsageCount >= dailyLimit) {
+        return res.status(400).json({ 
+          success: false,
+          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+        });
+      }
+      
+      // 🆕 ✅ INCREMENTAR USO (se tiver disponível)
+      dailyUsageCount += 1;
+      
+      await supabase
+        .from('user_trials')
+        .update({
+          daily_usage_count: dailyUsageCount,
+          last_usage_date: new Date().toISOString()
+        })
+        .eq('user_id', user_id);
+        
+      console.log(`✅ Uso incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
+    }
+
     // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
     const timestamp = Date.now();
     const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
@@ -269,7 +307,7 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error("Erro ao gerar link:", error);
-    res.status(500).json({ msg: "Erro interno" });
+    res.status(500).json({ success: false, msg: "Erro interno" });
   }
 });
 
@@ -2050,6 +2088,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
