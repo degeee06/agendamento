@@ -45,7 +45,7 @@ app.post("/agendamento-publico", async (req, res) => {
       return res.status(400).json({ msg: "Link inválido ou expirado" });
     }
 
-    // 🆕 🔥 ADICIONE ESTA VALIDAÇÃO AQUI - HORA CHEIA APENAS PARA PÚBLICO
+ // 🆕 🔥 ADICIONE ESTA VALIDAÇÃO AQUI - HORA CHEIA APENAS PARA PÚBLICO
     const minutos = horario.split(':')[1];
     if (minutos !== '00') {
         return res.status(400).json({ 
@@ -53,52 +53,14 @@ app.post("/agendamento-publico", async (req, res) => {
             msg: "Apenas horários de hora em hora são permitidos (ex: 09:00, 10:00, 11:00)" 
         });
     }
-
-    // 🆕 ✅ VERIFICAR E INCREMENTAR USO NO USER_TRIALS (ADICIONE ESTA PARTE)
-    const trial = await getUserTrialBackend(user_id);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      // 🆕 ✅ VERIFICAR SE TEM USOS DISPONÍVEIS
-      if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-        });
-      }
-      
-      // 🆕 ✅ INCREMENTAR USO (se tiver disponível)
-      dailyUsageCount += 1;
-      
-      await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', user_id);
-        
-      console.log(`✅ Uso incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
-    }
     
-    const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
+      const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
     if (!validacaoHorario.valido) {
       return res.status(400).json({ 
         msg: `Horário indisponível: ${validacaoHorario.motivo}` 
       });
     }
-    
-    // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
+  // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
     const { data: linkUsado } = await supabase
       .from('links_uso')
       .select('*')
@@ -202,83 +164,16 @@ app.post("/agendamento-publico", async (req, res) => {
   }
 });
 
-// Função para buscar trial do usuário (BACKEND)
-async function getUserTrialBackend(userId) {
-    try {
-        const { data, error } = await supabase
-            .from('user_trials')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-            
-        if (error) {
-            if (error.code === 'PGRST116') return null;
-            throw error;
-        }
-        
-        return data;
-    } catch (error) {
-        console.error('❌ Erro ao buscar trial (backend):', error);
-        return null;
-    }
-}
-
-// Função para verificar uso diário (BACKEND)  
-async function getDailyUsageBackend(trial, dailyLimit) {
-    if (!trial) return { dailyUsageCount: 0, dailyUsagesLeft: 0, lastUsageDate: null };
-    
-    const today = new Date().toISOString().split('T')[0];
-    const lastUsageDate = trial.last_usage_date ? new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-    
-    let dailyUsageCount = trial.daily_usage_count || 0;
-    
-    // Reset diário se for um novo dia
-    if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-    }
-    
-    const dailyUsagesLeft = Math.max(0, dailyLimit - dailyUsageCount);
-    
-    return {
-        dailyUsageCount: dailyUsageCount,
-        dailyUsagesLeft: dailyUsagesLeft,
-        lastUsageDate: lastUsageDate
-    };
-}
-
-
 app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
   try {
     const user_id = req.params.user_id;
     
     // Verifica se é o próprio usuário
     if (req.userId !== user_id) {
-      return res.status(403).json({ success: false, msg: "Não autorizado" });
+      return res.status(403).json({ msg: "Não autorizado" });
     }
 
-    // ✅ VERIFICAR LIMITE DE USOS ANTES DE GERAR LINK
-    const trial = await getUserTrialBackend(user_id);
-    if (!trial || trial.status !== 'active') {
-      return res.status(400).json({ 
-        success: false, 
-        msg: "Plano inativo. Faça upgrade para gerar links." 
-      });
-    }
-
-    // ✅ VERIFICAR USO DIÁRIO
-    const dailyLimit = trial.max_usages || 5;
-    const dailyUsage = await getDailyUsageBackend(trial, dailyLimit);
-    
-    if (dailyUsage.dailyUsagesLeft <= 0) {
-      return res.status(400).json({ 
-        success: false, 
-        msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-      });
-    }
-
-    // ✅ SE CHEGOU AQUI, TEM USOS DISPONÍVEIS - GERAR LINK
+    // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
     const timestamp = Date.now();
     const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
     
@@ -286,15 +181,15 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
       success: true, 
       link: link,
       qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
-      expira_em: "24 horas",
-      usos_restantes: dailyUsage.dailyUsagesLeft
+      expira_em: "24 horas" // 🆕 Informa quando expira
     });
 
   } catch (error) {
     console.error("Erro ao gerar link:", error);
-    res.status(500).json({ success: false, msg: "Erro interno" });
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
+
 // ==================== CACHE SIMPLES E FUNCIONAL ====================
 const cache = new Map(); // 🔥🔥🔥 ESTA LINHA ESTAVA FALTANDO!
 
@@ -2072,10 +1967,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
-
-
 
 
 
