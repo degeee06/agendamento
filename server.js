@@ -1068,7 +1068,51 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     if (!Nome || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // ✅ INCREMENTA USO APENAS QUANDO REALMENTE USADO
+    // ✅ 1. PRIMEIRO VALIDA TUDO (sem incrementar uso)
+    
+    // Valida data no passado
+    const dataAgendamento = new Date(`${Data}T${Horario}`);
+    const agora = new Date();
+    if (dataAgendamento < agora) {
+      return res.status(400).json({ 
+        success: false,
+        msg: "Não é possível agendar no passado" 
+      });
+    }
+    
+    // Valida horário de funcionamento
+    const validacaoHorario = await validarHorarioFuncionamento(req.userId, Data, Horario);
+    if (!validacaoHorario.valido) {
+      return res.status(400).json({ 
+        msg: `Horário indisponível: ${validacaoHorario.motivo}` 
+      });
+    }
+    
+    // Verifica conflitos
+    const cacheKey = `agendamentos_${req.userId}`;
+    const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("cliente", req.userId)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    });
+
+    const conflito = agendamentosExistentes.find(a => 
+      a.data === Data && a.horario === Horario && a.status !== "cancelado"
+    );
+    
+    if (conflito) {
+      return res.status(400).json({ 
+        msg: "Você já possui um agendamento para esta data e horário" 
+      });
+    }
+
+    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
     const trial = await getUserTrialBackend(req.userId);
     if (trial && trial.status === 'active') {
       const today = new Date().toISOString().split('T')[0];
@@ -1092,7 +1136,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         });
       }
       
-      // ✅ INCREMENTA USO (AGORA SIM - no uso real)
+      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
       dailyUsageCount += 1;
       
       await supabase
@@ -1106,52 +1150,9 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
     }
 
-    // 🆕 VALIDAÇÃO DE DATA NO PASSADO (ADICIONADA)
-    const dataAgendamento = new Date(`${Data}T${Horario}`);
-    const agora = new Date();
-    if (dataAgendamento < agora) {
-      return res.status(400).json({ 
-        success: false,
-        msg: "Não é possível agendar no passado" 
-      });
-    }
-    
+    // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
     const userEmail = req.user?.email || Email || null;
-    const cacheKey = `agendamentos_${req.userId}`;
     
-     // 🆕 VALIDA HORÁRIO DE FUNCIONAMENTO
-    const validacaoHorario = await validarHorarioFuncionamento(req.userId, Data, Horario);
-    if (!validacaoHorario.valido) {
-      return res.status(400).json({ 
-        msg: `Horário indisponível: ${validacaoHorario.motivo}` 
-      });
-    }
-    
-    // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
-    const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
-      const { data, error } = await supabase
-        .from("agendamentos")
-        .select("*")
-        .eq("cliente", req.userId)
-        .order("data", { ascending: true })
-        .order("horario", { ascending: true });
-
-      if (error) throw error;
-      return data || [];
-    });
-
-    // Verifica conflito usando dados em cache
-    const conflito = agendamentosExistentes.find(a => 
-      a.data === Data && a.horario === Horario
-    );
-    
-    if (conflito) {
-      return res.status(400).json({ 
-        msg: "Você já possui um agendamento para esta data e horário" 
-      });
-    }
-
-    // Se não há conflito, cria o agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -1170,6 +1171,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
+    // Atualiza Google Sheets
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
@@ -1195,11 +1197,18 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
     cacheManager.delete(cacheKey);
     
-    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
+    res.json({ 
+      success: true,
+      msg: "Agendamento realizado com sucesso!", 
+      agendamento: novoAgendamento 
+    });
 
   } catch (err) {
     console.error("Erro no /agendar:", err);
-    res.status(500).json({ msg: "Erro interno no servidor" });
+    res.status(500).json({ 
+      success: false,
+      msg: "Erro interno no servidor" 
+    });
   }
 });
 
@@ -2084,6 +2093,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
