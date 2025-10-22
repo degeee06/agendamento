@@ -117,62 +117,38 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
- // ✅ 2. INCREMENTO SUPER SEGURO - VERSÃO DEFINITIVA
-console.log('=== 🔍 INICIANDO INCREMENTO ===');
-const trial = await getUserTrialBackend(user_id); // ou req.userId
-
+// ✅ INCREMENTO CORRETO - USA APENAS daily_usage_count
+const trial = await getUserTrialBackend(req.userId);
 if (trial && trial.status === 'active') {
-    console.log('📊 ESTADO INICIAL:', {
-        daily_usage_count: trial.daily_usage_count,
-        max_usages: trial.max_usages,
-        last_usage_date: trial.last_usage_date
-    });
-
     const today = new Date().toISOString().split('T')[0];
     const lastUsageDate = trial.last_usage_date ? 
         new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
     
-    // 🎯 CALCULA base atual (com reset se necessário)
-    let baseCount = trial.daily_usage_count || 0;
+    let dailyUsageCount = trial.daily_usage_count || 0;
+    
     if (lastUsageDate !== today) {
-        console.log('🔄 RESET DIÁRIO aplicado');
-        baseCount = 0;
+        dailyUsageCount = 0;
     }
     
     const dailyLimit = trial.max_usages || 5;
     
-    console.log('🔢 APÓS CALCULOS:', { baseCount, dailyLimit });
-    
-    // Verifica limite
-    if (baseCount >= dailyLimit) {
+    if (dailyUsageCount >= dailyLimit) {
         return res.status(400).json({ 
             success: false,
             msg: `Limite diário atingido (${dailyLimit} usos).` 
         });
     }
     
-    // 🎯 INCREMENTO ÚNICO E EXPLÍCITO
-    const novoValor = baseCount + 1;
-    console.log('➡️ INCREMENTO:', { de: baseCount, para: novoValor });
-    
-    // 🎯 UPDATE DIRETO E EXPLÍCITO
-    const { error: updateError } = await supabase
+    // ✅ INCREMENTA APENAS daily_usage_count (COLUNA CORRETA)
+    await supabase
         .from('user_trials')
         .update({
-            daily_usage_count: novoValor, // VALOR EXPLÍCITO
+            daily_usage_count: dailyUsageCount + 1,
             last_usage_date: new Date().toISOString()
         })
-        .eq('user_id', user_id); // ou req.userId
+        .eq('user_id', req.userId);
         
-    if (updateError) {
-        console.error('❌ ERRO NO UPDATE:', updateError);
-        throw updateError;
-    }
-    
-    console.log('✅ INCREMENTO CONCLUÍDO:', { 
-        usuario: user_id, 
-        resultado: `${baseCount} → ${novoValor}/${dailyLimit}` 
-    });
+    console.log(`✅ daily_usage_count atualizado: ${dailyUsageCount} → ${dailyUsageCount + 1}`);
 }
     
     // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
@@ -1132,83 +1108,38 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-// ✅ 2. INCREMENTO COM DEBUG DETALHADO - VERSÃO CORRIGIDA
-console.log('=== 🚀 INICIANDO AGENDAMENTO - DEBUG INCREMENTO ===');
-const trial = await getUserTrialBackend(req.userId); // ✅ CORRETO: req.userId
-
+// ✅ INCREMENTO CORRETO - USA APENAS daily_usage_count
+const trial = await getUserTrialBackend(req.userId);
 if (trial && trial.status === 'active') {
-    console.log('📊 TRIAL ENCONTRADO:', {
-        daily_usage_count: trial.daily_usage_count,
-        max_usages: trial.max_usages,
-        last_usage_date: trial.last_usage_date,
-        status: trial.status
-    });
-
     const today = new Date().toISOString().split('T')[0];
     const lastUsageDate = trial.last_usage_date ? 
         new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
     
-    console.log('📅 VERIFICAÇÃO DE DATAS:', {
-        hoje: today,
-        ultimo_uso: lastUsageDate,
-        mesmo_dia: lastUsageDate === today
-    });
-    
     let dailyUsageCount = trial.daily_usage_count || 0;
     
-    // Reset se for novo dia
     if (lastUsageDate !== today) {
-        console.log('🔄 RESET DIÁRIO: de', dailyUsageCount, 'para 0');
         dailyUsageCount = 0;
     }
     
     const dailyLimit = trial.max_usages || 5;
     
-    console.log('🔢 ANTES DO INCREMENTO:', {
-        dailyUsageCount,
-        dailyLimit,
-        pode_incrementar: dailyUsageCount < dailyLimit
-    });
-    
-    // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
     if (dailyUsageCount >= dailyLimit) {
-        console.log('❌ LIMITE ATINGIDO: Bloqueando agendamento');
         return res.status(400).json({ 
             success: false,
-            msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+            msg: `Limite diário atingido (${dailyLimit} usos).` 
         });
     }
     
-    // ✅ INCREMENTA USO (APENAS +1)
-    const novoValor = dailyUsageCount + 1;
-    console.log('➡️ INCREMENTANDO:', {
-        de: dailyUsageCount,
-        para: novoValor,
-        operacao: 'dailyUsageCount + 1 = ' + novoValor
-    });
-    
-    const { error: updateError } = await supabase
+    // ✅ INCREMENTA APENAS daily_usage_count (COLUNA CORRETA)
+    await supabase
         .from('user_trials')
         .update({
-            daily_usage_count: novoValor, // 🎯 VALOR EXPLÍCITO
+            daily_usage_count: dailyUsageCount + 1,
             last_usage_date: new Date().toISOString()
         })
-        .eq('user_id', req.userId); // ✅ CORRETO: req.userId
+        .eq('user_id', req.userId);
         
-    if (updateError) {
-        console.error('❌ ERRO NO UPDATE DO TRIAL:', updateError);
-        throw updateError;
-    }
-    
-    console.log('✅ INCREMENTO CONCLUÍDO COM SUCESSO:', {
-        usuario: req.userId,
-        resultado: `${dailyUsageCount} → ${novoValor}/${dailyLimit}`
-    });
-} else {
-    console.log('ℹ️ SEM TRIAL OU TRIAL INATIVO:', { 
-        tem_trial: !!trial, 
-        status: trial?.status 
-    });
+    console.log(`✅ daily_usage_count atualizado: ${dailyUsageCount} → ${dailyUsageCount + 1}`);
 }
 
     // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
@@ -2305,6 +2236,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
