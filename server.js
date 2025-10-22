@@ -1122,9 +1122,11 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       let dailyUsageCount = trial.daily_usage_count || 0;
       
       // Reset se for novo dia
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
+  if (lastUsageDate !== today) {
+  dailyUsageCount = 0;
+  // 🔥 ADICIONE ESTA LINHA:
+  await supabase.from('user_trials').update({ daily_usage_count: 0 }).eq('user_id', user_id);
+}
       
       const dailyLimit = trial.max_usages || 5;
       
@@ -1245,9 +1247,12 @@ async function getDailyUsageBackend(trial, dailyLimit) {
     let dailyUsageCount = trial.daily_usage_count || 0;
     
     // Reset diário se for um novo dia
-    if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-    }
+// ✅ CORREÇÃO FÁCIL: Reset NO BANCO se for novo dia
+if (lastUsageDate !== today) {
+  dailyUsageCount = 0;
+  // 🔥 ADICIONE ESTA LINHA:
+  await supabase.from('user_trials').update({ daily_usage_count: 0 }).eq('user_id', user_id);
+}
     
     const dailyUsagesLeft = Math.max(0, dailyLimit - dailyUsageCount);
     
@@ -2093,6 +2098,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
