@@ -93,11 +93,10 @@ async function enviarNotificacao(token, titulo, mensagem, dadosExtras = {}) {
 
 
 
-// 🔥 ROTA SUPER SIMPLES QUE FUNCIONA
+// 🔥 ROTA CORRIGIDA - COM UUID VÁLIDO
 app.post("/api/salvar-token-simples", (req, res) => {
   console.log('🔔 Rota chamada');
   
-  // Ler o body manualmente - SEM complicação
   let body = '';
   req.on('data', chunk => {
     body += chunk.toString();
@@ -118,25 +117,27 @@ app.post("/api/salvar-token-simples", (req, res) => {
         return res.status(400).json({ success: false, msg: 'push_token faltando' });
       }
       
-      console.log('💾 Salvando token:', push_token);
+      console.log('💾 Salvando token:', push_token.substring(0, 50) + '...');
       
-      // Salvar no banco
+      // 🔥 CORREÇÃO: Usar NULL no user_id (permite null na tabela)
       const { data: result, error } = await supabase
         .from('user_push_tokens')
         .insert({
-          user_id: 'user-' + Date.now(),
+          user_id: null, // ✅ USA NULL em vez de string inválida
           push_token: push_token,
           device_name: 'App Android',
-          created_at: new Date().toISOString()
-        });
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select(); // ✅ Adiciona .select() para ver o resultado
       
       if (error) {
         console.log('❌ Erro banco:', error);
-        return res.status(500).json({ success: false, msg: 'Erro banco' });
+        return res.status(500).json({ success: false, msg: 'Erro banco: ' + error.message });
       }
       
-      console.log('✅ Token salvo!');
-      res.json({ success: true, msg: 'Token salvo!' });
+      console.log('✅✅✅ TOKEN SALVO COM SUCESSO!');
+      res.json({ success: true, msg: 'Token salvo no banco!' });
       
     } catch (error) {
       console.log('❌ Erro:', error);
@@ -2455,6 +2456,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
