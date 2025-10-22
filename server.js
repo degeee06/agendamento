@@ -117,8 +117,8 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-// ✅ INCREMENTO CORRETO - USA APENAS daily_usage_count
-const trial = await getUserTrialBackend(req.userId);
+// ✅ INCREMENTO CORRETO - USA APENAS daily_usage_count  
+const trial = await getUserTrialBackend(user_id);
 if (trial && trial.status === 'active') {
     const today = new Date().toISOString().split('T')[0];
     const lastUsageDate = trial.last_usage_date ? 
@@ -146,7 +146,7 @@ if (trial && trial.status === 'active') {
             daily_usage_count: dailyUsageCount + 1,
             last_usage_date: new Date().toISOString()
         })
-        .eq('user_id', req.userId);
+        .eq('user_id', user_id);
         
     console.log(`✅ daily_usage_count atualizado: ${dailyUsageCount} → ${dailyUsageCount + 1}`);
 }
@@ -2236,6 +2236,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
