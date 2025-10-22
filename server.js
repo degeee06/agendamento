@@ -339,6 +339,36 @@ app.post("/agendamento-publico", async (req, res) => {
 
     if (error) throw error;
 
+     // 🔥🔥🔥 ADICIONE AQUI: NOTIFICAÇÃO PARA O PRESTADOR (CAPACITOR APP)
+    try {
+      // Busca token FCM do prestador (dono do link público)
+      const { data: tokenData } = await supabase
+        .from('user_push_tokens')
+        .select('push_token')
+        .eq('user_id', user_id)
+        .single();
+
+      if (tokenData?.push_token) {
+        await enviarNotificacao(
+          tokenData.push_token,
+          '🎉 Novo Agendamento Público!',
+          `${nome} agendou via link para ${data} às ${horario}`,
+          {
+            tipo: 'novo_agendamento_publico',
+            agendamento_id: novoAgendamento.id.toString(),
+            acao: 'ver_detalhes',
+            origem: 'link_publico'
+          }
+        );
+        console.log('✅ Notificação de agendamento público enviada');
+      } else {
+        console.log('📱 Prestador não tem token FCM registrado para notificações');
+      }
+    } catch (notifError) {
+      console.error('❌ Erro na notificação pública:', notifError.message);
+      // Não quebra o agendamento se a notificação falhar
+    }
+    
     // 🆕 MARCA LINK COMO USADO (APÓS AGENDAMENTO BEM-SUCEDIDO)
     await supabase
       .from('links_uso')
@@ -1335,7 +1365,34 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       .single();
 
     if (error) throw error;
+ // 🔥🔥🔥 ADICIONE AQUI: NOTIFICAÇÃO PARA O PRESTADOR (CAPACITOR APP)
+    try {
+      // Busca token FCM do prestador (dono do negócio)
+      const { data: tokenData } = await supabase
+        .from('user_push_tokens')
+        .select('push_token')
+        .eq('user_id', req.userId)
+        .single();
 
+      if (tokenData?.push_token) {
+        await enviarNotificacao(
+          tokenData.push_token,
+          '🎉 Novo Agendamento!',
+          `${Nome} agendou para ${Data} às ${Horario}`,
+          {
+            tipo: 'novo_agendamento',
+            agendamento_id: novoAgendamento.id.toString(),
+            acao: 'ver_detalhes'
+          }
+        );
+        console.log('✅ Notificação enviada para o prestador no app');
+      } else {
+        console.log('📱 Prestador não tem token FCM registrado');
+      }
+    } catch (notifError) {
+      console.error('❌ Erro na notificação:', notifError.message);
+      // Não quebra o agendamento se a notificação falhar
+    }
     // Atualiza Google Sheets
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
@@ -2340,6 +2397,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
