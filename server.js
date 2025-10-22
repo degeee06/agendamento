@@ -274,8 +274,6 @@ app.options('*', cors());
 app.use(express.json()); // Para parsear JSON
 app.use(express.urlencoded({ extended: true })); // Para parsear URL encoded
 
-// 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
-app.use(express.json());
 
 
 app.post("/agendamento-publico", async (req, res) => {
@@ -2474,6 +2472,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
