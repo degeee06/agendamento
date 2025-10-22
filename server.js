@@ -1111,6 +1111,7 @@ function usuarioPodeGerenciarAgendamento(agendamento, userId) {
 }
 
 
+// 🔥 ROTA /AGENDAR CORRIGIDA - SEM DUPLO INCREMENTO
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -1162,21 +1163,25 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
+    // ✅ 2. 🔥 VERIFICAÇÃO ÚNICA DO TRIAL (MOVIDA PARA AQUI)
+    let dailyUsageCount = 0;
+    let dailyLimit = 5;
+    let canProceed = true;
+
     const trial = await getUserTrialBackend(req.userId);
     if (trial && trial.status === 'active') {
       const today = new Date().toISOString().split('T')[0];
       const lastUsageDate = trial.last_usage_date ? 
         new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
       
-      let dailyUsageCount = trial.daily_usage_count || 0;
+      dailyUsageCount = trial.daily_usage_count || 0;
       
       // Reset se for novo dia
       if (lastUsageDate !== today) {
         dailyUsageCount = 0;
       }
       
-      const dailyLimit = trial.max_usages || 5;
+      dailyLimit = trial.max_usages || 5;
       
       // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
       if (dailyUsageCount >= dailyLimit) {
@@ -1186,18 +1191,9 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         });
       }
       
-      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
+      // ✅ PREPARA INCREMENTO (mas ainda não executa)
       dailyUsageCount += 1;
-      
-      await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', req.userId);
-        
-      console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
+      console.log(`📝 Preparando incremento para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
     }
 
     // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
@@ -1220,6 +1216,19 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // ✅ 4. 🔥 AGORA SIM - INCREMENTA USO (APÓS agendamento criado com sucesso)
+    if (trial && trial.status === 'active') {
+      await supabase
+        .from('user_trials')
+        .update({
+          daily_usage_count: dailyUsageCount,
+          last_usage_date: new Date().toISOString()
+        })
+        .eq('user_id', req.userId);
+        
+      console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
+    }
 
     // Atualiza Google Sheets
     try {
@@ -1261,6 +1270,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     });
   }
 });
+
 
 // 🆕 FUNÇÃO: Buscar trial do usuário (BACKEND)
 async function getUserTrialBackend(userId) {
@@ -2143,6 +2153,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
