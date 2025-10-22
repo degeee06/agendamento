@@ -36,87 +36,7 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
-
-// ==================== SISTEMA DE CONTROLE DE USO DEFINITIVO ====================
-const transacoesAgendamento = new Map();
-
-async function controlarUsoUnico(userId, transactionId) {
-  // Verifica se esta transação já foi processada
-  if (transacoesAgendamento.has(transactionId)) {
-    console.log(`🔄 Transação ${transactionId} já processada, evitando duplicação`);
-    return { duplicado: true };
-  }
-  
-  // Marca transação como processada
-  transacoesAgendamento.set(transactionId, {
-    userId,
-    timestamp: Date.now()
-  });
-  
-  try {
-    const trial = await getUserTrialBackend(userId);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      if (dailyUsageCount >= dailyLimit) {
-        return { success: false, motivo: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` };
-      }
-      
-      dailyUsageCount += 1;
-      
-      const { error: updateError } = await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', userId);
-        
-      if (updateError) {
-        console.error('❌ Erro ao atualizar uso:', updateError);
-        return { success: false, motivo: 'Erro ao processar uso do trial' };
-      }
-        
-      console.log(`✅ Uso ÚNICO registrado para ${userId}: ${dailyUsageCount}/${dailyLimit} (Transação: ${transactionId})`);
-      
-      return { 
-        success: true, 
-        dailyUsageCount, 
-        dailyUsagesLeft: dailyLimit - dailyUsageCount 
-      };
-    }
-    
-    return { success: true };
-  } finally {
-    // Limpa após 2 minutos para evitar memory leaks
-    setTimeout(() => {
-      transacoesAgendamento.delete(transactionId);
-    }, 120000);
-  }
-}
-
-// Função para gerar transaction ID único
-function gerarTransactionId(userId, tipo) {
-  return `ag_${userId}_${tipo}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-
-
 app.post("/agendamento-publico", async (req, res) => {
-  // 🆕 GERA TRANSACTION ID ÚNICO
-  const transactionId = gerarTransactionId(req.body.user_id, 'publico');
-  console.log(`🔵 Iniciando agendamento público - Transaction: ${transactionId}`);
-  
   try {
     const { nome, email, telefone, data, horario, user_id, t } = req.body;
     
@@ -127,25 +47,7 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-    // Validação de hora cheia
-    const minutos = horario.split(':')[1];
-    if (minutos !== '00') {
-        return res.status(400).json({ 
-            success: false,
-            msg: "Apenas horários de hora em hora são permitidos (ex: 09:00, 10:00, 11:00)" 
-        });
-    }
-
-    // ✅ 1. VALIDAÇÕES INICIAIS (sem uso ainda)
-    const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
-    if (!validacaoHorario.valido) {
-        return res.status(400).json({ 
-            success: false,
-            msg: `Horário indisponível: ${validacaoHorario.motivo}` 
-        });
-    }
-
-    // Verificação de link usado
+    // VERIFICAÇÃO DE USO ÚNICO
     const { data: linkUsado } = await supabase
       .from('links_uso')
       .select('*')
@@ -160,7 +62,7 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-    // Verifica expiração
+    // VERIFICA EXPIRAÇÃO (24 horas)
     const agora = Date.now();
     const diferenca = agora - parseInt(t);
     const horas = diferenca / (1000 * 60 * 60);
@@ -181,7 +83,25 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-    // Verifica conflitos
+    // HORA CHEIA APENAS PARA PÚBLICO
+    const minutos = horario.split(':')[1];
+    if (minutos !== '00') {
+        return res.status(400).json({ 
+            success: false,
+            msg: "Apenas horários de hora em hora são permitidos (ex: 09:00, 10:00, 11:00)" 
+        });
+    }
+    
+    // Valida horário de funcionamento
+    const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
+    if (!validacaoHorario.valido) {
+      return res.status(400).json({ 
+        success: false,
+        msg: `Horário indisponível: ${validacaoHorario.motivo}` 
+      });
+    }
+
+    // Verifica conflitos de agendamento
     const { data: conflito } = await supabase
       .from("agendamentos")
       .select("*")
@@ -197,19 +117,7 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-    // ✅ 2. 🔥 CONTROLE DE USO ÚNICO (APENAS AQUI)
-    const resultadoUso = await controlarUsoUnico(user_id, transactionId);
-
-    if (resultadoUso.duplicado) {
-      console.log('🔄 Transação duplicada detectada, continuando sem incrementar...');
-    } else if (!resultadoUso.success) {
-      return res.status(400).json({ 
-        success: false,
-        msg: resultadoUso.motivo 
-      });
-    }
-    
-    // ✅ 3. CRIA O AGENDAMENTO
+    // Cria agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -222,13 +130,14 @@ app.post("/agendamento-publico", async (req, res) => {
         horario: horario,
         status: "pendente",
         confirmado: false,
+        origem: "link_publico"
       }])
       .select()
       .single();
 
     if (error) throw error;
 
-    // Marca link como usado
+    // MARCA LINK COMO USADO (APÓS AGENDAMENTO BEM-SUCEDIDO)
     await supabase
       .from('links_uso')
       .insert([{
@@ -243,6 +152,8 @@ app.post("/agendamento-publico", async (req, res) => {
       const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
+        
+        // DADOS FILTRADOS PARA SHEETS
         const dadosSheets = {
           nome: novoAgendamento.nome,
           email: email || 'Não informado',
@@ -254,26 +165,196 @@ app.post("/agendamento-publico", async (req, res) => {
         
         await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
         await sheet.addRow(dadosSheets);
-        console.log('✅ Dados salvos no Sheets');
+        console.log('✅ Dados filtrados salvos no Sheets');
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    console.log(`✅ Agendamento público concluído - Transaction: ${transactionId}`);
     res.json({ 
       success: true, 
       msg: "Agendamento realizado com sucesso!", 
-      agendamento: novoAgendamento 
+      agendamento: novoAgendamento
     });
 
   } catch (err) {
-    console.error(`❌ Erro no agendamento público (${transactionId}):`, err);
-    // Remove a transação em caso de erro
-    transacoesAgendamento.delete(transactionId);
+    console.error("Erro no agendamento público:", err);
     res.status(500).json({ 
       success: false,
       msg: "Erro interno no servidor" 
+    });
+  }
+});
+
+// 🆕 ROTA PARA VERIFICAR SE HOUVE AGENDAMENTOS VIA LINK
+app.get("/api/agendamentos-via-link/:user_id", authMiddleware, async (req, res) => {
+  try {
+    const user_id = req.params.user_id;
+    
+    if (req.userId !== user_id) {
+      return res.status(403).json({ msg: "Não autorizado" });
+    }
+
+    // Busca agendamentos feitos via link nos últimos 5 minutos
+    const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000);
+    
+    const { data: novosAgendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("user_id", user_id)
+      .eq("origem", "link_publico")
+      .gte("created_at", cincoMinutosAtras.toISOString())
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      novos_agendamentos: novosAgendamentos || [],
+      total_novos: novosAgendamentos?.length || 0
+    });
+
+  } catch (error) {
+    console.error("Erro ao verificar agendamentos via link:", error);
+    res.status(500).json({ success: false, msg: "Erro interno" });
+  }
+});
+
+
+app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
+  try {
+    const user_id = req.params.user_id;
+    
+    // Verifica se é o próprio usuário
+    if (req.userId !== user_id) {
+      return res.status(403).json({ msg: "Não autorizado" });
+    }
+
+    // VERIFICA LIMITES NA TABELA user_trials
+    const { data: userTrial, error: trialError } = await supabase
+      .from('user_trials')
+      .select('*')
+      .eq('user_id', user_id)
+      .single();
+
+    if (trialError && trialError.code !== 'PGRST116') {
+      throw trialError;
+    }
+
+    // Se não tem registro na user_trials, cria um padrão
+    if (!userTrial) {
+      const { data: newTrial, error: createError } = await supabase
+        .from('user_trials')
+        .insert([{
+          user_id: user_id,
+          user_email: req.user.email,
+          status: 'active',
+          usage_count: 0,
+          max_usages: 5,
+          usage_limit_type: 'usages',
+          plan_type: 'free_trial'
+        }])
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      
+      const timestamp = Date.now();
+      const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
+      
+      return res.json({ 
+        success: true, 
+        link: link,
+        qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
+        expira_em: "24 horas",
+        trial_info: {
+          usos_atuais: 0,
+          max_usos: newTrial.max_usages,
+          restante: newTrial.max_usages,
+          tipo_limite: newTrial.usage_limit_type,
+          plano: newTrial.plan_type
+        }
+      });
+    }
+
+    // VERIFICA SE O TRIAL ESTÁ ATIVO
+    if (userTrial.status !== 'active') {
+      return res.status(400).json({ 
+        success: false, 
+        msg: "Seu período de trial não está ativo. Atualize para um plano premium.",
+        trial_status: userTrial.status
+      });
+    }
+
+    // VERIFICA LIMITE POR USOS
+    if (userTrial.usage_limit_type === 'usages') {
+      if (userTrial.usage_count >= userTrial.max_usages) {
+        return res.status(400).json({ 
+          success: false, 
+          msg: `Limite de ${userTrial.max_usages} links atingido. Atualize para um plano premium.`,
+          usos_atuais: userTrial.usage_count,
+          max_usos: userTrial.max_usages
+        });
+      }
+    }
+
+    // VERIFICA LIMITE POR DIAS (se expirou)
+    if (userTrial.usage_limit_type === 'days') {
+      const agora = new Date();
+      const fimTrial = new Date(userTrial.ends_at);
+      
+      if (agora > fimTrial) {
+        // Atualiza status para expirado
+        await supabase
+          .from('user_trials')
+          .update({ status: 'expired' })
+          .eq('user_id', user_id);
+          
+        return res.status(400).json({ 
+          success: false, 
+          msg: "Seu período de trial expirou. Atualize para um plano premium.",
+          trial_ended: userTrial.ends_at
+        });
+      }
+    }
+
+    // ATUALIZA CONTADOR DE USOS
+    const { data: updatedTrial, error: updateError } = await supabase
+      .from('user_trials')
+      .update({
+        usage_count: userTrial.usage_count + 1,
+        last_usage_date: new Date().toISOString().split('T')[0]
+      })
+      .eq('user_id', user_id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // GERA O LINK COM TIMESTAMP
+    const timestamp = Date.now();
+    const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
+    
+    res.json({ 
+      success: true, 
+      link: link,
+      qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
+      expira_em: "24 horas",
+      trial_info: {
+        usos_atuais: updatedTrial.usage_count,
+        max_usos: updatedTrial.max_usages,
+        restante: updatedTrial.max_usages - updatedTrial.usage_count,
+        tipo_limite: updatedTrial.usage_limit_type,
+        plano: updatedTrial.plan_type,
+        expira_em: updatedTrial.ends_at
+      }
+    });
+
+  } catch (error) {
+    console.error("Erro ao gerar link:", error);
+    res.status(500).json({ 
+      success: false,
+      msg: "Erro interno ao gerar link" 
     });
   }
 });
@@ -1114,23 +1195,15 @@ function usuarioPodeGerenciarAgendamento(agendamento, userId) {
   return agendamento.cliente === userId || 
          agendamento.user_id === userId;
 }
-
-
+// 🔥 AGENDAR COM CACHE E INVALIDAÇÃO
 app.post("/agendar", authMiddleware, async (req, res) => {
-  // 🆕 GERA TRANSACTION ID ÚNICO
-  const transactionId = gerarTransactionId(req.userId, 'privado');
-  console.log(`🔵 Iniciando agendamento privado - Transaction: ${transactionId}`);
-  
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
-    
+    // 👇 removido o Email da validação obrigatória
     if (!Nome || !Telefone || !Data || !Horario)
-      return res.status(400).json({ 
-        success: false,
-        msg: "Todos os campos obrigatórios" 
-      });
+      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // ✅ 1. VALIDAÇÕES INICIAIS (sem uso ainda)
+ // 🆕 VALIDAÇÃO DE DATA NO PASSADO (ADICIONADA)
     const dataAgendamento = new Date(`${Data}T${Horario}`);
     const agora = new Date();
     if (dataAgendamento < agora) {
@@ -1140,53 +1213,49 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
     
+    const userEmail = req.user?.email || Email || null; // ✅ usa email do usuário logado, do corpo, ou null
+    const cacheKey = `agendamentos_${req.userId}`;
+    
+     // 🆕 VALIDA HORÁRIO DE FUNCIONAMENTO
     const validacaoHorario = await validarHorarioFuncionamento(req.userId, Data, Horario);
     if (!validacaoHorario.valido) {
       return res.status(400).json({ 
-        success: false,
         msg: `Horário indisponível: ${validacaoHorario.motivo}` 
       });
     }
     
-    // Verifica conflitos
-    const { data: conflito, error: conflitoError } = await supabase
-      .from("agendamentos")
-      .select("id")
-      .eq("cliente", req.userId)
-      .eq("data", Data)
-      .eq("horario", Horario)
-      .neq("status", "cancelado")
-      .single();
+    // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
+    const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
+      const { data, error } = await supabase
+        .from("agendamentos")
+        .select("*")
+        .eq("cliente", req.userId)
+        .order("data", { ascending: true })
+        .order("horario", { ascending: true });
 
-    if (conflito && !conflitoError) {
+      if (error) throw error;
+      return data || [];
+    });
+
+    // Verifica conflito usando dados em cache
+    const conflito = agendamentosExistentes.find(a => 
+      a.data === Data && a.horario === Horario
+    );
+    
+    if (conflito) {
       return res.status(400).json({ 
-        success: false,
         msg: "Você já possui um agendamento para esta data e horário" 
       });
     }
 
-    // ✅ 2. 🔥 CONTROLE DE USO ÚNICO (APENAS AQUI)
-    const resultadoUso = await controlarUsoUnico(req.userId, transactionId);
-
-    if (resultadoUso.duplicado) {
-      console.log('🔄 Transação duplicada detectada, continuando sem incrementar...');
-    } else if (!resultadoUso.success) {
-      return res.status(400).json({ 
-        success: false,
-        msg: resultadoUso.motivo 
-      });
-    }
-
-    // ✅ 3. CRIA O AGENDAMENTO
-    const userEmail = req.user?.email || Email || null;
-    
+    // Se não há conflito, cria o agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
         cliente: req.userId,
         user_id: req.userId,
         nome: Nome,
-        email: Email || null,
+        email: Email || null, // ✅ agora pode ser null ou opcional
         telefone: Telefone,
         data: Data,
         horario: Horario,
@@ -1198,11 +1267,12 @@ app.post("/agendar", authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
-    // Atualiza Google Sheets
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
+        
+        // 🆕 USA DADOS FILTRADOS (igual ao agendamento público)
         const dadosSheets = {
           nome: novoAgendamento.nome,
           email: Email || '',
@@ -1214,78 +1284,22 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         
         await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
         await sheet.addRow(dadosSheets);
-        console.log(`✅ Agendamento salvo na planilha`);
+        console.log(`✅ Agendamento salvo na planilha do usuário ${req.userId}`);
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // INVALIDA CACHE
-    cacheManager.delete(`agendamentos_${req.userId}`);
+    // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
+    cacheManager.delete(cacheKey);
     
-    console.log(`✅ Agendamento privado concluído - Transaction: ${transactionId}`);
-    res.json({ 
-      success: true,
-      msg: "Agendamento realizado com sucesso!", 
-      agendamento: novoAgendamento 
-    });
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
   } catch (err) {
-    console.error(`❌ Erro no /agendar (${transactionId}):`, err);
-    // Remove a transação em caso de erro
-    transacoesAgendamento.delete(transactionId);
-    res.status(500).json({ 
-      success: false,
-      msg: "Erro interno no servidor" 
-    });
+    console.error("Erro no /agendar:", err);
+    res.status(500).json({ msg: "Erro interno no servidor" });
   }
 });
-
-// 🆕 FUNÇÃO: Buscar trial do usuário (BACKEND)
-async function getUserTrialBackend(userId) {
-    try {
-        const { data, error } = await supabase
-            .from('user_trials')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-            
-        if (error) {
-            if (error.code === 'PGRST116') return null;
-            throw error;
-        }
-        
-        return data;
-    } catch (error) {
-        console.error('❌ Erro ao buscar trial (backend):', error);
-        return null;
-    }
-}
-
-// 🆕 FUNÇÃO: Verificar uso diário (BACKEND)  
-async function getDailyUsageBackend(trial, dailyLimit) {
-    if (!trial) return { dailyUsageCount: 0, dailyUsagesLeft: 0, lastUsageDate: null };
-    
-    const today = new Date().toISOString().split('T')[0];
-    const lastUsageDate = trial.last_usage_date ? new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-    
-    let dailyUsageCount = trial.daily_usage_count || 0;
-    
-    // Reset diário se for um novo dia
-    if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-    }
-    
-    const dailyUsagesLeft = Math.max(0, dailyLimit - dailyUsageCount);
-    
-    return {
-        dailyUsageCount: dailyUsageCount,
-        dailyUsagesLeft: dailyUsagesLeft,
-        lastUsageDate: lastUsageDate
-    };
-}
 
 // 🔥 CONFIRMAR AGENDAMENTO CORRIGIDO
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
@@ -2122,12 +2136,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
-
-
-
-
 
 
 
