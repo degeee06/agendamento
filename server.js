@@ -255,37 +255,49 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
       return res.status(403).json({ msg: "Não autorizado" });
     }
 
-    // 🆕 VERIFICA LIMITES ANTES DE GERAR LINK
-    const { data: agendamentosHoje } = await supabase
-      .from("agendamentos")
-      .select("id", { count: 'exact' })
-      .eq("user_id", user_id)
-      .gte("created_at", new Date().toISOString().split('T')[0] + "T00:00:00")
-      .neq("status", "cancelado");
+    // 🆕 VERIFICA LIMITES REAIS - CONTA APENAS AGENDAMENTOS DELE COMO PROFISSIONAL
+  // 🆕 VERIFICA LIMITES REAIS - CONTA APENAS AGENDAMENTOS DELE COMO PROFISSIONAL
+const hoje = new Date().toISOString().split('T')[0];
 
-    const { data: agendamentosTotal } = await supabase
-      .from("agendamentos")
-      .select("id", { count: 'exact' })
-      .eq("user_id", user_id)
-      .neq("status", "cancelado");
+const { data: agendamentosHoje, error: erroHoje } = await supabase
+  .from("agendamentos")
+  .select("id")
+  .eq("user_id", user_id)  // 🎯 AQUI: conta agendamentos ONDE ELE É O PROFISSIONAL
+  .gte("created_at", hoje + "T00:00:00")
+  .neq("status", "cancelado");
 
-    // 🆕 LIMITES FIXOS - SEM TABELA TRIAL
-    const limiteDiario = 5;
-    const limiteTotal = 20;
+const { data: agendamentosTotal, error: erroTotal } = await supabase
+  .from("agendamentos")
+  .select("id")
+  .eq("user_id", user_id)  // 🎯 AQUI: conta agendamentos ONDE ELE É O PROFISSIONAL
+  .neq("status", "cancelado");
 
-    if (agendamentosHoje.length >= limiteDiario) {
-      return res.status(400).json({ 
-        success: false, 
-        msg: `Limite diário atingido (${limiteDiario} agendamentos). Atualize para PRO.` 
-      });
-    }
+if (erroHoje || erroTotal) {
+  console.error("Erro ao verificar limites:", erroHoje || erroTotal);
+}
 
-    if (agendamentosTotal.length >= limiteTotal) {
-      return res.status(400).json({ 
-        success: false, 
-        msg: `Limite total do trial atingido (${limiteTotal} agendamentos). Atualize para PRO.` 
-      });
-    }
+// 🆕 LIMITES FIXOS
+const limiteDiario = 5;
+const limiteTotal = 20;
+
+const usadosHoje = agendamentosHoje ? agendamentosHoje.length : 0;
+const usadosTotal = agendamentosTotal ? agendamentosTotal.length : 0;
+
+console.log(`📊 Limites reais no público: ${usadosHoje}/${limiteDiario} hoje, ${usadosTotal}/${limiteTotal} total`);
+
+if (usadosHoje >= limiteDiario) {
+  return res.status(400).json({ 
+    success: false,
+    msg: `Limite diário do profissional atingido (${usadosHoje}/${limiteDiario}). Tente novamente amanhã.` 
+  });
+}
+
+if (usadosTotal >= limiteTotal) {
+  return res.status(400).json({ 
+    success: false,
+    msg: `Limite total do trial do profissional atingido (${usadosTotal}/${limiteTotal}).` 
+  });
+}
 
     // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
     const timestamp = Date.now();
@@ -297,8 +309,8 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
       qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
       expira_em: "24 horas",
       limites: {
-        usados_hoje: agendamentosHoje.length,
-        usados_total: agendamentosTotal.length,
+        usados_hoje: usadosHoje,
+        usados_total: usadosTotal,
         limite_diario: limiteDiario,
         limite_total: limiteTotal
       }
@@ -2087,6 +2099,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
