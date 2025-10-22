@@ -340,43 +340,47 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
-    const trial = await getUserTrialBackend(user_id);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
+   // ✅ 2. 🔥 VERIFICA E INCREMENTA USO (APÓS todas as validações)
+const trial = await getUserTrialBackend(user_id);
+if (trial && trial.status === 'active') {
+    const today = new Date().toISOString().split('T')[0];
+    const lastUsageDate = trial.last_usage_date ? 
         new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-      if (lastUsageDate !== today) {
+    
+    let dailyUsageCount = trial.daily_usage_count || 0;
+    
+    // Reset se for novo dia
+    if (lastUsageDate !== today) {
         dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-      if (dailyUsageCount >= dailyLimit) {
+    }
+    
+    // 🔥🔥🔥 CORREÇÃO: USA VALOR REAL DO BANCO
+    const dailyLimit = trial.max_usages; // ← AGORA USA O VALOR DO BANCO!
+    
+    console.log(`📊 Status REAL público: ${dailyUsageCount}/${dailyLimit} para ${user_id}`);
+    
+    // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
+    if (dailyUsageCount >= dailyLimit) {
         return res.status(400).json({ 
-          success: false,
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+            success: false,
+            msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
         });
-      }
-      
-      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
-      dailyUsageCount += 1;
-      
-      await supabase
+    }
+    
+    // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
+    dailyUsageCount += 1;
+    
+    await supabase
         .from('user_trials')
         .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
+            daily_usage_count: dailyUsageCount,
+            last_usage_date: new Date().toISOString()
         })
         .eq('user_id', user_id);
         
-      console.log(`✅ Uso REAL incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
-    }
+    console.log(`✅ Uso REAL incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
+}
+      
     
     // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
     const { data: novoAgendamento, error } = await supabase
@@ -1336,36 +1340,54 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-    // ✅ 2. 🔥 VERIFICAÇÃO ÚNICA DO TRIAL (MOVIDA PARA AQUI)
-    let dailyUsageCount = 0;
-    let dailyLimit = 5;
-    let canProceed = true;
+   // ✅ 2. 🔥 VERIFICAÇÃO CORRIGIDA DO TRIAL
+let dailyUsageCount = 0;
+let dailyLimit = 5; // 🔥 VALOR PADRÃO, MAS SERÁ SOBRESCRITO
+let canProceed = true;
 
-    const trial = await getUserTrialBackend(req.userId);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
+const trial = await getUserTrialBackend(req.userId);
+if (trial && trial.status === 'active') {
+    const today = new Date().toISOString().split('T')[0];
+    const lastUsageDate = trial.last_usage_date ? 
         new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-      if (lastUsageDate !== today) {
+    
+    dailyUsageCount = trial.daily_usage_count || 0;
+    
+    // Reset se for novo dia
+    if (lastUsageDate !== today) {
         dailyUsageCount = 0;
-      }
-      
-      dailyLimit = trial.max_usages || 5;
-      
-      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-      if (dailyUsageCount >= dailyLimit) {
+        console.log(`🔄 Novo dia - Resetando contador para: ${req.userId}`);
+    }
+    
+    // 🔥🔥🔥 CORREÇÃO CRÍTICA: USA O VALOR REAL DO BANCO
+    dailyLimit = trial.max_usages; // ← AGORA USA O VALOR DO BANCO!
+    
+    console.log(`📊 Status REAL do trial: ${dailyUsageCount}/${dailyLimit} para ${req.userId}`);
+    
+    // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
+    if (dailyUsageCount >= dailyLimit) {
         return res.status(400).json({ 
-          success: false,
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+            success: false,
+            msg: `Limite diário atingido (${dailyUsageCount}/${dailyLimit} usos). Os usos resetam à meia-noite.` 
         });
-      }
-      
-      // ✅ PREPARA INCREMENTO (mas ainda não executa)
-      dailyUsageCount += 1;
+    }
+    
+    // ✅ PREPARA INCREMENTO (mas ainda não executa)
+    dailyUsageCount += 1;
+    console.log(`📝 Preparando incremento para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
+} else {
+    console.log(`ℹ️ Usuário ${req.userId} sem trial ativo - usando limite padrão 5`);
+    dailyLimit = 5;
+    
+    // Verifica se já atingiu o limite padrão
+    if (dailyUsageCount >= dailyLimit) {
+        return res.status(400).json({ 
+            success: false,
+            msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+        });
+    }
+    
+    dailyUsageCount += 1;
       console.log(`📝 Preparando incremento para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
     }
 
@@ -1445,9 +1467,11 @@ app.post("/agendar", authMiddleware, async (req, res) => {
 });
 
 
-// 🆕 FUNÇÃO: Buscar trial do usuário (BACKEND)
+// 🆕 FUNÇÃO CORRIGIDA: Buscar trial do usuário (BACKEND)
 async function getUserTrialBackend(userId) {
     try {
+        console.log(`🔍 Buscando trial REAL para usuário: ${userId}`);
+        
         const { data, error } = await supabase
             .from('user_trials')
             .select('*')
@@ -1457,9 +1481,19 @@ async function getUserTrialBackend(userId) {
             .single();
             
         if (error) {
-            if (error.code === 'PGRST116') return null;
+            if (error.code === 'PGRST116') {
+                console.log(`❌ Nenhum trial encontrado para: ${userId}`);
+                return null;
+            }
             throw error;
         }
+        
+        console.log(`✅ Trial encontrado:`, {
+            id: data.id,
+            max_usages: data.max_usages,
+            daily_usage_count: data.daily_usage_count,
+            status: data.status
+        });
         
         return data;
     } catch (error) {
@@ -1467,7 +1501,6 @@ async function getUserTrialBackend(userId) {
         return null;
     }
 }
-
 // 🆕 FUNÇÃO: Verificar uso diário (BACKEND)  
 async function getDailyUsageBackend(trial, dailyLimit) {
     if (!trial) return { dailyUsageCount: 0, dailyUsagesLeft: 0, lastUsageDate: null };
@@ -2326,6 +2359,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
