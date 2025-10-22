@@ -111,70 +111,6 @@ function gerarTransactionId(userId, tipo) {
 }
 
 
-// ==================== CONTROLE DE USO POR AGENDAMENTO ====================
-const controleAgendamentos = new Map();
-
-async function gerenciarUsoAgendamento(userId) {
-  const chaveControle = `uso_${userId}_${Date.now()}`;
-  
-  // Verifica se já tem operação em andamento nos últimos 10 segundos
-  for (const [chave, timestamp] of controleAgendamentos.entries()) {
-    if (chave.startsWith(`uso_${userId}_`) && (Date.now() - timestamp) < 10000) {
-      console.log(`🔄 Agendamento já em processamento para ${userId}, evitando duplicação`);
-      return { duplicado: true };
-    }
-  }
-  
-  // Registra nova operação
-  controleAgendamentos.set(chaveControle, Date.now());
-  
-  try {
-    const trial = await getUserTrialBackend(userId);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      if (dailyUsageCount >= dailyLimit) {
-        return { success: false, motivo: 'Limite diário atingido' };
-      }
-      
-      dailyUsageCount += 1;
-      
-      await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', userId);
-        
-      console.log(`✅ Uso ÚNICO registrado para ${userId}: ${dailyUsageCount}/${dailyLimit}`);
-      
-      return { 
-        success: true, 
-        dailyUsageCount, 
-        dailyUsagesLeft: dailyLimit - dailyUsageCount 
-      };
-    }
-    
-    return { success: true };
-  } finally {
-    // Limpa após 30 segundos
-    setTimeout(() => {
-      controleAgendamentos.delete(chaveControle);
-    }, 30000);
-  }
-}
-
 
 app.post("/agendamento-publico", async (req, res) => {
   // 🆕 GERA TRANSACTION ID ÚNICO
@@ -2186,6 +2122,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
