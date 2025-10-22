@@ -92,45 +92,72 @@ async function enviarNotificacao(token, titulo, mensagem, dadosExtras = {}) {
 }
 
 
-// 🔥 ROTA SUPER SIMPLES - SEM AUTH, SEM COMPLICAÇÃO
+// 🔥 ROTA COM DEBUG COMPLETO
 app.post("/api/salvar-token-simples", async (req, res) => {
   try {
+    console.log('🔔🔔🔔 ROTA CHAMADA: /api/salvar-token-simples');
+    console.log('📦 Body completo:', JSON.stringify(req.body, null, 2));
+    console.log('📦 Content-Type:', req.headers['content-type']);
+    console.log('📦 Method:', req.method);
+    
+    // Verificar se body existe
+    if (!req.body || Object.keys(req.body).length === 0) {
+      console.log('❌ Body está VAZIO ou UNDEFINED');
+      return res.status(400).json({ 
+        success: false, 
+        msg: 'Body da requisição está vazio',
+        received_body: req.body
+      });
+    }
+    
     const { push_token } = req.body;
     
-    console.log('💾 SALVANDO TOKEN SIMPLES:', push_token);
+    if (!push_token) {
+      console.log('❌ push_token não encontrado no body');
+      return res.status(400).json({ 
+        success: false, 
+        msg: 'push_token é obrigatório',
+        body_received: req.body
+      });
+    }
 
-    // Criar entrada simples na tabela
+    console.log('💾 Salvando token no banco:', push_token.substring(0, 20) + '...');
+
+    // Salvar no banco
     const { data, error } = await supabase
       .from('user_push_tokens')
       .insert({
-        user_id: 'user-temp-' + Date.now(), // ID temporário único
+        user_id: 'user-' + Date.now(),
         push_token: push_token,
         device_name: 'App Android',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      });
+      })
+      .select();
 
     if (error) {
-      console.log('❌ Erro ao salvar:', error);
+      console.log('❌ Erro ao salvar no Supabase:', error);
       return res.status(500).json({ 
         success: false, 
         msg: 'Erro no banco: ' + error.message 
       });
     }
 
-    console.log('✅ TOKEN SALVO COM SUCESSO!');
+    console.log('✅✅✅ TOKEN SALVO COM SUCESSO! ID:', data[0]?.id);
     
     res.json({ 
       success: true, 
       msg: 'Token salvo com sucesso!',
-      token_salvo: push_token
+      id: data[0]?.id,
+      token_salvo: push_token.substring(0, 20) + '...'
     });
     
   } catch (error) {
-    console.error('❌ Erro geral:', error);
+    console.error('❌ Erro geral na rota:', error);
     res.status(500).json({ 
       success: false, 
-      msg: 'Erro interno: ' + error.message 
+      msg: 'Erro interno: ' + error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -243,8 +270,13 @@ app.use(cors({
 // Handle preflight requests for ALL routes
 app.options('*', cors());
 
+// 🔥🔥🔥 ADICIONE ESTAS 2 LINHAS (FALTANDO!)
+app.use(express.json()); // Para parsear JSON
+app.use(express.urlencoded({ extended: true })); // Para parsear URL encoded
+
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
+
 
 app.post("/agendamento-publico", async (req, res) => {
   try {
@@ -2442,6 +2474,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
