@@ -2,15 +2,10 @@ import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
-import admin from "firebase-admin"; // 🔥 FALTANDO ESTE IMPORT
-import cron from 'node-cron';
 
 const PORT = process.env.PORT || 3000;
 const app = express();
-
-
-// ==================== MIDDLEWARES NA ORDEM CORRETA ====================
-// 1. CORS PRIMEIRO
+// ==================== CORS CONFIGURADO CORRETAMENTE ====================
 app.use(cors({
   origin: [
     'https://frontrender-iota.vercel.app',
@@ -32,232 +27,14 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'Authorization'],
   preflightContinue: false,
   optionsSuccessStatus: 204,
-  maxAge: 86400
+  maxAge: 86400 // 24 hours
 }));
 
+// Handle preflight requests for ALL routes
 app.options('*', cors());
 
-// 2. BODY PARSER IMEDIATAMENTE DEPOIS (APENAS UMA VEZ!)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-
-
-// 🔥 ROTA PRODUÇÃO - SALVAR TOKEN (LOGS REDUZIDOS)
-app.post("/api/salvar-token-simples", (req, res) => {
-  let body = '';
-  req.on('data', chunk => {
-    body += chunk.toString();
-  });
-  
-  req.on('end', async () => {
-    try {
-      if (!body) {
-        return res.status(400).json({ success: false, msg: 'Body vazio' });
-      }
-      
-      const data = JSON.parse(body);
-      const push_token = data.push_token;
-      
-      if (!push_token) {
-        return res.status(400).json({ success: false, msg: 'push_token faltando' });
-      }
-      
-      console.log('💾 Salvando token FCM...');
-      
-      // Salvar no banco
-      const { error } = await supabase
-        .from('user_push_tokens')
-        .insert({
-          user_id: null,
-          push_token: push_token,
-          device_name: 'App Android',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-      
-      if (error) {
-        console.log('❌ Erro ao salvar token:', error.message);
-        return res.status(500).json({ success: false, msg: 'Erro no servidor' });
-      }
-      
-      console.log('✅ Token salvo com sucesso');
-      res.json({ success: true, msg: 'Token salvo!' });
-      
-    } catch (error) {
-      console.log('❌ Erro na rota:', error.message);
-      res.status(500).json({ success: false, msg: 'Erro interno' });
-    }
-  });
-});
-
-// ==================== CONFIGURAÇÃO FIREBASE ADMIN ====================
-let firebaseInitialized = false;
-
-try {
-  const serviceAccount = {
-    project_id: process.env.FIREBASE_PROJECT_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    client_email: process.env.FIREBASE_CLIENT_EMAIL,
-  };
-
-  if (serviceAccount.project_id && serviceAccount.private_key && serviceAccount.client_email) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    
-    firebaseInitialized = true;
-    console.log('🚀 Firebase Admin inicializado com sucesso!');
-  } else {
-    console.log('📱 Firebase não configurado - Notificações desativadas');
-  }
-} catch (error) {
-  console.log('❌ Erro ao inicializar Firebase:', error.message);
-}
-
-// 🔥 FUNÇÃO DE NOTIFICAÇÃO PUSH
-async function enviarNotificacao(token, titulo, mensagem, dadosExtras = {}) {
-  try {
-    if (!firebaseInitialized) {
-      console.log('📱 Firebase não inicializado - Notificação ignorada');
-      return false;
-    }
-
-    if (!token || token === 'undefined' || token.length < 50) {
-      console.log('❌ Token FCM inválido');
-      return false;
-    }
-
-    const message = {
-      notification: {
-        title: titulo.substring(0, 50),
-        body: mensagem.substring(0, 150),
-      },
-      data: {
-        ...dadosExtras,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-        sound: 'default'
-      },
-      token: token,
-      android: {
-        priority: 'high',
-        notification: {
-          sound: 'default',
-          channel_id: 'high_importance_channel'
-        }
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-          },
-        },
-      },
-    };
-
-    console.log(`📤 Enviando notificação: "${titulo}"`);
-    
-    const response = await admin.messaging().send(message);
-    console.log('✅ Notificação entregue com sucesso!');
-    return true;
-    
-  } catch (error) {
-    console.error('❌ Erro FCM:', error.message);
-    
-    if (error.code === 'messaging/registration-token-not-registered' || 
-        error.code === 'messaging/invalid-argument') {
-      console.log('🔄 Removendo token inválido...');
-      await removerTokenInvalido(token);
-    }
-    
-    return false;
-  }
-}
-
-// 🔥 FUNÇÃO AUXILIAR - REMOVER TOKEN INVÁLIDO
-async function removerTokenInvalido(token) {
-  try {
-    const { error } = await supabase
-      .from('user_push_tokens')
-      .delete()
-      .eq('push_token', token);
-      
-    if (!error) console.log('✅ Token inválido removido');
-  } catch (error) {
-    console.log('❌ Erro ao remover token:', error.message);
-  }
-}
-
-// ==================== SISTEMA DE LEMBRETES AUTOMÁTICOS ====================
-cron.schedule('*/5 * * * *', async () => {
-  try {
-    if (!firebaseInitialized) return;
-
-    console.log('🔔 Verificando lembretes...');
-    
-    const agora = new Date();
-    const em30Minutos = new Date(agora.getTime() + 30 * 60000);
-    
-    // Busca agendamentos confirmados que acontecerão em ~30 minutos
-    const { data: agendamentos, error } = await supabase
-      .from('agendamentos')
-      .select(`
-        id,
-        nome,
-        data,
-        horario,
-        status,
-        user_id,
-        user_profiles:user_id (
-          push_token
-        )
-      `)
-      .eq('status', 'confirmado')
-      .eq('lembrete_enviado', false)
-      .gte('data', agora.toISOString().split('T')[0])
-      .lte('data', em30Minutos.toISOString().split('T')[0]);
-
-    if (error) throw error;
-
-    console.log(`📦 ${agendamentos?.length || 0} agendamentos para verificar`);
-
-    for (const agendamento of agendamentos || []) {
-      const horarioAgendamento = new Date(`${agendamento.data}T${agendamento.horario}`);
-      const diferencaMinutos = (horarioAgendamento - agora) / (1000 * 60);
-      
-      if (diferencaMinutos >= 25 && diferencaMinutos <= 35) {
-        const token = agendamento.user_profiles?.push_token;
-        
-        if (token) {
-          const sucesso = await enviarNotificacao(
-            token,
-            '🔔 Lembrete de Agendamento',
-            `Seu agendamento com ${agendamento.nome} é em 30 minutos (${agendamento.horario})`,
-            {
-              tipo: 'lembrete',
-              agendamento_id: agendamento.id.toString(),
-              acao: 'ver_agendamento'
-            }
-          );
-
-          if (sucesso) {
-            await supabase
-              .from('agendamentos')
-              .update({ lembrete_enviado: true })
-              .eq('id', agendamento.id);
-              
-            console.log(`✅ Lembrete enviado: ${agendamento.id}`);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('❌ Erro no agendador:', error);
-  }
-});
-
-
+// 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
+app.use(express.json());
 
 app.post("/agendamento-publico", async (req, res) => {
   try {
@@ -340,47 +117,43 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-   // ✅ 2. 🔥 VERIFICA E INCREMENTA USO (APÓS todas as validações)
-const trial = await getUserTrialBackend(user_id);
-if (trial && trial.status === 'active') {
-    const today = new Date().toISOString().split('T')[0];
-    const lastUsageDate = trial.last_usage_date ? 
+    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
+    const trial = await getUserTrialBackend(user_id);
+    if (trial && trial.status === 'active') {
+      const today = new Date().toISOString().split('T')[0];
+      const lastUsageDate = trial.last_usage_date ? 
         new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-    
-    let dailyUsageCount = trial.daily_usage_count || 0;
-    
-    // Reset se for novo dia
-    if (lastUsageDate !== today) {
+      
+      let dailyUsageCount = trial.daily_usage_count || 0;
+      
+      // Reset se for novo dia
+      if (lastUsageDate !== today) {
         dailyUsageCount = 0;
-    }
-    
-    // 🔥🔥🔥 CORREÇÃO: USA VALOR REAL DO BANCO
-    const dailyLimit = trial.max_usages; // ← AGORA USA O VALOR DO BANCO!
-    
-    console.log(`📊 Status REAL público: ${dailyUsageCount}/${dailyLimit} para ${user_id}`);
-    
-    // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-    if (dailyUsageCount >= dailyLimit) {
+      }
+      
+      const dailyLimit = trial.max_usages || 5;
+      
+      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
+      if (dailyUsageCount >= dailyLimit) {
         return res.status(400).json({ 
-            success: false,
-            msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+          success: false,
+          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
         });
-    }
-    
-    // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
-    dailyUsageCount += 1;
-    
-    await supabase
+      }
+      
+      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
+      dailyUsageCount += 1;
+      
+      await supabase
         .from('user_trials')
         .update({
-            daily_usage_count: dailyUsageCount,
-            last_usage_date: new Date().toISOString()
+          daily_usage_count: dailyUsageCount,
+          last_usage_date: new Date().toISOString()
         })
         .eq('user_id', user_id);
         
-    console.log(`✅ Uso REAL incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
-}
-      
+      console.log(`✅ Uso REAL incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
+    }
     
     // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
     const { data: novoAgendamento, error } = await supabase
@@ -1288,7 +1061,6 @@ function usuarioPodeGerenciarAgendamento(agendamento, userId) {
 }
 
 
-// 🔥 ROTA /AGENDAR CORRIGIDA - SEM DUPLO INCREMENTO
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -1340,55 +1112,42 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-   // ✅ 2. 🔥 VERIFICAÇÃO CORRIGIDA DO TRIAL
-let dailyUsageCount = 0;
-let dailyLimit = 5; // 🔥 VALOR PADRÃO, MAS SERÁ SOBRESCRITO
-let canProceed = true;
-
-const trial = await getUserTrialBackend(req.userId);
-if (trial && trial.status === 'active') {
-    const today = new Date().toISOString().split('T')[0];
-    const lastUsageDate = trial.last_usage_date ? 
+    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
+    const trial = await getUserTrialBackend(req.userId);
+    if (trial && trial.status === 'active') {
+      const today = new Date().toISOString().split('T')[0];
+      const lastUsageDate = trial.last_usage_date ? 
         new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-    
-    dailyUsageCount = trial.daily_usage_count || 0;
-    
-    // Reset se for novo dia
-    if (lastUsageDate !== today) {
+      
+      let dailyUsageCount = trial.daily_usage_count || 0;
+      
+      // Reset se for novo dia
+      if (lastUsageDate !== today) {
         dailyUsageCount = 0;
-        console.log(`🔄 Novo dia - Resetando contador para: ${req.userId}`);
-    }
-    
-    // 🔥🔥🔥 CORREÇÃO CRÍTICA: USA O VALOR REAL DO BANCO
-    dailyLimit = trial.max_usages; // ← AGORA USA O VALOR DO BANCO!
-    
-    console.log(`📊 Status REAL do trial: ${dailyUsageCount}/${dailyLimit} para ${req.userId}`);
-    
-    // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-    if (dailyUsageCount >= dailyLimit) {
+      }
+      
+      const dailyLimit = trial.max_usages || 5;
+      
+      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
+      if (dailyUsageCount >= dailyLimit) {
         return res.status(400).json({ 
-            success: false,
-            msg: `Limite diário atingido (${dailyUsageCount}/${dailyLimit} usos). Os usos resetam à meia-noite.` 
+          success: false,
+          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
         });
-    }
-    
-    // ✅ PREPARA INCREMENTO (mas ainda não executa)
-    dailyUsageCount += 1;
-    console.log(`📝 Preparando incremento para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
-} else {
-    console.log(`ℹ️ Usuário ${req.userId} sem trial ativo - usando limite padrão 5`);
-    dailyLimit = 5;
-    
-    // Verifica se já atingiu o limite padrão
-    if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-            success: false,
-            msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-        });
-    }
-    
-    dailyUsageCount += 1;
-      console.log(`📝 Preparando incremento para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
+      }
+      
+      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
+      dailyUsageCount += 1;
+      
+      await supabase
+        .from('user_trials')
+        .update({
+          daily_usage_count: dailyUsageCount,
+          last_usage_date: new Date().toISOString()
+        })
+        .eq('user_id', req.userId);
+        
+      console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
     }
 
     // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
@@ -1411,19 +1170,6 @@ if (trial && trial.status === 'active') {
       .single();
 
     if (error) throw error;
-
-    // ✅ 4. 🔥 AGORA SIM - INCREMENTA USO (APÓS agendamento criado com sucesso)
-    if (trial && trial.status === 'active') {
-      await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', req.userId);
-        
-      console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
-    }
 
     // Atualiza Google Sheets
     try {
@@ -1466,12 +1212,9 @@ if (trial && trial.status === 'active') {
   }
 });
 
-
-// 🆕 FUNÇÃO CORRIGIDA: Buscar trial do usuário (BACKEND)
+// 🆕 FUNÇÃO: Buscar trial do usuário (BACKEND)
 async function getUserTrialBackend(userId) {
     try {
-        console.log(`🔍 Buscando trial REAL para usuário: ${userId}`);
-        
         const { data, error } = await supabase
             .from('user_trials')
             .select('*')
@@ -1481,19 +1224,9 @@ async function getUserTrialBackend(userId) {
             .single();
             
         if (error) {
-            if (error.code === 'PGRST116') {
-                console.log(`❌ Nenhum trial encontrado para: ${userId}`);
-                return null;
-            }
+            if (error.code === 'PGRST116') return null;
             throw error;
         }
-        
-        console.log(`✅ Trial encontrado:`, {
-            id: data.id,
-            max_usages: data.max_usages,
-            daily_usage_count: data.daily_usage_count,
-            status: data.status
-        });
         
         return data;
     } catch (error) {
@@ -1501,6 +1234,7 @@ async function getUserTrialBackend(userId) {
         return null;
     }
 }
+
 // 🆕 FUNÇÃO: Verificar uso diário (BACKEND)  
 async function getDailyUsageBackend(trial, dailyLimit) {
     if (!trial) return { dailyUsageCount: 0, dailyUsagesLeft: 0, lastUsageDate: null };
@@ -2359,9 +2093,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
-
 
 
 
