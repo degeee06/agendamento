@@ -186,7 +186,7 @@ app.post("/agendamento-publico", async (req, res) => {
   }
 });
 
-// 🆕 ROTA PARA VERIFICAR SE HOUVE AGENDAMENTOS VIA LINK
+// ✅ ROTA FUNCIONAL IMEDIATA - Sem precisar de coluna origem
 app.get("/api/agendamentos-via-link/:user_id", authMiddleware, async (req, res) => {
   try {
     const user_id = req.params.user_id;
@@ -195,27 +195,31 @@ app.get("/api/agendamentos-via-link/:user_id", authMiddleware, async (req, res) 
       return res.status(403).json({ msg: "Não autorizado" });
     }
 
-    // Busca agendamentos feitos via link nos últimos 5 minutos
-    const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000);
+    // Busca agendamentos dos últimos 2 minutos (rápido e funcional)
+    const doisMinutosAtras = new Date(Date.now() - 2 * 60 * 1000);
     
-    const { data: novosAgendamentos, error } = await supabase
+    const { data: todosAgendamentos, error } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("user_id", user_id)
-      .eq("origem", "link_publico")
-      .gte("created_at", cincoMinutosAtras.toISOString())
+      .gte("created_at", doisMinutosAtras.toISOString())
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
+    // Filtra apenas agendamentos onde o cliente NÃO é o próprio usuário
+    const agendamentosExternos = todosAgendamentos?.filter(ag => 
+      ag.cliente !== user_id
+    ) || [];
+
     res.json({
       success: true,
-      novos_agendamentos: novosAgendamentos || [],
-      total_novos: novosAgendamentos?.length || 0
+      novos_agendamentos: agendamentosExternos,
+      total_novos: agendamentosExternos.length
     });
 
   } catch (error) {
-    console.error("Erro ao verificar agendamentos via link:", error);
+    console.error("Erro ao verificar agendamentos:", error);
     res.status(500).json({ success: false, msg: "Erro interno" });
   }
 });
@@ -2136,6 +2140,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
