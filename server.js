@@ -36,6 +36,71 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
+// ==================== CONTROLE DE USO POR AGENDAMENTO ====================
+const controleAgendamentos = new Map();
+
+async function gerenciarUsoAgendamento(userId) {
+  const chaveControle = `uso_${userId}_${Date.now()}`;
+  
+  // Verifica se já tem operação em andamento nos últimos 10 segundos
+  for (const [chave, timestamp] of controleAgendamentos.entries()) {
+    if (chave.startsWith(`uso_${userId}_`) && (Date.now() - timestamp) < 10000) {
+      console.log(`🔄 Agendamento já em processamento para ${userId}, evitando duplicação`);
+      return { duplicado: true };
+    }
+  }
+  
+  // Registra nova operação
+  controleAgendamentos.set(chaveControle, Date.now());
+  
+  try {
+    const trial = await getUserTrialBackend(userId);
+    if (trial && trial.status === 'active') {
+      const today = new Date().toISOString().split('T')[0];
+      const lastUsageDate = trial.last_usage_date ? 
+        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
+      
+      let dailyUsageCount = trial.daily_usage_count || 0;
+      
+      if (lastUsageDate !== today) {
+        dailyUsageCount = 0;
+      }
+      
+      const dailyLimit = trial.max_usages || 5;
+      
+      if (dailyUsageCount >= dailyLimit) {
+        return { success: false, motivo: 'Limite diário atingido' };
+      }
+      
+      dailyUsageCount += 1;
+      
+      await supabase
+        .from('user_trials')
+        .update({
+          daily_usage_count: dailyUsageCount,
+          last_usage_date: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+        
+      console.log(`✅ Uso ÚNICO registrado para ${userId}: ${dailyUsageCount}/${dailyLimit}`);
+      
+      return { 
+        success: true, 
+        dailyUsageCount, 
+        dailyUsagesLeft: dailyLimit - dailyUsageCount 
+      };
+    }
+    
+    return { success: true };
+  } finally {
+    // Limpa após 30 segundos
+    setTimeout(() => {
+      controleAgendamentos.delete(chaveControle);
+    }, 30000);
+  }
+}
+
+
 app.post("/agendamento-publico", async (req, res) => {
   try {
     const { nome, email, telefone, data, horario, user_id, t } = req.body;
@@ -117,42 +182,17 @@ app.post("/agendamento-publico", async (req, res) => {
       });
     }
 
-    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
-    const trial = await getUserTrialBackend(user_id);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-      if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-          success: false,
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-        });
-      }
-      
-      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
-      dailyUsageCount += 1;
-      
-      await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', user_id);
-        
-      console.log(`✅ Uso REAL incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
+    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (SISTEMA UNIFICADO)
+    const resultadoUso = await gerenciarUsoAgendamento(user_id);
+
+    if (resultadoUso.duplicado) {
+      // Continua o agendamento sem incrementar uso novamente
+      console.log('ℹ️ Uso já contabilizado, continuando agendamento público...');
+    } else if (!resultadoUso.success) {
+      return res.status(400).json({ 
+        success: false,
+        msg: resultadoUso.motivo 
+      });
     }
     
     // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
@@ -1061,7 +1101,6 @@ function usuarioPodeGerenciarAgendamento(agendamento, userId) {
 }
 
 
-// 🔥 AGENDAR COM CACHE CORRIGIDO - SEM CONFLITO COM TRIAL
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -1110,50 +1149,17 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-    // ✅ 3. 🔥 VERIFICA E INCREMENTA USO (APÓS todas as validações)
-    const trial = await getUserTrialBackend(req.userId);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-      if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-          success: false,
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-        });
-      }
-      
-      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
-      dailyUsageCount += 1;
-      
-      const { error: updateError } = await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', req.userId);
-        
-      if (updateError) {
-        console.error('❌ Erro ao atualizar uso:', updateError);
-        return res.status(500).json({ 
-          success: false,
-          msg: "Erro ao processar uso do trial" 
-        });
-      }
-        
-      console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
+    // ✅ 3. 🔥 VERIFICA E INCREMENTA USO (SISTEMA UNIFICADO)
+    const resultadoUso = await gerenciarUsoAgendamento(req.userId);
+
+    if (resultadoUso.duplicado) {
+      // Continua o agendamento sem incrementar uso novamente
+      console.log('ℹ️ Uso já contabilizado, continuando agendamento normal...');
+    } else if (!resultadoUso.success) {
+      return res.status(400).json({ 
+        success: false,
+        msg: resultadoUso.motivo 
+      });
     }
 
     // ✅ 4. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
@@ -2099,6 +2105,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
