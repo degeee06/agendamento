@@ -92,74 +92,57 @@ async function enviarNotificacao(token, titulo, mensagem, dadosExtras = {}) {
 }
 
 
-// 🔥 ROTA COM DEBUG COMPLETO
-app.post("/api/salvar-token-simples", async (req, res) => {
-  try {
-    console.log('🔔🔔🔔 ROTA CHAMADA: /api/salvar-token-simples');
-    console.log('📦 Body completo:', JSON.stringify(req.body, null, 2));
-    console.log('📦 Content-Type:', req.headers['content-type']);
-    console.log('📦 Method:', req.method);
-    
-    // Verificar se body existe
-    if (!req.body || Object.keys(req.body).length === 0) {
-      console.log('❌ Body está VAZIO ou UNDEFINED');
-      return res.status(400).json({ 
-        success: false, 
-        msg: 'Body da requisição está vazio',
-        received_body: req.body
-      });
+
+// 🔥 ROTA SUPER SIMPLES QUE FUNCIONA
+app.post("/api/salvar-token-simples", (req, res) => {
+  console.log('🔔 Rota chamada');
+  
+  // Ler o body manualmente - SEM complicação
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk.toString();
+  });
+  
+  req.on('end', async () => {
+    try {
+      console.log('📦 Body recebido:', body);
+      
+      if (!body) {
+        return res.status(400).json({ success: false, msg: 'Body vazio' });
+      }
+      
+      const data = JSON.parse(body);
+      const push_token = data.push_token;
+      
+      if (!push_token) {
+        return res.status(400).json({ success: false, msg: 'push_token faltando' });
+      }
+      
+      console.log('💾 Salvando token:', push_token);
+      
+      // Salvar no banco
+      const { data: result, error } = await supabase
+        .from('user_push_tokens')
+        .insert({
+          user_id: 'user-' + Date.now(),
+          push_token: push_token,
+          device_name: 'App Android',
+          created_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        console.log('❌ Erro banco:', error);
+        return res.status(500).json({ success: false, msg: 'Erro banco' });
+      }
+      
+      console.log('✅ Token salvo!');
+      res.json({ success: true, msg: 'Token salvo!' });
+      
+    } catch (error) {
+      console.log('❌ Erro:', error);
+      res.status(500).json({ success: false, msg: 'Erro: ' + error.message });
     }
-    
-    const { push_token } = req.body;
-    
-    if (!push_token) {
-      console.log('❌ push_token não encontrado no body');
-      return res.status(400).json({ 
-        success: false, 
-        msg: 'push_token é obrigatório',
-        body_received: req.body
-      });
-    }
-
-    console.log('💾 Salvando token no banco:', push_token.substring(0, 20) + '...');
-
-    // Salvar no banco
-    const { data, error } = await supabase
-      .from('user_push_tokens')
-      .insert({
-        user_id: 'user-' + Date.now(),
-        push_token: push_token,
-        device_name: 'App Android',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select();
-
-    if (error) {
-      console.log('❌ Erro ao salvar no Supabase:', error);
-      return res.status(500).json({ 
-        success: false, 
-        msg: 'Erro no banco: ' + error.message 
-      });
-    }
-
-    console.log('✅✅✅ TOKEN SALVO COM SUCESSO! ID:', data[0]?.id);
-    
-    res.json({ 
-      success: true, 
-      msg: 'Token salvo com sucesso!',
-      id: data[0]?.id,
-      token_salvo: push_token.substring(0, 20) + '...'
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro geral na rota:', error);
-    res.status(500).json({ 
-      success: false, 
-      msg: 'Erro interno: ' + error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
+  });
 });
 
 
@@ -2472,6 +2455,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
