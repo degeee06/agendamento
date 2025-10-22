@@ -36,18 +36,16 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
+// ROTA PÚBLICA para agendamento via link
 app.post("/agendamento-publico", async (req, res) => {
   try {
-    const { nome, email, telefone, data, horario, user_id, t } = req.body;
+    const { nome, email, telefone, data, horario, user_id, t } = req.body; // 🆕 Recebe timestamp
     
-    if (!nome || !telefone || !data || !horario || !user_id || !t) {
-      return res.status(400).json({ 
-        success: false,
-        msg: "Link inválido ou expirado" 
-      });
+    if (!nome || !telefone || !data || !horario || !user_id || !t) { // 🆕 Verifica timestamp
+      return res.status(400).json({ msg: "Link inválido ou expirado" });
     }
 
-    // 🆕 🔥 VALIDAÇÃO DE HORA CHEIA APENAS PARA PÚBLICO
+ // 🆕 🔥 ADICIONE ESTA VALIDAÇÃO AQUI - HORA CHEIA APENAS PARA PÚBLICO
     const minutos = horario.split(':')[1];
     if (minutos !== '00') {
         return res.status(400).json({ 
@@ -55,17 +53,14 @@ app.post("/agendamento-publico", async (req, res) => {
             msg: "Apenas horários de hora em hora são permitidos (ex: 09:00, 10:00, 11:00)" 
         });
     }
-
-    // ✅ 1. PRIMEIRO VALIDA TUDO (sem incrementar uso)
-    const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
+    
+      const validacaoHorario = await validarHorarioFuncionamento(user_id, data, horario);
     if (!validacaoHorario.valido) {
-        return res.status(400).json({ 
-            success: false,
-            msg: `Horário indisponível: ${validacaoHorario.motivo}` 
-        });
+      return res.status(400).json({ 
+        msg: `Horário indisponível: ${validacaoHorario.motivo}` 
+      });
     }
-
-    // 🆕 VERIFICAÇÃO DE USO ÚNICO (ANTES de incrementar)
+  // 🆕 VERIFICAÇÃO DE USO ÚNICO (ADICIONE ESTA PARTE ANTES!)
     const { data: linkUsado } = await supabase
       .from('links_uso')
       .select('*')
@@ -74,33 +69,24 @@ app.post("/agendamento-publico", async (req, res) => {
       .single();
 
     if (linkUsado) {
-      return res.status(400).json({ 
-        success: false,
-        msg: "Este link já foi utilizado. Solicite um novo link de agendamento." 
-      });
+      return res.status(400).json({ msg: "Este link já foi utilizado. Solicite um novo link de agendamento." });
     }
 
-    // 🆕 VERIFICA EXPIRAÇÃO (24 horas) - ANTES de incrementar
+    
+    // 🆕 VERIFICA EXPIRAÇÃO (24 horas)
     const agora = Date.now();
     const diferenca = agora - parseInt(t);
     const horas = diferenca / (1000 * 60 * 60);
     
     if (horas > 24) {
-      return res.status(400).json({ 
-        success: false,
-        msg: "Link expirado. Gere um novo link de agendamento." 
-      });
+      return res.status(400).json({ msg: "Link expirado. Gere um novo link de agendamento." });
     }
 
     // Verifica se o user_id existe
     const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id);
     if (userError || !user) {
-      return res.status(400).json({ 
-        success: false,
-        msg: "Link inválido" 
-      });
+      return res.status(400).json({ msg: "Link inválido" });
     }
-
     // Verifica conflitos
     const { data: conflito } = await supabase
       .from("agendamentos")
@@ -108,54 +94,13 @@ app.post("/agendamento-publico", async (req, res) => {
       .eq("user_id", user_id)
       .eq("data", data)
       .eq("horario", horario)
-      .neq("status", "cancelado");
+      .neq("status", "cancelado"); // Ignora agendamentos cancelados
     
     if (conflito && conflito.length > 0) {
-      return res.status(400).json({ 
-        success: false,
-        msg: "Horário indisponível" 
-      });
+      return res.status(400).json({ msg: "Horário indisponível" });
     }
 
-    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
-    const trial = await getUserTrialBackend(user_id);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-      if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-      }
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-      if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-          success: false,
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-        });
-      }
-      
-      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
-      dailyUsageCount += 1;
-      
-      await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', user_id);
-        
-      console.log(`✅ Uso REAL incrementado para ${user_id}: ${dailyUsageCount}/${dailyLimit}`);
-    }
-    
-    // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
+    // Cria agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
@@ -174,7 +119,7 @@ app.post("/agendamento-publico", async (req, res) => {
 
     if (error) throw error;
 
-    // 🆕 MARCA LINK COMO USADO (APÓS AGENDAMENTO BEM-SUCEDIDO)
+// 🆕 MARCA LINK COMO USADO (APÓS AGENDAMENTO BEM-SUCEDIDO)
     await supabase
       .from('links_uso')
       .insert([{
@@ -183,30 +128,29 @@ app.post("/agendamento-publico", async (req, res) => {
         usado_em: new Date(),
         agendamento_id: novoAgendamento.id
       }]);
-
     // Atualiza Google Sheets
-    try {
-      const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
-      if (doc) {
-        const sheet = doc.sheetsByIndex[0];
-        
-        // 🆕 DADOS FILTRADOS PARA SHEETS
-        const dadosSheets = {
-          nome: novoAgendamento.nome,
-          email: email || 'Não informado',
-          telefone: novoAgendamento.telefone,
-          data: novoAgendamento.data,
-          horario: novoAgendamento.horario,
-          status: novoAgendamento.status
-        };
-        
-        await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
-        await sheet.addRow(dadosSheets);
-        console.log('✅ Dados filtrados salvos no Sheets');
-      }
-    } catch (sheetError) {
-      console.error("Erro ao atualizar Google Sheets:", sheetError);
-    }
+   try {
+  const doc = await accessUserSpreadsheet(user.user.email, user.user.user_metadata);
+  if (doc) {
+    const sheet = doc.sheetsByIndex[0];
+    
+    // 🆕 DADOS FILTRADOS PARA SHEETS
+    const dadosSheets = {
+      nome: novoAgendamento.nome,
+      email: email || 'Não informado',
+      telefone: novoAgendamento.telefone,
+      data: novoAgendamento.data,
+      horario: novoAgendamento.horario,
+      status: novoAgendamento.status
+    };
+    
+    await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
+    await sheet.addRow(dadosSheets);
+    console.log('✅ Dados filtrados salvos no Sheets');
+  }
+} catch (sheetError) {
+  console.error("Erro ao atualizar Google Sheets:", sheetError);
+}
 
     res.json({ 
       success: true, 
@@ -216,10 +160,33 @@ app.post("/agendamento-publico", async (req, res) => {
 
   } catch (err) {
     console.error("Erro no agendamento público:", err);
-    res.status(500).json({ 
-      success: false,
-      msg: "Erro interno no servidor" 
+    res.status(500).json({ msg: "Erro interno no servidor" });
+  }
+});
+
+app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
+  try {
+    const user_id = req.params.user_id;
+    
+    // Verifica se é o próprio usuário
+    if (req.userId !== user_id) {
+      return res.status(403).json({ msg: "Não autorizado" });
+    }
+
+    // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
+    const timestamp = Date.now();
+    const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
+    
+    res.json({ 
+      success: true, 
+      link: link,
+      qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`,
+      expira_em: "24 horas" // 🆕 Informa quando expira
     });
+
+  } catch (error) {
+    console.error("Erro ao gerar link:", error);
+    res.status(500).json({ msg: "Erro interno" });
   }
 });
 
@@ -1059,18 +1026,15 @@ function usuarioPodeGerenciarAgendamento(agendamento, userId) {
   return agendamento.cliente === userId || 
          agendamento.user_id === userId;
 }
-
-
+// 🔥 AGENDAR COM CACHE E INVALIDAÇÃO
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
-    
+    // 👇 removido o Email da validação obrigatória
     if (!Nome || !Telefone || !Data || !Horario)
       return res.status(400).json({ msg: "Todos os campos obrigatórios" });
 
-    // ✅ 1. PRIMEIRO VALIDA TUDO (sem incrementar uso)
-    
-    // Valida data no passado
+ // 🆕 VALIDAÇÃO DE DATA NO PASSADO (ADICIONADA)
     const dataAgendamento = new Date(`${Data}T${Horario}`);
     const agora = new Date();
     if (dataAgendamento < agora) {
@@ -1080,7 +1044,10 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
     
-    // Valida horário de funcionamento
+    const userEmail = req.user?.email || Email || null; // ✅ usa email do usuário logado, do corpo, ou null
+    const cacheKey = `agendamentos_${req.userId}`;
+    
+     // 🆕 VALIDA HORÁRIO DE FUNCIONAMENTO
     const validacaoHorario = await validarHorarioFuncionamento(req.userId, Data, Horario);
     if (!validacaoHorario.valido) {
       return res.status(400).json({ 
@@ -1088,8 +1055,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
     
-    // Verifica conflitos
-    const cacheKey = `agendamentos_${req.userId}`;
+    // ✅ PRIMEIRO VERIFICA CONFLITOS USANDO CACHE
     const agendamentosExistentes = await cacheManager.getOrSet(cacheKey, async () => {
       const { data, error } = await supabase
         .from("agendamentos")
@@ -1102,8 +1068,9 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       return data || [];
     });
 
+    // Verifica conflito usando dados em cache
     const conflito = agendamentosExistentes.find(a => 
-      a.data === Data && a.horario === Horario && a.status !== "cancelado"
+      a.data === Data && a.horario === Horario
     );
     
     if (conflito) {
@@ -1112,56 +1079,14 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
 
-    // ✅ 2. 🔥 AGORA SIM - VERIFICA E INCREMENTA USO (APÓS todas as validações)
-    const trial = await getUserTrialBackend(req.userId);
-    if (trial && trial.status === 'active') {
-      const today = new Date().toISOString().split('T')[0];
-      const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-      
-      let dailyUsageCount = trial.daily_usage_count || 0;
-      
-      // Reset se for novo dia
-  if (lastUsageDate !== today) {
-  dailyUsageCount = 0;
-  // 🔥 ADICIONE ESTA LINHA:
-  await supabase.from('user_trials').update({ daily_usage_count: 0 }).eq('user_id', user_id);
-}
-      
-      const dailyLimit = trial.max_usages || 5;
-      
-      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
-      if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-          success: false,
-          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
-        });
-      }
-      
-      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
-      dailyUsageCount += 1;
-      
-      await supabase
-        .from('user_trials')
-        .update({
-          daily_usage_count: dailyUsageCount,
-          last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', req.userId);
-        
-      console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
-    }
-
-    // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
-    const userEmail = req.user?.email || Email || null;
-    
+    // Se não há conflito, cria o agendamento
     const { data: novoAgendamento, error } = await supabase
       .from("agendamentos")
       .insert([{
         cliente: req.userId,
         user_id: req.userId,
         nome: Nome,
-        email: Email || null,
+        email: Email || null, // ✅ agora pode ser null ou opcional
         telefone: Telefone,
         data: Data,
         horario: Horario,
@@ -1173,12 +1098,12 @@ app.post("/agendar", authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
-    // Atualiza Google Sheets
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
         const sheet = doc.sheetsByIndex[0];
         
+        // 🆕 USA DADOS FILTRADOS (igual ao agendamento público)
         const dadosSheets = {
           nome: novoAgendamento.nome,
           email: Email || '',
@@ -1199,69 +1124,13 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
     cacheManager.delete(cacheKey);
     
-    res.json({ 
-      success: true,
-      msg: "Agendamento realizado com sucesso!", 
-      agendamento: novoAgendamento 
-    });
+    res.json({ msg: "Agendamento realizado com sucesso!", agendamento: novoAgendamento });
 
   } catch (err) {
     console.error("Erro no /agendar:", err);
-    res.status(500).json({ 
-      success: false,
-      msg: "Erro interno no servidor" 
-    });
+    res.status(500).json({ msg: "Erro interno no servidor" });
   }
 });
-
-// 🆕 FUNÇÃO: Buscar trial do usuário (BACKEND)
-async function getUserTrialBackend(userId) {
-    try {
-        const { data, error } = await supabase
-            .from('user_trials')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-            
-        if (error) {
-            if (error.code === 'PGRST116') return null;
-            throw error;
-        }
-        
-        return data;
-    } catch (error) {
-        console.error('❌ Erro ao buscar trial (backend):', error);
-        return null;
-    }
-}
-
-// 🆕 FUNÇÃO: Verificar uso diário (BACKEND)  
-async function getDailyUsageBackend(trial, dailyLimit) {
-    if (!trial) return { dailyUsageCount: 0, dailyUsagesLeft: 0, lastUsageDate: null };
-    
-    const today = new Date().toISOString().split('T')[0];
-    const lastUsageDate = trial.last_usage_date ? new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-    
-    let dailyUsageCount = trial.daily_usage_count || 0;
-    
-    // Reset diário se for um novo dia
-// ✅ CORREÇÃO FÁCIL: Reset NO BANCO se for novo dia
-if (lastUsageDate !== today) {
-  dailyUsageCount = 0;
-  // 🔥 ADICIONE ESTA LINHA:
-  await supabase.from('user_trials').update({ daily_usage_count: 0 }).eq('user_id', user_id);
-}
-    
-    const dailyUsagesLeft = Math.max(0, dailyLimit - dailyUsageCount);
-    
-    return {
-        dailyUsageCount: dailyUsageCount,
-        dailyUsagesLeft: dailyUsagesLeft,
-        lastUsageDate: lastUsageDate
-    };
-}
 
 // 🔥 CONFIRMAR AGENDAMENTO CORRIGIDO
 app.post("/agendamentos/:email/confirmar/:id", authMiddleware, async (req, res) => {
@@ -2098,8 +1967,6 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
-
-
 
 
 
