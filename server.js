@@ -1061,7 +1061,7 @@ function usuarioPodeGerenciarAgendamento(agendamento, userId) {
 }
 
 
-// 🔥 AGENDAR COM CACHE CORRIGIDO - SEM CONFLITO COM TRIAL
+// 🔥 AGENDAR CORRIGIDO - SEM DUPLICAÇÃO DE USOS
 app.post("/agendar", authMiddleware, async (req, res) => {
   try {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
@@ -1072,9 +1072,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         msg: "Todos os campos obrigatórios" 
       });
 
-    // ✅ 1. PRIMEIRO VALIDA TUDO (sem incrementar uso)
-    
-    // Valida data no passado
+    // ✅ 1. VALIDAÇÕES INICIAIS
     const dataAgendamento = new Date(`${Data}T${Horario}`);
     const agora = new Date();
     if (dataAgendamento < agora) {
@@ -1084,7 +1082,6 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       });
     }
     
-    // Valida horário de funcionamento
     const validacaoHorario = await validarHorarioFuncionamento(req.userId, Data, Horario);
     if (!validacaoHorario.valido) {
       return res.status(400).json({ 
@@ -1092,12 +1089,12 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         msg: `Horário indisponível: ${validacaoHorario.motivo}` 
       });
     }
-    
-    // ✅ 2. VERIFICA CONFLITOS DIRETAMENTE NO BANCO (SEM CACHE)
+
+    // ✅ 2. VERIFICA CONFLITO APENAS UMA VEZ (DIRETO NO BANCO)
     const { data: conflito, error: conflitoError } = await supabase
       .from("agendamentos")
       .select("id")
-      .eq("cliente", req.userId)
+      .eq("user_id", req.userId)
       .eq("data", Data)
       .eq("horario", Horario)
       .neq("status", "cancelado")
@@ -1106,11 +1103,11 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     if (conflito && !conflitoError) {
       return res.status(400).json({ 
         success: false,
-        msg: "Você já possui um agendamento para esta data e horário" 
+        msg: "Horário indisponível" 
       });
     }
 
-    // ✅ 3. 🔥 VERIFICA E INCREMENTA USO (APÓS todas as validações)
+    // ✅ 3. VERIFICAÇÃO DE USO (APENAS UMA VEZ)
     const trial = await getUserTrialBackend(req.userId);
     if (trial && trial.status === 'active') {
       const today = new Date().toISOString().split('T')[0];
@@ -1119,14 +1116,12 @@ app.post("/agendar", authMiddleware, async (req, res) => {
       
       let dailyUsageCount = trial.daily_usage_count || 0;
       
-      // Reset se for novo dia
       if (lastUsageDate !== today) {
         dailyUsageCount = 0;
       }
       
       const dailyLimit = trial.max_usages || 5;
       
-      // ✅ VERIFICA SE TEM USOS DISPONÍVEIS
       if (dailyUsageCount >= dailyLimit) {
         return res.status(400).json({ 
           success: false,
@@ -1134,7 +1129,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         });
       }
       
-      // ✅ INCREMENTA USO (AGORA CORRETO - só se passou por todas as validações)
+      // ✅ INCREMENTA USO UMA ÚNICA VEZ
       dailyUsageCount += 1;
       
       const { error: updateError } = await supabase
@@ -1147,16 +1142,13 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         
       if (updateError) {
         console.error('❌ Erro ao atualizar uso:', updateError);
-        return res.status(500).json({ 
-          success: false,
-          msg: "Erro ao processar uso do trial" 
-        });
+        throw updateError;
       }
         
-      console.log(`✅ Uso REAL incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
+      console.log(`✅ Uso incrementado para ${req.userId}: ${dailyUsageCount}/${dailyLimit}`);
     }
 
-    // ✅ 4. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
+    // ✅ 4. CRIA AGENDAMENTO
     const userEmail = req.user?.email || Email || null;
     
     const { data: novoAgendamento, error } = await supabase
@@ -1177,7 +1169,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
 
     if (error) throw error;
 
-    // Atualiza Google Sheets
+    // ✅ 5. ATUALIZA SHEETS (OPCIONAL)
     try {
       const doc = await accessUserSpreadsheet(userEmail, req.user.user_metadata);
       if (doc) {
@@ -1194,13 +1186,12 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         
         await ensureDynamicHeaders(sheet, Object.keys(dadosSheets));
         await sheet.addRow(dadosSheets);
-        console.log(`✅ Agendamento salvo na planilha do usuário ${req.userId}`);
       }
     } catch (sheetError) {
       console.error("Erro ao atualizar Google Sheets:", sheetError);
     }
 
-    // 🔥 INVALIDA CACHE PARA FORÇAR ATUALIZAÇÃO
+    // ✅ 6. INVALIDA CACHE
     cacheManager.delete(`agendamentos_${req.userId}`);
     
     res.json({ 
@@ -2099,6 +2090,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
