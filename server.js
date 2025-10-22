@@ -92,49 +92,45 @@ async function enviarNotificacao(token, titulo, mensagem, dadosExtras = {}) {
 }
 
 
-// 🔥 ROTA TEMPORÁRIA ATUALIZADA
-app.post("/api/salvar-token-temp", async (req, res) => {
+// 🔥 ROTA SUPER SIMPLES - SEM AUTH, SEM COMPLICAÇÃO
+app.post("/api/salvar-token-simples", async (req, res) => {
   try {
-    const { push_token, device_name, user_email } = req.body;
+    const { push_token } = req.body;
     
-    if (!push_token) {
-      return res.status(400).json({ 
+    console.log('💾 SALVANDO TOKEN SIMPLES:', push_token);
+
+    // Criar entrada simples na tabela
+    const { data, error } = await supabase
+      .from('user_push_tokens')
+      .insert({
+        user_id: 'user-temp-' + Date.now(), // ID temporário único
+        push_token: push_token,
+        device_name: 'App Android',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.log('❌ Erro ao salvar:', error);
+      return res.status(500).json({ 
         success: false, 
-        msg: 'Token FCM é obrigatório' 
+        msg: 'Erro no banco: ' + error.message 
       });
     }
 
-    console.log('💾 Salvando token TEMPORÁRIO:', { user_email, push_token });
-
-    // Criar um ID temporário baseado no email ou token
-    const tempUserId = 'temp-' + (user_email || push_token.substring(0, 10));
-
-    const { data, error } = await supabase
-      .from('user_push_tokens')
-      .upsert({
-        user_id: tempUserId,
-        push_token: push_token,
-        device_name: device_name || 'Capacitor App (Temp)',
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'push_token'
-      });
-
-    if (error) throw error;
-
-    console.log('✅ Token salvo temporariamente');
+    console.log('✅ TOKEN SALVO COM SUCESSO!');
     
     res.json({ 
       success: true, 
-      msg: 'Token salvo temporariamente!',
-      temp_user_id: tempUserId
+      msg: 'Token salvo com sucesso!',
+      token_salvo: push_token
     });
     
   } catch (error) {
-    console.error('❌ Erro ao salvar token temp:', error);
+    console.error('❌ Erro geral:', error);
     res.status(500).json({ 
       success: false, 
-      msg: 'Erro ao salvar token temporário' 
+      msg: 'Erro interno: ' + error.message 
     });
   }
 });
@@ -2446,6 +2442,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
