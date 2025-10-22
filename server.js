@@ -2,9 +2,13 @@ import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import admin from "firebase-admin"; // 🔥 FALTANDO ESTE IMPORT
+import cron from 'node-cron';
 
 const PORT = process.env.PORT || 3000;
 const app = express();
+
+
 // ==================== MIDDLEWARES NA ORDEM CORRETA ====================
 // 1. CORS PRIMEIRO
 app.use(cors({
@@ -36,6 +40,8 @@ app.options('*', cors());
 // 2. BODY PARSER IMEDIATAMENTE DEPOIS (APENAS UMA VEZ!)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+
 
 // 🔥 ROTA PRODUÇÃO - SALVAR TOKEN (LOGS REDUZIDOS)
 app.post("/api/salvar-token-simples", (req, res) => {
@@ -84,6 +90,173 @@ app.post("/api/salvar-token-simples", (req, res) => {
     }
   });
 });
+
+// ==================== CONFIGURAÇÃO FIREBASE ADMIN ====================
+let firebaseInitialized = false;
+
+try {
+  const serviceAccount = {
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+  };
+
+  if (serviceAccount.project_id && serviceAccount.private_key && serviceAccount.client_email) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    
+    firebaseInitialized = true;
+    console.log('🚀 Firebase Admin inicializado com sucesso!');
+  } else {
+    console.log('📱 Firebase não configurado - Notificações desativadas');
+  }
+} catch (error) {
+  console.log('❌ Erro ao inicializar Firebase:', error.message);
+}
+
+// 🔥 FUNÇÃO DE NOTIFICAÇÃO PUSH
+async function enviarNotificacao(token, titulo, mensagem, dadosExtras = {}) {
+  try {
+    if (!firebaseInitialized) {
+      console.log('📱 Firebase não inicializado - Notificação ignorada');
+      return false;
+    }
+
+    if (!token || token === 'undefined' || token.length < 50) {
+      console.log('❌ Token FCM inválido');
+      return false;
+    }
+
+    const message = {
+      notification: {
+        title: titulo.substring(0, 50),
+        body: mensagem.substring(0, 150),
+      },
+      data: {
+        ...dadosExtras,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        sound: 'default'
+      },
+      token: token,
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          channel_id: 'high_importance_channel'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    console.log(`📤 Enviando notificação: "${titulo}"`);
+    
+    const response = await admin.messaging().send(message);
+    console.log('✅ Notificação entregue com sucesso!');
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Erro FCM:', error.message);
+    
+    if (error.code === 'messaging/registration-token-not-registered' || 
+        error.code === 'messaging/invalid-argument') {
+      console.log('🔄 Removendo token inválido...');
+      await removerTokenInvalido(token);
+    }
+    
+    return false;
+  }
+}
+
+// 🔥 FUNÇÃO AUXILIAR - REMOVER TOKEN INVÁLIDO
+async function removerTokenInvalido(token) {
+  try {
+    const { error } = await supabase
+      .from('user_push_tokens')
+      .delete()
+      .eq('push_token', token);
+      
+    if (!error) console.log('✅ Token inválido removido');
+  } catch (error) {
+    console.log('❌ Erro ao remover token:', error.message);
+  }
+}
+
+// ==================== SISTEMA DE LEMBRETES AUTOMÁTICOS ====================
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    if (!firebaseInitialized) return;
+
+    console.log('🔔 Verificando lembretes...');
+    
+    const agora = new Date();
+    const em30Minutos = new Date(agora.getTime() + 30 * 60000);
+    
+    // Busca agendamentos confirmados que acontecerão em ~30 minutos
+    const { data: agendamentos, error } = await supabase
+      .from('agendamentos')
+      .select(`
+        id,
+        nome,
+        data,
+        horario,
+        status,
+        user_id,
+        user_profiles:user_id (
+          push_token
+        )
+      `)
+      .eq('status', 'confirmado')
+      .eq('lembrete_enviado', false)
+      .gte('data', agora.toISOString().split('T')[0])
+      .lte('data', em30Minutos.toISOString().split('T')[0]);
+
+    if (error) throw error;
+
+    console.log(`📦 ${agendamentos?.length || 0} agendamentos para verificar`);
+
+    for (const agendamento of agendamentos || []) {
+      const horarioAgendamento = new Date(`${agendamento.data}T${agendamento.horario}`);
+      const diferencaMinutos = (horarioAgendamento - agora) / (1000 * 60);
+      
+      if (diferencaMinutos >= 25 && diferencaMinutos <= 35) {
+        const token = agendamento.user_profiles?.push_token;
+        
+        if (token) {
+          const sucesso = await enviarNotificacao(
+            token,
+            '🔔 Lembrete de Agendamento',
+            `Seu agendamento com ${agendamento.nome} é em 30 minutos (${agendamento.horario})`,
+            {
+              tipo: 'lembrete',
+              agendamento_id: agendamento.id.toString(),
+              acao: 'ver_agendamento'
+            }
+          );
+
+          if (sucesso) {
+            await supabase
+              .from('agendamentos')
+              .update({ lembrete_enviado: true })
+              .eq('id', agendamento.id);
+              
+            console.log(`✅ Lembrete enviado: ${agendamento.id}`);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erro no agendador:', error);
+  }
+});
+
 
 
 app.post("/agendamento-publico", async (req, res) => {
@@ -2153,6 +2326,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
