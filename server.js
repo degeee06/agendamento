@@ -2055,6 +2055,21 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
       return res.status(403).json({ msg: "Não autorizado" });
     }
 
+    // ✅ ADICIONE ESTA VERIFICAÇÃO DE LIMITE (ANTES de gerar o link)
+    const trial = await getUserTrialBackend(user_id);
+    if (trial && trial.status === 'active') {
+      const dailyLimit = trial.max_usages || 5;
+      const dailyUsage = await getDailyUsageBackend(trial, dailyLimit);
+      
+      // 🚫 BLOQUEIA se não tem usos disponíveis
+      if (dailyUsage.dailyUsagesLeft <= 0) {
+        return res.status(400).json({ 
+          success: false,
+          msg: `Limite diário atingido (${dailyLimit} usos). Os usos resetam à meia-noite.` 
+        });
+      }
+    }
+
     // 🆕 ADICIONE TIMESTAMP AO LINK (expira em 24h)
     const timestamp = Date.now();
     const link = `https://oubook.vercel.app/agendar.html?user_id=${user_id}&t=${timestamp}`;
@@ -2112,6 +2127,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
