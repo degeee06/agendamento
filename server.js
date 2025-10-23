@@ -2,6 +2,26 @@ import express from "express";
 import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import admin from 'firebase-admin';
+
+// ==================== CONFIGURAÇÃO FIREBASE ====================
+// Inicializar Firebase Admin com as variáveis do Render
+const firebaseConfig = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'), // Importante para quebras de linha
+};
+
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(firebaseConfig)
+    });
+    console.log('✅ Firebase Admin inicializado com sucesso');
+  } catch (error) {
+    console.error('❌ Erro ao inicializar Firebase Admin:', error.message);
+  }
+}
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -35,6 +55,7 @@ app.options('*', cors());
 
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
+
 
 app.post("/agendamento-publico", async (req, res) => {
   try {
@@ -170,30 +191,20 @@ if (trial && trial.status === 'active') {
 
     if (error) throw error;
 
+// 🔥 NOTIFICAÇÃO NO AGENDAMENTO PÚBLICO (substitua o bloco atual)
 try {
-  // Busca token FCM do prestador (dono do link público)
-  const { data: tokenData } = await supabase
-    .from('user_push_tokens')
-    .select('push_token')
-    .eq('user_id', user_id)
-    .single();
-
-  if (tokenData?.push_token) {
-    await enviarNotificacao(
-      tokenData.push_token,
-      '🎉 Novo Agendamento Público!',
-      `${nome} agendou via link para ${data} às ${horario}`,
-      {
-        tipo: 'novo_agendamento_publico',
-        agendamento_id: novoAgendamento.id.toString(),
-        acao: 'ver_detalhes',
-        origem: 'link_publico'
-      }
-    );
-    console.log('✅ Notificação de agendamento público enviada');
-  } else {
-    console.log('📱 Prestador não tem token FCM registrado para notificações');
-  }
+  await enviarNotificacaoParaUsuario(
+    user_id,
+    '🎉 Novo Agendamento Público!',
+    `${nome} agendou via link para ${data} às ${horario}`,
+    {
+      tipo: 'novo_agendamento_publico',
+      agendamento_id: novoAgendamento.id.toString(),
+      acao: 'ver_detalhes',
+      origem: 'link_publico',
+      cliente_nome: nome
+    }
+  );
 } catch (notifError) {
   console.error('❌ Erro na notificação pública:', notifError.message);
   // Não quebra o agendamento se a notificação falhar
@@ -294,54 +305,240 @@ const cacheManager = {
   }
 };
 
-// 🔥 ROTA PRODUÇÃO - SALVAR TOKEN (LOGS REDUZIDOS)
-app.post("/api/salvar-token-simples", (req, res) => {
-  let body = '';
-  req.on('data', chunk => {
-    body += chunk.toString();
-  });
-  
-  req.on('end', async () => {
-    try {
-      if (!body) {
-        return res.status(400).json({ success: false, msg: 'Body vazio' });
+// 🔥 FUNÇÃO COMPLETA PARA ENVIAR NOTIFICAÇÕES FCM
+async function enviarNotificacao(pushToken, titulo, mensagem, dadosExtras = {}) {
+  try {
+    if (!pushToken) {
+      console.log('❌ Token FCM não fornecido');
+      return false;
+    }
+
+    // Verifica se o Firebase está configurado
+    if (!admin.apps.length) {
+      console.log('❌ Firebase Admin não inicializado');
+      return false;
+    }
+
+    const message = {
+      token: pushToken,
+      notification: {
+        title: titulo,
+        body: mensagem,
+      },
+      data: {
+        ...dadosExtras,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        sound: 'default',
+        timestamp: new Date().toISOString()
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          channel_id: 'high_importance_channel',
+          icon: 'ic_notification',
+          color: '#FF6B35'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            alert: {
+              title: titulo,
+              body: mensagem
+            }
+          }
+        }
+      },
+      webpush: {
+        headers: {
+          Urgency: 'high'
+        }
       }
-      
-      const data = JSON.parse(body);
-      const push_token = data.push_token;
-      
-      if (!push_token) {
-        return res.status(400).json({ success: false, msg: 'push_token faltando' });
-      }
-      
-      console.log('💾 Salvando token FCM...');
-      
-      // Salvar no banco
-      const { error } = await supabase
+    };
+
+    console.log('📤 Enviando notificação FCM...', { 
+      token: pushToken.substring(0, 10) + '...',
+      titulo,
+      mensagem 
+    });
+
+    const response = await admin.messaging().send(message);
+    console.log('✅ Notificação enviada com sucesso:', response);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Erro ao enviar notificação FCM:', error);
+    
+    // Tratamento específico de erros comuns do FCM
+    if (error.code === 'messaging/registration-token-not-registered') {
+      console.log('🔄 Removendo token inválido/desregistrado:', pushToken);
+      await supabase
+        .from('user_push_tokens')
+        .delete()
+        .eq('push_token', pushToken);
+    } else if (error.code === 'messaging/invalid-argument') {
+      console.log('❌ Token FCM inválido:', pushToken);
+    } else if (error.code === 'messaging/internal-error') {
+      console.log('❌ Erro interno do FCM');
+    }
+    
+    return false;
+  }
+}
+
+
+// 🔥 ROTA MELHORADA PARA SALVAR TOKEN FCM
+app.post("/api/salvar-token-simples", async (req, res) => {
+  try {
+    const { push_token, user_id, device_name, platform } = req.body;
+    
+    if (!push_token) {
+      return res.status(400).json({ success: false, msg: 'push_token é obrigatório' });
+    }
+
+    console.log('💾 Salvando token FCM:', { 
+      user_id, 
+      device_name, 
+      token_preview: push_token.substring(0, 20) + '...' 
+    });
+
+    // Verificar se o token já existe
+    const { data: existingToken } = await supabase
+      .from('user_push_tokens')
+      .select('id')
+      .eq('push_token', push_token)
+      .single();
+
+    let result;
+    if (existingToken) {
+      // Atualizar token existente
+      result = await supabase
+        .from('user_push_tokens')
+        .update({
+          user_id: user_id || null,
+          device_name: device_name || 'Dispositivo Desconhecido',
+          platform: platform || 'android',
+          updated_at: new Date().toISOString()
+        })
+        .eq('push_token', push_token);
+    } else {
+      // Inserir novo token
+      result = await supabase
         .from('user_push_tokens')
         .insert({
-          user_id: null,
+          user_id: user_id || null,
           push_token: push_token,
-          device_name: 'App Android',
+          device_name: device_name || 'Dispositivo Desconhecido',
+          platform: platform || 'android',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
-      
-      if (error) {
-        console.log('❌ Erro ao salvar token:', error.message);
-        return res.status(500).json({ success: false, msg: 'Erro no servidor' });
-      }
-      
-      console.log('✅ Token salvo com sucesso');
-      res.json({ success: true, msg: 'Token salvo!' });
-      
-    } catch (error) {
-      console.log('❌ Erro na rota:', error.message);
-      res.status(500).json({ success: false, msg: 'Erro interno' });
     }
-  });
+
+    if (result.error) {
+      console.log('❌ Erro ao salvar token:', result.error.message);
+      return res.status(500).json({ success: false, msg: 'Erro ao salvar token' });
+    }
+
+    console.log('✅ Token salvo/atualizado com sucesso');
+    res.json({ 
+      success: true, 
+      msg: 'Token registrado!',
+      action: existingToken ? 'updated' : 'created'
+    });
+    
+  } catch (error) {
+    console.log('❌ Erro na rota salvar-token:', error.message);
+    res.status(500).json({ success: false, msg: 'Erro interno do servidor' });
+  }
 });
 
+
+// 🔥 ROTA DE TESTE PARA NOTIFICAÇÕES (apenas desenvolvimento)
+app.post("/api/testar-notificacao", authMiddleware, async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (process.env.NODE_ENV !== 'development') {
+      return res.status(403).json({ success: false, msg: 'Apenas em desenvolvimento' });
+    }
+
+    const testToken = token || (await supabase
+      .from('user_push_tokens')
+      .select('push_token')
+      .eq('user_id', req.userId)
+      .single()).data?.push_token;
+
+    if (!testToken) {
+      return res.status(400).json({ success: false, msg: 'Nenhum token encontrado' });
+    }
+
+    const sucesso = await enviarNotificacao(
+      testToken,
+      '🔔 Teste de Notificação',
+      'Esta é uma notificação de teste do seu backend! 🎉',
+      {
+        tipo: 'teste',
+        timestamp: new Date().toISOString(),
+        acao: 'testar'
+      }
+    );
+
+    res.json({
+      success: sucesso,
+      msg: sucesso ? 'Notificação de teste enviada!' : 'Falha ao enviar notificação',
+      token_usado: testToken.substring(0, 20) + '...'
+    });
+
+  } catch (error) {
+    console.error('❌ Erro no teste de notificação:', error);
+    res.status(500).json({ success: false, msg: 'Erro no teste' });
+  }
+});
+
+    
+// 🔥 ENVIAR NOTIFICAÇÃO PARA MÚLTIPLOS DISPOSITIVOS DE UM USUÁRIO
+async function enviarNotificacaoParaUsuario(userId, titulo, mensagem, dadosExtras = {}) {
+  try {
+    // Buscar todos os tokens do usuário
+    const { data: tokens, error } = await supabase
+      .from('user_push_tokens')
+      .select('push_token, device_name')
+      .eq('user_id', userId);
+
+    if (error || !tokens || tokens.length === 0) {
+      console.log('📱 Nenhum token encontrado para o usuário:', userId);
+      return false;
+    }
+
+    console.log(`📤 Enviando notificação para ${tokens.length} dispositivo(s) do usuário ${userId}`);
+
+    const promises = tokens.map(tokenData => 
+      enviarNotificacao(
+        tokenData.push_token, 
+        titulo, 
+        mensagem, 
+        {
+          ...dadosExtras,
+          device: tokenData.device_name
+        }
+      )
+    );
+
+    const results = await Promise.allSettled(promises);
+    const sucessos = results.filter(result => result.status === 'fulfilled' && result.value).length;
+
+    console.log(`✅ Notificações enviadas: ${sucessos}/${tokens.length} sucessos`);
+    return sucessos > 0;
+    
+  } catch (error) {
+    console.error('❌ Erro ao enviar notificações para usuário:', error);
+    return false;
+  }
+}
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -1271,32 +1468,22 @@ app.post("/agendar", authMiddleware, async (req, res) => {
         }
     }
 
-    // 🔥🔥🔥 NOTIFICAÇÃO (mantém igual)
-    try {
-      const { data: tokenData } = await supabase
-        .from('user_push_tokens')
-        .select('push_token')
-        .eq('user_id', req.userId)
-        .single();
-
-      if (tokenData?.push_token) {
-        await enviarNotificacao(
-          tokenData.push_token,
-          '🎉 Novo Agendamento!',
-          `${Nome} agendou para ${Data} às ${Horario}`,
-          {
-            tipo: 'novo_agendamento',
-            agendamento_id: novoAgendamento.id.toString(),
-            acao: 'ver_detalhes'
-          }
-        );
-        console.log('✅ Notificação enviada para o prestador');
-      } else {
-        console.log('📱 Prestador não tem token FCM registrado');
-      }
-    } catch (notifError) {
-      console.error('❌ Erro na notificação:', notifError.message);
+  // 🔥 NOTIFICAÇÃO NO AGENDAMENTO NORMAL (substitua o bloco atual)
+try {
+  await enviarNotificacaoParaUsuario(
+    req.userId,
+    '🎉 Novo Agendamento!',
+    `${Nome} agendou para ${Data} às ${Horario}`,
+    {
+      tipo: 'novo_agendamento',
+      agendamento_id: novoAgendamento.id.toString(),
+      acao: 'ver_detalhes',
+      cliente_nome: Nome
     }
+  );
+} catch (notifError) {
+  console.error('❌ Erro na notificação:', notifError.message);
+}
     
     // Atualiza Google Sheets
     try {
@@ -2261,7 +2448,11 @@ app.listen(PORT, () => {
   console.log('🤖 DeepSeek IA: ' + (DEEPSEEK_API_KEY ? 'CONFIGURADA' : 'NÃO CONFIGURADA'));
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
+   console.log(`🚀 Backend rodando na porta ${PORT}`);
+  console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
+  console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
