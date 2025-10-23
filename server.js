@@ -265,6 +265,54 @@ const cacheManager = {
   }
 };
 
+// 🔥 ROTA PRODUÇÃO - SALVAR TOKEN (LOGS REDUZIDOS)
+app.post("/api/salvar-token-simples", (req, res) => {
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk.toString();
+  });
+  
+  req.on('end', async () => {
+    try {
+      if (!body) {
+        return res.status(400).json({ success: false, msg: 'Body vazio' });
+      }
+      
+      const data = JSON.parse(body);
+      const push_token = data.push_token;
+      
+      if (!push_token) {
+        return res.status(400).json({ success: false, msg: 'push_token faltando' });
+      }
+      
+      console.log('💾 Salvando token FCM...');
+      
+      // Salvar no banco
+      const { error } = await supabase
+        .from('user_push_tokens')
+        .insert({
+          user_id: null,
+          push_token: push_token,
+          device_name: 'App Android',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        console.log('❌ Erro ao salvar token:', error.message);
+        return res.status(500).json({ success: false, msg: 'Erro no servidor' });
+      }
+      
+      console.log('✅ Token salvo com sucesso');
+      res.json({ success: true, msg: 'Token salvo!' });
+      
+    } catch (error) {
+      console.log('❌ Erro na rota:', error.message);
+      res.status(500).json({ success: false, msg: 'Erro interno' });
+    }
+  });
+});
+
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -2127,6 +2175,7 @@ app.listen(PORT, () => {
   console.log('📊 Use /health para status completo');
   console.log('🔥 Use /warmup para manter instância ativa');
 });
+
 
 
 
