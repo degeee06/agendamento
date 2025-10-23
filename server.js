@@ -1139,7 +1139,10 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const { Nome, Email, Telefone, Data, Horario } = req.body;
     
     if (!Nome || !Telefone || !Data || !Horario)
-      return res.status(400).json({ msg: "Todos os campos obrigatórios" });
+      return res.status(400).json({ 
+        success: false,
+        msg: "Todos os campos obrigatórios" 
+      });
 
     // ✅ 1. PRIMEIRO VALIDA TUDO (sem incrementar uso)
     
@@ -1157,6 +1160,7 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     const validacaoHorario = await validarHorarioFuncionamento(req.userId, Data, Horario);
     if (!validacaoHorario.valido) {
       return res.status(400).json({ 
+        success: false,
         msg: `Horário indisponível: ${validacaoHorario.motivo}` 
       });
     }
@@ -1181,45 +1185,35 @@ app.post("/agendar", authMiddleware, async (req, res) => {
     
     if (conflito) {
       return res.status(400).json({ 
+        success: false,
         msg: "Você já possui um agendamento para esta data e horário" 
       });
     }
 
-// ✅ INCREMENTO CORRETO - USA APENAS daily_usage_count
-const trial = await getUserTrialBackend(req.userId);
-if (trial && trial.status === 'active') {
-    const today = new Date().toISOString().split('T')[0];
-    const lastUsageDate = trial.last_usage_date ? 
-        new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
-    
-    let dailyUsageCount = trial.daily_usage_count || 0;
-    
-    if (lastUsageDate !== today) {
-        dailyUsageCount = 0;
-    }
-    
-    const dailyLimit = trial.max_usages || 5;
-    
-    if (dailyUsageCount >= dailyLimit) {
-        return res.status(400).json({ 
-            success: false,
-            msg: `Limite diário atingido (${dailyLimit} usos).` 
-        });
-    }
-    
-    // ✅ INCREMENTA APENAS daily_usage_count (COLUNA CORRETA)
-    await supabase
-        .from('user_trials')
-        .update({
-            daily_usage_count: dailyUsageCount + 1,
-            last_usage_date: new Date().toISOString()
-        })
-        .eq('user_id', req.userId);
+    // ✅ 2. VERIFICA LIMITE DE USO (sem incrementar ainda)
+    const trial = await getUserTrialBackend(req.userId);
+    if (trial && trial.status === 'active') {
+        const today = new Date().toISOString().split('T')[0];
+        const lastUsageDate = trial.last_usage_date ? 
+            new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
         
-    console.log(`✅ daily_usage_count atualizado: ${dailyUsageCount} → ${dailyUsageCount + 1}`);
-}
+        let dailyUsageCount = trial.daily_usage_count || 0;
+        
+        if (lastUsageDate !== today) {
+            dailyUsageCount = 0;
+        }
+        
+        const dailyLimit = trial.max_usages || 5;
+        
+        if (dailyUsageCount >= dailyLimit) {
+            return res.status(400).json({ 
+                success: false,
+                msg: `Limite diário atingido (${dailyLimit} usos).` 
+            });
+        }
+    }
 
-    // ✅ 3. CRIA O AGENDAMENTO (se chegou até aqui, tudo validado)
+    // ✅ 3. CRIA O AGENDAMENTO PRIMEIRO (se todas as validações passaram)
     const userEmail = req.user?.email || Email || null;
     
     const { data: novoAgendamento, error } = await supabase
@@ -1238,36 +1232,71 @@ if (trial && trial.status === 'active') {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Erro ao criar agendamento:", error);
+      return res.status(500).json({ 
+        success: false,
+        msg: "Erro interno ao criar agendamento" 
+      });
+    }
 
-   // 🔥🔥🔥 ADICIONE ESTE BLOCO DE NOTIFICAÇÃO AQUI
-try {
-  // Busca token FCM do prestador (dono do negócio)
-  const { data: tokenData } = await supabase
-    .from('user_push_tokens')
-    .select('push_token')
-    .eq('user_id', req.userId)
-    .single();
+    console.log('✅ Agendamento criado com sucesso:', novoAgendamento.id);
 
-  if (tokenData?.push_token) {
-    await enviarNotificacao(
-      tokenData.push_token,
-      '🎉 Novo Agendamento!',
-      `${Nome} agendou para ${Data} às ${Horario}`,
-      {
-        tipo: 'novo_agendamento',
-        agendamento_id: novoAgendamento.id.toString(),
-        acao: 'ver_detalhes'
+    // ✅ 4. SÓ AQUI INCREMENTA O USO (depois que agendamento foi criado)
+    if (trial && trial.status === 'active') {
+        const today = new Date().toISOString().split('T')[0];
+        const lastUsageDate = trial.last_usage_date ? 
+            new Date(trial.last_usage_date).toISOString().split('T')[0] : null;
+        
+        let dailyUsageCount = trial.daily_usage_count || 0;
+        
+        if (lastUsageDate !== today) {
+            dailyUsageCount = 0;
+        }
+        
+        // ✅ INCREMENTA APENAS daily_usage_count (COLUNA CORRETA)
+        const { error: updateError } = await supabase
+            .from('user_trials')
+            .update({
+                daily_usage_count: dailyUsageCount + 1,
+                last_usage_date: new Date().toISOString()
+            })
+            .eq('user_id', req.userId);
+
+        if (updateError) {
+            console.error('❌ Erro ao incrementar uso:', updateError);
+            // Não quebra o agendamento se o incremento falhar
+        } else {
+            console.log(`✅ daily_usage_count atualizado: ${dailyUsageCount} → ${dailyUsageCount + 1}`);
+        }
+    }
+
+    // 🔥🔥🔥 NOTIFICAÇÃO (mantém igual)
+    try {
+      const { data: tokenData } = await supabase
+        .from('user_push_tokens')
+        .select('push_token')
+        .eq('user_id', req.userId)
+        .single();
+
+      if (tokenData?.push_token) {
+        await enviarNotificacao(
+          tokenData.push_token,
+          '🎉 Novo Agendamento!',
+          `${Nome} agendou para ${Data} às ${Horario}`,
+          {
+            tipo: 'novo_agendamento',
+            agendamento_id: novoAgendamento.id.toString(),
+            acao: 'ver_detalhes'
+          }
+        );
+        console.log('✅ Notificação enviada para o prestador');
+      } else {
+        console.log('📱 Prestador não tem token FCM registrado');
       }
-    );
-    console.log('✅ Notificação enviada para o prestador');
-  } else {
-    console.log('📱 Prestador não tem token FCM registrado');
-  }
-} catch (notifError) {
-  console.error('❌ Erro na notificação:', notifError.message);
-  // Não quebra o agendamento se a notificação falhar
-}
+    } catch (notifError) {
+      console.error('❌ Erro na notificação:', notifError.message);
+    }
     
     // Atualiza Google Sheets
     try {
