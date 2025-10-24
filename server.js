@@ -2443,6 +2443,158 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
   }
 });
 
+// 🔔 SISTEMA DE LEMBRETES AUTOMÁTICOS
+app.get("/api/lembretes-diarios", async (req, res) => {
+  try {
+    const hoje = new Date().toISOString().split('T')[0];
+    console.log(`🔔 Executando lembretes para: ${hoje}`);
+    
+    // Buscar agendamentos de HOJE que estão confirmados ou pendentes
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("data", hoje)
+      .in("status", ["confirmado", "pendente"])
+      .neq("status", "cancelado");
+
+    if (error) {
+      console.error("❌ Erro ao buscar agendamentos:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    if (!agendamentos || agendamentos.length === 0) {
+      console.log("📭 Nenhum agendamento para lembrete hoje");
+      return res.json({ 
+        success: true, 
+        message: "Nenhum agendamento para notificar hoje",
+        total: 0 
+      });
+    }
+
+    console.log(`📨 Enviando lembretes para ${agendamentos.length} agendamentos`);
+
+    // Enviar notificações
+    const resultados = [];
+    for (const agendamento of agendamentos) {
+      try {
+        const sucesso = await enviarNotificacaoParaUsuario(
+          agendamento.cliente,
+          '🔔 Lembrete de Agendamento Hoje!',
+          `Você tem agendamento com ${agendamento.nome} às ${agendamento.horario}`,
+          { 
+            tipo: 'lembrete_agendamento', 
+            agendamento_id: agendamento.id.toString(),
+            data: agendamento.data,
+            horario: agendamento.horario,
+            cliente_nome: agendamento.nome,
+            acao: 'ver_agenda'
+          }
+        );
+
+        resultados.push({
+          agendamento_id: agendamento.id,
+          cliente: agendamento.cliente,
+          horario: agendamento.horario,
+          sucesso: sucesso
+        });
+
+        // Pequeno delay para não sobrecarregar o FCM
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.error(`❌ Erro no agendamento ${agendamento.id}:`, error);
+        resultados.push({
+          agendamento_id: agendamento.id,
+          sucesso: false,
+          erro: error.message
+        });
+      }
+    }
+
+    const sucessos = resultados.filter(r => r.sucesso).length;
+    console.log(`✅ Lembretes enviados: ${sucessos}/${agendamentos.length} com sucesso`);
+
+    res.json({
+      success: true,
+      message: `Lembretes processados: ${sucessos} enviados, ${agendamentos.length - sucessos} falhas`,
+      total_agendamentos: agendamentos.length,
+      notificacoes_enviadas: sucessos,
+      detalhes: resultados
+    });
+
+  } catch (error) {
+    console.error("❌ Erro geral no sistema de lembretes:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 🔔 LEMBRETES PARA AGENDAMENTOS DE AMANHÃ
+app.get("/api/lembretes-amanha", async (req, res) => {
+  try {
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    const amanhaStr = amanha.toISOString().split('T')[0];
+    
+    console.log(`🔔 Executando lembretes para amanhã: ${amanhaStr}`);
+    
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("data", amanhaStr)
+      .in("status", ["confirmado", "pendente"])
+      .neq("status", "cancelado");
+
+    if (error) throw error;
+
+    if (!agendamentos || agendamentos.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: "Nenhum agendamento para notificar amanhã",
+        total: 0 
+      });
+    }
+
+    const resultados = [];
+    for (const agendamento of agendamentos) {
+      const sucesso = await enviarNotificacaoParaUsuario(
+        agendamento.cliente,
+        '📅 Lembrete para Amanhã!',
+        `Você tem agendamento com ${agendamento.nome} amanhã às ${agendamento.horario}`,
+        { 
+          tipo: 'lembrete_amanha', 
+          agendamento_id: agendamento.id.toString(),
+          data: agendamento.data,
+          horario: agendamento.horario,
+          cliente_nome: agendamento.nome
+        }
+      );
+      
+      resultados.push({
+        agendamento_id: agendamento.id,
+        sucesso: sucesso
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    const sucessos = resultados.filter(r => r.sucesso).length;
+    
+    res.json({
+      success: true,
+      message: `Lembretes para amanhã: ${sucessos} enviados`,
+      total: agendamentos.length,
+      enviados: sucessos
+    });
+
+  } catch (error) {
+    console.error("❌ Erro em lembretes para amanhã:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 🔥 NOVA FUNÇÃO: Atualizar estrutura da tabela perfis_negocio
 async function atualizarEstruturaPerfis() {
   try {
@@ -2486,6 +2638,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
