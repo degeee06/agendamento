@@ -56,6 +56,28 @@ app.options('*', cors());
 // 🔥🔥🔥 AGORA SIM, O RESTO DO CÓDIGO 🔥🔥🔥
 app.use(express.json());
 
+// 🔥 ENDPOINT DE DEBUG - Adicione ao seu backend
+app.get("/api/debug-tokens", authMiddleware, async (req, res) => {
+  try {
+    const { data: tokens, error } = await supabase
+      .from('user_push_tokens')
+      .select('*')
+      .eq('user_id', req.userId);
+
+    console.log('🔍 DEBUG Tokens para userId:', req.userId, tokens);
+
+    res.json({
+      success: true,
+      userId: req.userId,
+      userEmail: req.user.email,
+      tokens: tokens || [],
+      total: tokens?.length || 0
+    });
+  } catch (error) {
+    console.error('❌ Erro no debug tokens:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 app.post("/agendamento-publico", async (req, res) => {
   try {
@@ -2452,6 +2474,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
