@@ -2446,20 +2446,20 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
 // 🔔 SISTEMA DE LEMBRETES AUTOMÁTICOS
 app.get("/api/lembretes-diarios", async (req, res) => {
   try {
-    // 🛡️ VERIFICA SE É HORÁRIO DE EXECUTAR (8h da manhã)
-    const agora = new Date();
-    const hora = agora.getHours();
-    
-    // Só executa entre 8h e 8h59
-    if (hora !== 8) {
-      console.log(`⏰ Não é horário de lembrete (agora são ${hora}h)`);
-      return res.json({ 
-        success: true, 
-        message: `Lembretes só executam às 8h (agora: ${hora}h)`,
-        executado: false 
-      });
-    }
+   // 🛡️ VERIFICA SE É HORÁRIO DE EXECUTAR (8h da manhã BRASÍLIA)
+const agora = new Date();
+const horaUTC = agora.getUTCHours();
+const horaBrasilia = (horaUTC - 3 + 24) % 24; // Ajuste para UTC-3 (Brasília)
 
+// Só executa entre 8h e 8h59 (horário Brasil)
+if (horaBrasilia !== 8) {
+  console.log(`⏰ Não é horário de lembrete (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
+  return res.json({ 
+    success: true, 
+    message: `Lembretes só executam às 8h BR (agora: ${horaBrasilia}h BR)`,
+    executado: false 
+  });
+}
     const hoje = new Date().toISOString().split('T')[0];
     console.log(`🔔 Executando lembretes para: ${hoje}`);
     
@@ -2550,19 +2550,20 @@ app.get("/api/lembretes-diarios", async (req, res) => {
 // 🔔 LEMBRETES PARA AGENDAMENTOS DE AMANHÃ
 app.get("/api/lembretes-amanha", async (req, res) => {
   try {
-    // 🛡️ VERIFICA SE É HORÁRIO DE EXECUTAR (18h da tarde)
-    const agora = new Date();
-    const hora = agora.getHours();
-    
-    // Só executa entre 18h e 18h59
-    if (hora !== 18) {
-      console.log(`⏰ Não é horário de lembrete amanhã (agora são ${hora}h)`);
-      return res.json({ 
-        success: true, 
-        message: `Lembretes amanhã só executam às 18h (agora: ${hora}h)`,
-        executado: false 
-      });
-    }
+   // 🛡️ VERIFICA SE É HORÁRIO DE EXECUTAR (18h da tarde BRASÍLIA)
+const agora = new Date();
+const horaUTC = agora.getUTCHours();
+const horaBrasilia = (horaUTC - 3 + 24) % 24; // Ajuste para UTC-3
+
+// Só executa entre 18h e 18h59 (horário Brasil)
+if (horaBrasilia !== 18) {
+  console.log(`⏰ Não é horário de lembrete amanhã (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
+  return res.json({ 
+    success: true, 
+    message: `Lembretes amanhã só executam às 18h BR (agora: ${horaBrasilia}h BR)`,
+    executado: false 
+  });
+}
 
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
@@ -2668,6 +2669,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
