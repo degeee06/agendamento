@@ -1573,7 +1573,8 @@ async function getUserTrialBackend(userId) {
     }
 }
 
-// 🆕 FUNÇÃO: Verificar uso diário (BACKEND)  
+
+// 🆕 FUNÇÃO: Verificar uso diário (BACKEND) - CORRIGIDA
 async function getDailyUsageBackend(trial, dailyLimit) {
     if (!trial) return { dailyUsageCount: 0, dailyUsagesLeft: 0, lastUsageDate: null };
     
@@ -1582,9 +1583,20 @@ async function getDailyUsageBackend(trial, dailyLimit) {
     
     let dailyUsageCount = trial.daily_usage_count || 0;
     
-    // Reset diário se for um novo dia
+    // 🎯 CORREÇÃO: Se for um novo dia, RESETA NO BANCO DE DADOS também
     if (lastUsageDate !== today) {
         dailyUsageCount = 0;
+        
+        // ✅ ATUALIZA NO BANCO para persistir o reset
+        await supabase
+            .from('user_trials')
+            .update({
+                daily_usage_count: 0,
+                last_usage_date: new Date().toISOString()
+            })
+            .eq('user_id', trial.user_id);
+            
+        console.log(`🔄 Reset diário executado para usuário ${trial.user_id}`);
     }
     
     const dailyUsagesLeft = Math.max(0, dailyLimit - dailyUsageCount);
@@ -2474,6 +2486,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
