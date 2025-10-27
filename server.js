@@ -2443,33 +2443,36 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔔 SISTEMA DE LEMBRETES AUTOMÁTICOS
+// 🔔 LEMBRETES DIÁRIOS - VERSÃO CORRIGIDA
 app.get("/api/lembretes-diarios", async (req, res) => {
+  let agendamentosNotificados = [];
+  
   try {
-   // 🛡️ VERIFICA SE É HORÁRIO DE EXECUTAR (8h da manhã BRASÍLIA)
-const agora = new Date();
-const horaUTC = agora.getUTCHours();
-const horaBrasilia = (horaUTC - 3 + 24) % 24; // Ajuste para UTC-3 (Brasília)
+    // 🛡️ VERIFICAÇÃO DE HORÁRIO
+    const agora = new Date();
+    const horaUTC = agora.getUTCHours();
+    const horaBrasilia = (horaUTC - 3 + 24) % 24;
 
-// Só executa entre 8h e 8h59 (horário Brasil)
-if (horaBrasilia !== 8) {
-  console.log(`⏰ Não é horário de lembrete (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
-  return res.json({ 
-    success: true, 
-    message: `Lembretes só executam às 8h BR (agora: ${horaBrasilia}h BR)`,
-    executado: false 
-  });
-}
+    if (horaBrasilia !== 8) {
+      console.log(`⏰ Fora do horário (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
+      return res.json({ 
+        success: true, 
+        message: `Lembretes às 8h BR (agora: ${horaBrasilia}h)`,
+        executado: false 
+      });
+    }
+
     const hoje = new Date().toISOString().split('T')[0];
-    console.log(`🔔 Executando lembretes para: ${hoje}`);
+    console.log(`🔔 Iniciando lembretes para: ${hoje}`);
     
-    // Buscar agendamentos de HOJE que estão confirmados ou pendentes
+    // 🔍 BUSCAR AGENDAMENTOS NÃO NOTIFICADOS
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
-      .select("*")
+      .select("id, cliente, nome, horario, data, status")
       .eq("data", hoje)
       .in("status", ["confirmado", "pendente"])
-      .neq("status", "cancelado");
+      .neq("status", "cancelado")
+      .is("notificado_hoje", null);
 
     if (error) {
       console.error("❌ Erro ao buscar agendamentos:", error);
@@ -2477,7 +2480,7 @@ if (horaBrasilia !== 8) {
     }
 
     if (!agendamentos || agendamentos.length === 0) {
-      console.log("📭 Nenhum agendamento para lembrete hoje");
+      console.log("📭 Nenhum agendamento para notificar hoje");
       return res.json({ 
         success: true, 
         message: "Nenhum agendamento para notificar hoje",
@@ -2485,102 +2488,186 @@ if (horaBrasilia !== 8) {
       });
     }
 
-    console.log(`📨 Enviando lembretes para ${agendamentos.length} agendamentos`);
+    console.log(`📨 Encontrados ${agendamentos.length} agendamentos não notificados`);
 
-    // Enviar notificações
+    // 🔥 AGRUPAMENTO CORRETO POR CLIENTE
+    const agendamentosPorCliente = {};
+    
+    agendamentos.forEach(agendamento => {
+      const clienteId = agendamento.cliente;
+      if (!agendamentosPorCliente[clienteId]) {
+        agendamentosPorCliente[clienteId] = [];
+      }
+      agendamentosPorCliente[clienteId].push(agendamento);
+    });
+
+    console.log(`👥 ${Object.keys(agendamentosPorCliente).length} clientes para notificar`);
+
     const resultados = [];
-    for (const agendamento of agendamentos) {
+    const clientesNotificados = new Set();
+
+    // 📱 ENVIAR NOTIFICAÇÕES AGRUPADAS
+    for (const [clienteId, agendamentosCliente] of Object.entries(agendamentosPorCliente)) {
+      // ⚠️ VERIFICAR DUPLICATA DURANTE EXECUÇÃO
+      if (clientesNotificados.has(clienteId)) {
+        console.log(`⚠️ Cliente ${clienteId} já notificado nesta execução, pulando...`);
+        continue;
+      }
+
       try {
-        const sucesso = await enviarNotificacaoParaUsuario(
-          agendamento.cliente,
-          '🔔 Lembrete de Agendamento Hoje!',
-          `Você tem agendamento com ${agendamento.nome} às ${agendamento.horario}`,
-          { 
-            tipo: 'lembrete_agendamento', 
+        console.log(`📱 Notificando cliente ${clienteId} com ${agendamentosCliente.length} agendamento(s)`);
+        
+        let titulo, mensagem, dados;
+        const idsParaMarcar = agendamentosCliente.map(a => a.id);
+
+        if (agendamentosCliente.length === 1) {
+          // 📅 CASO INDIVIDUAL
+          const agendamento = agendamentosCliente[0];
+          titulo = '🔔 Lembrete de Agendamento Hoje!';
+          mensagem = `Você tem agendamento com ${agendamento.nome} às ${agendamento.horario}`;
+          dados = {
+            tipo: 'lembrete_agendamento',
             agendamento_id: agendamento.id.toString(),
             data: agendamento.data,
-            horario: agendamento.horario,
-            cliente_nome: agendamento.nome,
-            acao: 'ver_agenda'
-          }
-        );
+            horario: agendamento.horario
+          };
+        } else {
+          // 📅 CASO MÚLTIPLOS
+          const horariosFormatados = agendamentosCliente
+            .sort((a, b) => a.horario.localeCompare(b.horario))
+            .map(a => `• ${a.horario} - ${a.nome}`)
+            .join('\n');
+          
+          titulo = `📅 Você tem ${agendamentosCliente.length} agendamentos hoje!`;
+          mensagem = `Seus agendamentos de hoje:\n${horariosFormatados}`;
+          dados = {
+            tipo: 'lembrete_multiplos',
+            total_agendamentos: agendamentosCliente.length.toString(),
+            data: hoje
+          };
+        }
+
+        // 🚀 ENVIAR NOTIFICAÇÃO
+        const sucesso = await enviarNotificacaoParaUsuario(clienteId, titulo, mensagem, dados);
+        
+        if (sucesso) {
+          // ✅ MARCAR COMO NOTIFICADO IMEDIATAMENTE
+          agendamentosNotificados.push(...idsParaMarcar);
+          clientesNotificados.add(clienteId);
+          
+          console.log(`✅ Cliente ${clienteId} notificado com sucesso (${agendamentosCliente.length} agendamentos)`);
+        } else {
+          console.log(`❌ Falha ao notificar cliente ${clienteId}`);
+        }
 
         resultados.push({
-          agendamento_id: agendamento.id,
-          cliente: agendamento.cliente,
-          horario: agendamento.horario,
-          sucesso: sucesso
+          cliente_id: clienteId,
+          sucesso: sucesso,
+          tipo: agendamentosCliente.length === 1 ? 'individual' : 'agrupada',
+          total_agendamentos: agendamentosCliente.length
         });
 
-        // Pequeno delay para não sobrecarregar o FCM
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // ⏰ DELAY ENTRE CLIENTES
+        await new Promise(resolve => setTimeout(resolve, 300));
         
       } catch (error) {
-        console.error(`❌ Erro no agendamento ${agendamento.id}:`, error);
-        resultados.push({
-          agendamento_id: agendamento.id,
-          sucesso: false,
-          erro: error.message
+        console.error(`💥 Erro grave no cliente ${clienteId}:`, error);
+        resultados.push({ 
+          cliente_id: clienteId, 
+          sucesso: false, 
+          erro: error.message 
         });
       }
     }
 
+    // 💾 ATUALIZAR BANCO DE DADOS - CRÍTICO
+    if (agendamentosNotificados.length > 0) {
+      try {
+        console.log(`💾 Marcando ${agendamentosNotificados.length} agendamentos como notificados...`);
+        
+        const { error: updateError } = await supabase
+          .from("agendamentos")
+          .update({ 
+            notificado_hoje: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .in("id", agendamentosNotificados);
+
+        if (updateError) {
+          console.error("❌ Erro crítico ao atualizar notificações:", updateError);
+          throw updateError;
+        }
+        
+        console.log(`✅ ${agendamentosNotificados.length} agendamentos marcados como notificados`);
+      } catch (updateError) {
+        console.error("💥 Falha crítica ao salvar no banco:", updateError);
+        // Não fazemos throw para não quebrar a resposta
+      }
+    }
+
+    const totalClientes = Object.keys(agendamentosPorCliente).length;
     const sucessos = resultados.filter(r => r.sucesso).length;
-    console.log(`✅ Lembretes enviados: ${sucessos}/${agendamentos.length} com sucesso`);
+    
+    console.log(`🎯 RESUMO: ${sucessos}/${totalClientes} clientes notificados com sucesso`);
 
     res.json({
       success: true,
-      message: `Lembretes processados: ${sucessos} enviados, ${agendamentos.length - sucessos} falhas`,
+      message: `Lembretes enviados para ${sucessos} clientes`,
       total_agendamentos: agendamentos.length,
+      total_clientes: totalClientes,
       notificacoes_enviadas: sucessos,
+      agendamentos_marcados_como_notificados: agendamentosNotificados.length,
       detalhes: resultados
     });
 
   } catch (error) {
-    console.error("❌ Erro geral no sistema de lembretes:", error);
+    console.error("💥 ERRO GERAL NO SISTEMA DE LEMBRETES:", error);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message,
+      agendamentos_notificados: agendamentosNotificados.length // Para debug
     });
   }
 });
 
-
-
-// 🔔 LEMBRETES PARA AGENDAMENTOS DE AMANHÃ
+// 🔔 LEMBRETES PARA AMANHÃ - VERSÃO CORRIGIDA
 app.get("/api/lembretes-amanha", async (req, res) => {
+  let agendamentosNotificados = [];
+  
   try {
-   // 🛡️ VERIFICA SE É HORÁRIO DE EXECUTAR (18h da tarde BRASÍLIA)
-const agora = new Date();
-const horaUTC = agora.getUTCHours();
-const horaBrasilia = (horaUTC - 3 + 24) % 24; // Ajuste para UTC-3
+    // 🛡️ VERIFICAÇÃO DE HORÁRIO
+    const agora = new Date();
+    const horaUTC = agora.getUTCHours();
+    const horaBrasilia = (horaUTC - 3 + 24) % 24;
 
-// Só executa entre 18h e 18h59 (horário Brasil)
-if (horaBrasilia !== 18) {
-  console.log(`⏰ Não é horário de lembrete amanhã (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
-  return res.json({ 
-    success: true, 
-    message: `Lembretes amanhã só executam às 18h BR (agora: ${horaBrasilia}h BR)`,
-    executado: false 
-  });
-}
+    if (horaBrasilia !== 18) {
+      console.log(`⏰ Fora do horário amanhã (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
+      return res.json({ 
+        success: true, 
+        message: `Lembretes amanhã às 18h BR (agora: ${horaBrasilia}h)`,
+        executado: false 
+      });
+    }
 
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
     const amanhaStr = amanha.toISOString().split('T')[0];
     
-    console.log(`🔔 Executando lembretes para amanhã: ${amanhaStr}`);
+    console.log(`🔔 Iniciando lembretes para amanhã: ${amanhaStr}`);
     
+    // 🔍 BUSCAR AGENDAMENTOS
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
-      .select("*")
+      .select("id, cliente, nome, horario, data, status")
       .eq("data", amanhaStr)
       .in("status", ["confirmado", "pendente"])
-      .neq("status", "cancelado");
+      .neq("status", "cancelado")
+      .is("notificado_amanha", null);
 
     if (error) throw error;
 
     if (!agendamentos || agendamentos.length === 0) {
+      console.log("📭 Nenhum agendamento para notificar amanhã");
       return res.json({ 
         success: true, 
         message: "Nenhum agendamento para notificar amanhã",
@@ -2588,41 +2675,107 @@ if (horaBrasilia !== 18) {
       });
     }
 
+    console.log(`📨 Encontrados ${agendamentos.length} agendamentos para amanhã`);
+
+    // 🔥 AGRUPAMENTO
+    const agendamentosPorCliente = {};
+    agendamentos.forEach(agendamento => {
+      const clienteId = agendamento.cliente;
+      if (!agendamentosPorCliente[clienteId]) {
+        agendamentosPorCliente[clienteId] = [];
+      }
+      agendamentosPorCliente[clienteId].push(agendamento);
+    });
+
     const resultados = [];
-    for (const agendamento of agendamentos) {
-      const sucesso = await enviarNotificacaoParaUsuario(
-        agendamento.cliente,
-        '📅 Lembrete para Amanhã!',
-        `Você tem agendamento com ${agendamento.nome} amanhã às ${agendamento.horario}`,
-        { 
-          tipo: 'lembrete_amanha', 
-          agendamento_id: agendamento.id.toString(),
-          data: agendamento.data,
-          horario: agendamento.horario,
-          cliente_nome: agendamento.nome
+    const clientesNotificados = new Set();
+
+    // 📱 ENVIAR NOTIFICAÇÕES
+    for (const [clienteId, agendamentosCliente] of Object.entries(agendamentosPorCliente)) {
+      if (clientesNotificados.has(clienteId)) {
+        console.log(`⚠️ Cliente ${clienteId} já notificado, pulando...`);
+        continue;
+      }
+
+      try {
+        let titulo, mensagem, dados;
+        const idsParaMarcar = agendamentosCliente.map(a => a.id);
+
+        if (agendamentosCliente.length === 1) {
+          const agendamento = agendamentosCliente[0];
+          titulo = '📅 Lembrete para Amanhã!';
+          mensagem = `Você tem agendamento com ${agendamento.nome} amanhã às ${agendamento.horario}`;
+          dados = {
+            tipo: 'lembrete_amanha',
+            agendamento_id: agendamento.id.toString()
+          };
+        } else {
+          const horarios = agendamentosCliente
+            .sort((a, b) => a.horario.localeCompare(b.horario))
+            .map(a => `• ${a.horario} - ${a.nome}`)
+            .join('\n');
+          
+          titulo = `📅 Você tem ${agendamentosCliente.length} agendamentos amanhã!`;
+          mensagem = `Seus agendamentos de amanhã:\n${horarios}`;
+          dados = {
+            tipo: 'lembrete_amanha_multiplos',
+            total_agendamentos: agendamentosCliente.length.toString()
+          };
         }
-      );
-      
-      resultados.push({
-        agendamento_id: agendamento.id,
-        sucesso: sucesso
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+        const sucesso = await enviarNotificacaoParaUsuario(clienteId, titulo, mensagem, dados);
+        
+        if (sucesso) {
+          agendamentosNotificados.push(...idsParaMarcar);
+          clientesNotificados.add(clienteId);
+        }
+
+        resultados.push({
+          cliente_id: clienteId,
+          sucesso: sucesso,
+          total_agendamentos: agendamentosCliente.length
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+      } catch (error) {
+        console.error(`❌ Erro no cliente ${clienteId}:`, error);
+        resultados.push({ cliente_id: clienteId, sucesso: false, erro: error.message });
+      }
     }
 
+    // 💾 ATUALIZAR BANCO
+    if (agendamentosNotificados.length > 0) {
+      await supabase
+        .from("agendamentos")
+        .update({ 
+          notificado_amanha: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .in("id", agendamentosNotificados);
+    }
+
+    const totalClientes = Object.keys(agendamentosPorCliente).length;
     const sucessos = resultados.filter(r => r.sucesso).length;
     
+    console.log(`🎯 Lembretes amanhã: ${sucessos}/${totalClientes} clientes notificados`);
+
     res.json({
       success: true,
-      message: `Lembretes para amanhã: ${sucessos} enviados`,
-      total: agendamentos.length,
-      enviados: sucessos
+      message: `Lembretes para amanhã enviados para ${sucessos} clientes`,
+      total_agendamentos: agendamentos.length,
+      total_clientes: totalClientes,
+      notificacoes_enviadas: sucessos,
+      agendamentos_marcados_como_notificados: agendamentosNotificados.length
     });
 
   } catch (error) {
     console.error("❌ Erro em lembretes para amanhã:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      agendamentos_notificados: agendamentosNotificados.length
+    });
   }
 });
 
@@ -2669,6 +2822,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
