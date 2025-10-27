@@ -2443,7 +2443,7 @@ app.get("/gerar-link/:user_id", authMiddleware, async (req, res) => {
   }
 });
 
-// 🔔 LEMBRETES DIÁRIOS - VERSÃO CORRIGIDA
+// 🔔 LEMBRETES DIÁRIOS - VERSÃO COMPATÍVEL
 app.get("/api/lembretes-diarios", async (req, res) => {
   let agendamentosNotificados = [];
   
@@ -2465,14 +2465,14 @@ app.get("/api/lembretes-diarios", async (req, res) => {
     const hoje = new Date().toISOString().split('T')[0];
     console.log(`🔔 Iniciando lembretes para: ${hoje}`);
     
-    // 🔍 BUSCAR AGENDAMENTOS NÃO NOTIFICADOS
+    // 🔍 BUSCAR AGENDAMENTOS NÃO NOTIFICADOS - CORRIGIDO
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
-      .select("id, cliente, nome, horario, data, status")
+      .select("id, cliente, nome, horario, data, status, notificado_hoje")
       .eq("data", hoje)
       .in("status", ["confirmado", "pendente"])
       .neq("status", "cancelado")
-      .is("notificado_hoje", null);
+      .is("notificado_hoje", null); // ✅ Só busca os não notificados
 
     if (error) {
       console.error("❌ Erro ao buscar agendamentos:", error);
@@ -2568,7 +2568,7 @@ app.get("/api/lembretes-diarios", async (req, res) => {
         });
 
         // ⏰ DELAY ENTRE CLIENTES
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500)); // Aumentei para 500ms
         
       } catch (error) {
         console.error(`💥 Erro grave no cliente ${clienteId}:`, error);
@@ -2580,7 +2580,7 @@ app.get("/api/lembretes-diarios", async (req, res) => {
       }
     }
 
-    // 💾 ATUALIZAR BANCO DE DADOS - CRÍTICO
+    // 💾 ATUALIZAR BANCO DE DADOS - CORRIGIDO (sem updated_at)
     if (agendamentosNotificados.length > 0) {
       try {
         console.log(`💾 Marcando ${agendamentosNotificados.length} agendamentos como notificados...`);
@@ -2588,20 +2588,19 @@ app.get("/api/lembretes-diarios", async (req, res) => {
         const { error: updateError } = await supabase
           .from("agendamentos")
           .update({ 
-            notificado_hoje: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            notificado_hoje: new Date().toISOString()
+            // ❌ REMOVIDO: updated_at não existe na sua tabela
           })
           .in("id", agendamentosNotificados);
 
         if (updateError) {
           console.error("❌ Erro crítico ao atualizar notificações:", updateError);
-          throw updateError;
+          // Não faz throw para não quebrar a resposta completa
+        } else {
+          console.log(`✅ ${agendamentosNotificados.length} agendamentos marcados como notificados`);
         }
-        
-        console.log(`✅ ${agendamentosNotificados.length} agendamentos marcados como notificados`);
       } catch (updateError) {
         console.error("💥 Falha crítica ao salvar no banco:", updateError);
-        // Não fazemos throw para não quebrar a resposta
       }
     }
 
@@ -2625,12 +2624,12 @@ app.get("/api/lembretes-diarios", async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message,
-      agendamentos_notificados: agendamentosNotificados.length // Para debug
+      agendamentos_notificados: agendamentosNotificados.length
     });
   }
 });
 
-// 🔔 LEMBRETES PARA AMANHÃ - VERSÃO CORRIGIDA
+// 🔔 LEMBRETES PARA AMANHÃ - VERSÃO COMPATÍVEL
 app.get("/api/lembretes-amanha", async (req, res) => {
   let agendamentosNotificados = [];
   
@@ -2655,10 +2654,10 @@ app.get("/api/lembretes-amanha", async (req, res) => {
     
     console.log(`🔔 Iniciando lembretes para amanhã: ${amanhaStr}`);
     
-    // 🔍 BUSCAR AGENDAMENTOS
+    // 🔍 BUSCAR AGENDAMENTOS - CORRIGIDO
     const { data: agendamentos, error } = await supabase
       .from("agendamentos")
-      .select("id, cliente, nome, horario, data, status")
+      .select("id, cliente, nome, horario, data, status, notificado_amanha")
       .eq("data", amanhaStr)
       .in("status", ["confirmado", "pendente"])
       .neq("status", "cancelado")
@@ -2736,7 +2735,7 @@ app.get("/api/lembretes-amanha", async (req, res) => {
           total_agendamentos: agendamentosCliente.length
         });
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500)); // Aumentei para 500ms
         
       } catch (error) {
         console.error(`❌ Erro no cliente ${clienteId}:`, error);
@@ -2744,13 +2743,13 @@ app.get("/api/lembretes-amanha", async (req, res) => {
       }
     }
 
-    // 💾 ATUALIZAR BANCO
+    // 💾 ATUALIZAR BANCO - CORRIGIDO (sem updated_at)
     if (agendamentosNotificados.length > 0) {
       await supabase
         .from("agendamentos")
         .update({ 
-          notificado_amanha: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          notificado_amanha: new Date().toISOString()
+          // ❌ REMOVIDO: updated_at não existe na sua tabela
         })
         .in("id", agendamentosNotificados);
     }
@@ -2822,6 +2821,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
