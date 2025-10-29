@@ -411,7 +411,68 @@ async function enviarNotificacao(pushToken, titulo, mensagem, dadosExtras = {}) 
   }
 }
 
+// ✅ ROTA DE STATUS DO TRIAL/PREMIUM (A ROTA QUE ESTAVA FALTANDO)
+app.get("/api/trial-status", authMiddleware, async (req, res) => {
+    try {
+        const userId = req.userId;
+        
+        // 1. Verifica se o usuário tem uma assinatura premium ativa
+        const { data: subscription } = await supabase
+            .from('user_subscriptions')
+            .select('*')
+            .eq('user_email', req.user.email) // Usa o email para compatibilidade com Hotmart
+            .in('status', ['active', 'SUBSCRIPTION_ACTIVATED'])
+            .single();
 
+        if (subscription) {
+            return res.json({
+                success: true,
+                status: {
+                    hasTrial: false,
+                    isPremium: true,
+                    unlimited: true,
+                    dailyUsagesLeft: 999 // Representa ilimitado
+                }
+            });
+        }
+        
+        // 2. Se não for premium, verifica o trial
+        const trial = await getUserTrialBackend(userId);
+        
+        if (!trial || trial.status !== 'active') {
+            return res.json({
+                success: true,
+                status: {
+                    hasTrial: false,
+                    dailyUsagesLeft: 0,
+                    unlimited: false
+                }
+            });
+        }
+        
+        // 3. Calcula os usos diários restantes do trial
+        const dailyLimit = trial.max_usages || 5;
+        const usage = await getDailyUsageBackend(trial, dailyLimit);
+        
+        return res.json({
+            success: true,
+            status: {
+                hasTrial: true,
+                isPremiumTrial: trial.plan_type === 'premium_trial',
+                isFreeTrial: trial.plan_type === 'free_trial',
+                dailyUsagesLeft: usage.dailyUsagesLeft,
+                unlimited: false
+            }
+        });
+
+    } catch (error) {
+        console.error("❌ Erro ao verificar status do trial:", error);
+        res.status(500).json({
+            success: false,
+            msg: "Erro ao verificar status do trial"
+        });
+    }
+});
 // 🔥 ROTA MELHORADA PARA SALVAR TOKEN FCM
 app.post("/api/salvar-token-simples", async (req, res) => {
   try {
@@ -2821,6 +2882,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
