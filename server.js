@@ -327,7 +327,7 @@ const cacheManager = {
   }
 };
 
-// 🔥 ATUALIZE A FUNÇÃO enviarNotificacao NO BACKEND
+// 🔥 FUNÇÃO COMPLETA PARA ENVIAR NOTIFICAÇÕES FCM
 async function enviarNotificacao(pushToken, titulo, mensagem, dadosExtras = {}) {
   try {
     if (!pushToken) {
@@ -349,23 +349,40 @@ async function enviarNotificacao(pushToken, titulo, mensagem, dadosExtras = {}) 
       },
       data: {
         ...dadosExtras,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK', // Mantém compatibilidade
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
         sound: 'default',
         timestamp: new Date().toISOString()
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          channel_id: 'high_importance_channel',
+          icon: 'ic_notification',
+          color: '#FF6B35'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            alert: {
+              title: titulo,
+              body: mensagem
+            }
+          }
+        }
       },
       webpush: {
         headers: {
           Urgency: 'high'
-        },
-        notification: {
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/badge-72x72.png'
         }
       }
     };
 
-    console.log('📤 Enviando notificação FCM Web...', { 
-      token: pushToken.substring(0, 15) + '...',
+    console.log('📤 Enviando notificação FCM...', { 
+      token: pushToken.substring(0, 10) + '...',
       titulo,
       mensagem 
     });
@@ -377,111 +394,22 @@ async function enviarNotificacao(pushToken, titulo, mensagem, dadosExtras = {}) 
   } catch (error) {
     console.error('❌ Erro ao enviar notificação FCM:', error);
     
-    // 🔥 TRATAMENTO ESPECÍFICO PARA WEB
-    if (error.code === 'messaging/registration-token-not-registered' || 
-        error.code === 'messaging/invalid-argument' ||
-        error.message.includes('not found')) {
-      
-      console.log('🔄 Removendo token FCM web inválido:', pushToken.substring(0, 20) + '...');
-      
-      try {
-        const { error: deleteError } = await supabase
-          .from('user_push_tokens')
-          .delete()
-          .eq('push_token', pushToken);
-          
-        if (deleteError) {
-          console.log('❌ Erro ao remover token do banco:', deleteError);
-        } else {
-          console.log('✅ Token web inválido removido do banco');
-        }
-      } catch (dbError) {
-        console.log('❌ Erro ao acessar banco para remover token:', dbError);
-      }
+    // Tratamento específico de erros comuns do FCM
+    if (error.code === 'messaging/registration-token-not-registered') {
+      console.log('🔄 Removendo token inválido/desregistrado:', pushToken);
+      await supabase
+        .from('user_push_tokens')
+        .delete()
+        .eq('push_token', pushToken);
+    } else if (error.code === 'messaging/invalid-argument') {
+      console.log('❌ Token FCM inválido:', pushToken);
+    } else if (error.code === 'messaging/internal-error') {
+      console.log('❌ Erro interno do FCM');
     }
     
     return false;
   }
 }
-
-// 🔥 ADICIONE ESTA FUNÇÃO NO SEU BACKEND (server.js)
-async function limparTokensInvalidos() {
-  try {
-    console.log('🧹 Iniciando limpeza de tokens FCM inválidos...');
-    
-    // Busca todos os tokens
-    const { data: todosTokens, error } = await supabase
-      .from('user_push_tokens')
-      .select('id, push_token, user_id, device_name');
-    
-    if (error) throw error;
-    
-    if (!todosTokens || todosTokens.length === 0) {
-      console.log('📭 Nenhum token para verificar');
-      return;
-    }
-    
-    console.log(`🔍 Verificando ${todosTokens.length} tokens...`);
-    
-    const tokensParaRemover = [];
-    
-    // Testa cada token
-    for (const token of todosTokens) {
-      try {
-        // Tenta enviar notificação de teste silenciosa
-        const message = {
-          token: token.push_token,
-          data: {
-            tipo: 'teste_silencioso',
-            timestamp: new Date().toISOString()
-          },
-          webpush: {
-            headers: {
-              Urgency: 'low'
-            }
-          }
-        };
-        
-        await admin.messaging().send(message);
-        console.log(`✅ Token válido: ${token.device_name} (${token.user_id})`);
-        
-      } catch (error) {
-        if (error.code === 'messaging/registration-token-not-registered' || 
-            error.code === 'messaging/invalid-argument') {
-          
-          tokensParaRemover.push(token.id);
-          console.log(`❌ Token inválido: ${token.device_name} - ${error.code}`);
-        }
-      }
-      
-      // Delay para não sobrecarregar o FCM
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    // Remove tokens inválidos
-    if (tokensParaRemover.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('user_push_tokens')
-        .delete()
-        .in('id', tokensParaRemover);
-      
-      if (deleteError) {
-        console.error('❌ Erro ao remover tokens:', deleteError);
-      } else {
-        console.log(`✅ ${tokensParaRemover.length} tokens inválidos removidos`);
-      }
-    }
-    
-  } catch (error) {
-    console.error('❌ Erro na limpeza de tokens:', error);
-  }
-}
-
-// 🔥 EXECUTA A LIMPEZA NO STARTUP
-limparTokensInvalidos();
-
-// 🔥 E AGENDA PARA RODAR A CADA 6 HORAS
-setInterval(limparTokensInvalidos, 6 * 60 * 60 * 1000);
 
 
 // 🔥 ROTA MELHORADA PARA SALVAR TOKEN FCM
@@ -2534,25 +2462,6 @@ async function atualizarEstruturaPerfis() {
     console.log('ℹ️ Estrutura da tabela:', error.message);
   }
 }
-
-// 🔥 ADICIONE ESTA ROTA NO BACKEND PARA LIMPEZA MANUAL
-app.get("/api/limpar-tokens-invalidos", async (req, res) => {
-  try {
-    console.log('🧹 Limpeza manual de tokens inválidos solicitada');
-    
-    await limparTokensInvalidos();
-    
-    res.json({
-      success: true,
-      message: 'Limpeza de tokens inválidos concluída'
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro na limpeza manual:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 
 // Chame esta função no startup
 atualizarEstruturaPerfis();
