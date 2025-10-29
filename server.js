@@ -1003,6 +1003,86 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// 🔥 MOVER A FUNÇÃO limparTokensInvalidos PARA AQUI (DEPOIS DO SUPABASE)
+async function limparTokensInvalidos() {
+  try {
+    console.log('🧹 Iniciando limpeza de tokens FCM inválidos...');
+    
+    // Busca todos os tokens
+    const { data: todosTokens, error } = await supabase
+      .from('user_push_tokens')
+      .select('id, push_token, user_id, device_name');
+    
+    if (error) throw error;
+    
+    if (!todosTokens || todosTokens.length === 0) {
+      console.log('📭 Nenhum token para verificar');
+      return;
+    }
+    
+    console.log(`🔍 Verificando ${todosTokens.length} tokens...`);
+    
+    const tokensParaRemover = [];
+    
+    // Testa cada token
+    for (const token of todosTokens) {
+      try {
+        // Tenta enviar notificação de teste silenciosa
+        const message = {
+          token: token.push_token,
+          data: {
+            tipo: 'teste_silencioso',
+            timestamp: new Date().toISOString()
+          },
+          webpush: {
+            headers: {
+              Urgency: 'low'
+            }
+          }
+        };
+        
+        await admin.messaging().send(message);
+        console.log(`✅ Token válido: ${token.device_name} (${token.user_id})`);
+        
+      } catch (error) {
+        if (error.code === 'messaging/registration-token-not-registered' || 
+            error.code === 'messaging/invalid-argument') {
+          
+          tokensParaRemover.push(token.id);
+          console.log(`❌ Token inválido: ${token.device_name} - ${error.code}`);
+        }
+      }
+      
+      // Delay para não sobrecarregar o FCM
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Remove tokens inválidos
+    if (tokensParaRemover.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('user_push_tokens')
+        .delete()
+        .in('id', tokensParaRemover);
+      
+      if (deleteError) {
+        console.error('❌ Erro ao remover tokens:', deleteError);
+      } else {
+        console.log(`✅ ${tokensParaRemover.length} tokens inválidos removidos`);
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro na limpeza de tokens:', error);
+  }
+}
+
+// 🔥 EXECUTA A LIMPEZA NO STARTUP (AGORA DEPOIS DO SUPABASE)
+setTimeout(() => {
+  limparTokensInvalidos();
+}, 3000);
+
+
+
 let creds;
 try {
   creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
@@ -1010,7 +1090,6 @@ try {
   console.error("Erro ao parsear GOOGLE_SERVICE_ACCOUNT:", e);
   process.exit(1);
 }
-
 
 
 // 🎯 FUNÇÃO CORRIGIDA: Usa dados REAIS sem precisar do userId
@@ -2486,6 +2565,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
