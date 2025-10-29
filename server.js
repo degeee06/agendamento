@@ -2463,6 +2463,342 @@ async function atualizarEstruturaPerfis() {
   }
 }
 
+
+// 🔔 LEMBRETES DIÁRIOS - VERSÃO COMPATÍVEL
+app.get("/api/lembretes-diarios", async (req, res) => {
+  let agendamentosNotificados = [];
+  
+  try {
+    // 🛡️ VERIFICAÇÃO DE HORÁRIO
+    const agora = new Date();
+    const horaUTC = agora.getUTCHours();
+    const horaBrasilia = (horaUTC - 3 + 24) % 24;
+
+    if (horaBrasilia !== 8) {
+      console.log(`⏰ Fora do horário (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
+      return res.json({ 
+        success: true, 
+        message: `Lembretes às 8h BR (agora: ${horaBrasilia}h)`,
+        executado: false 
+      });
+    }
+
+    const hoje = new Date().toISOString().split('T')[0];
+    console.log(`🔔 Iniciando lembretes para: ${hoje}`);
+    
+    // 🔍 BUSCAR AGENDAMENTOS NÃO NOTIFICADOS - CORRIGIDO
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("id, cliente, nome, horario, data, status, notificado_hoje")
+      .eq("data", hoje)
+      .in("status", ["confirmado", "pendente"])
+      .neq("status", "cancelado")
+      .is("notificado_hoje", null); // ✅ Só busca os não notificados
+
+    if (error) {
+      console.error("❌ Erro ao buscar agendamentos:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    if (!agendamentos || agendamentos.length === 0) {
+      console.log("📭 Nenhum agendamento para notificar hoje");
+      return res.json({ 
+        success: true, 
+        message: "Nenhum agendamento para notificar hoje",
+        total: 0 
+      });
+    }
+
+    console.log(`📨 Encontrados ${agendamentos.length} agendamentos não notificados`);
+
+    // 🔥 AGRUPAMENTO CORRETO POR CLIENTE
+    const agendamentosPorCliente = {};
+    
+    agendamentos.forEach(agendamento => {
+      const clienteId = agendamento.cliente;
+      if (!agendamentosPorCliente[clienteId]) {
+        agendamentosPorCliente[clienteId] = [];
+      }
+      agendamentosPorCliente[clienteId].push(agendamento);
+    });
+
+    console.log(`👥 ${Object.keys(agendamentosPorCliente).length} clientes para notificar`);
+
+    const resultados = [];
+    const clientesNotificados = new Set();
+
+    // 📱 ENVIAR NOTIFICAÇÕES AGRUPADAS
+    for (const [clienteId, agendamentosCliente] of Object.entries(agendamentosPorCliente)) {
+      // ⚠️ VERIFICAR DUPLICATA DURANTE EXECUÇÃO
+      if (clientesNotificados.has(clienteId)) {
+        console.log(`⚠️ Cliente ${clienteId} já notificado nesta execução, pulando...`);
+        continue;
+      }
+
+      try {
+        console.log(`📱 Notificando cliente ${clienteId} com ${agendamentosCliente.length} agendamento(s)`);
+        
+        let titulo, mensagem, dados;
+        const idsParaMarcar = agendamentosCliente.map(a => a.id);
+
+        if (agendamentosCliente.length === 1) {
+          // 📅 CASO INDIVIDUAL
+          const agendamento = agendamentosCliente[0];
+          titulo = '🔔 Lembrete de Agendamento Hoje!';
+          mensagem = `Você tem agendamento com ${agendamento.nome} às ${agendamento.horario}`;
+          dados = {
+            tipo: 'lembrete_agendamento',
+            agendamento_id: agendamento.id.toString(),
+            data: agendamento.data,
+            horario: agendamento.horario
+          };
+        } else {
+          // 📅 CASO MÚLTIPLOS
+          const horariosFormatados = agendamentosCliente
+            .sort((a, b) => a.horario.localeCompare(b.horario))
+            .map(a => `• ${a.horario} - ${a.nome}`)
+            .join('\n');
+          
+          titulo = `📅 Você tem ${agendamentosCliente.length} agendamentos hoje!`;
+          mensagem = `Seus agendamentos de hoje:\n${horariosFormatados}`;
+          dados = {
+            tipo: 'lembrete_multiplos',
+            total_agendamentos: agendamentosCliente.length.toString(),
+            data: hoje
+          };
+        }
+
+        // 🚀 ENVIAR NOTIFICAÇÃO
+        const sucesso = await enviarNotificacaoParaUsuario(clienteId, titulo, mensagem, dados);
+        
+        if (sucesso) {
+          // ✅ MARCAR COMO NOTIFICADO IMEDIATAMENTE
+          agendamentosNotificados.push(...idsParaMarcar);
+          clientesNotificados.add(clienteId);
+          
+          console.log(`✅ Cliente ${clienteId} notificado com sucesso (${agendamentosCliente.length} agendamentos)`);
+        } else {
+          console.log(`❌ Falha ao notificar cliente ${clienteId}`);
+        }
+
+        resultados.push({
+          cliente_id: clienteId,
+          sucesso: sucesso,
+          tipo: agendamentosCliente.length === 1 ? 'individual' : 'agrupada',
+          total_agendamentos: agendamentosCliente.length
+        });
+
+        // ⏰ DELAY ENTRE CLIENTES
+        await new Promise(resolve => setTimeout(resolve, 500)); // Aumentei para 500ms
+        
+      } catch (error) {
+        console.error(`💥 Erro grave no cliente ${clienteId}:`, error);
+        resultados.push({ 
+          cliente_id: clienteId, 
+          sucesso: false, 
+          erro: error.message 
+        });
+      }
+    }
+
+    // 💾 ATUALIZAR BANCO DE DADOS - CORRIGIDO (sem updated_at)
+    if (agendamentosNotificados.length > 0) {
+      try {
+        console.log(`💾 Marcando ${agendamentosNotificados.length} agendamentos como notificados...`);
+        
+        const { error: updateError } = await supabase
+          .from("agendamentos")
+          .update({ 
+            notificado_hoje: new Date().toISOString()
+            // ❌ REMOVIDO: updated_at não existe na sua tabela
+          })
+          .in("id", agendamentosNotificados);
+
+        if (updateError) {
+          console.error("❌ Erro crítico ao atualizar notificações:", updateError);
+          // Não faz throw para não quebrar a resposta completa
+        } else {
+          console.log(`✅ ${agendamentosNotificados.length} agendamentos marcados como notificados`);
+        }
+      } catch (updateError) {
+        console.error("💥 Falha crítica ao salvar no banco:", updateError);
+      }
+    }
+
+    const totalClientes = Object.keys(agendamentosPorCliente).length;
+    const sucessos = resultados.filter(r => r.sucesso).length;
+    
+    console.log(`🎯 RESUMO: ${sucessos}/${totalClientes} clientes notificados com sucesso`);
+
+    res.json({
+      success: true,
+      message: `Lembretes enviados para ${sucessos} clientes`,
+      total_agendamentos: agendamentos.length,
+      total_clientes: totalClientes,
+      notificacoes_enviadas: sucessos,
+      agendamentos_marcados_como_notificados: agendamentosNotificados.length,
+      detalhes: resultados
+    });
+
+  } catch (error) {
+    console.error("💥 ERRO GERAL NO SISTEMA DE LEMBRETES:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      agendamentos_notificados: agendamentosNotificados.length
+    });
+  }
+});
+
+// 🔔 LEMBRETES PARA AMANHÃ - VERSÃO COMPATÍVEL
+app.get("/api/lembretes-amanha", async (req, res) => {
+  let agendamentosNotificados = [];
+  
+  try {
+    // 🛡️ VERIFICAÇÃO DE HORÁRIO
+    const agora = new Date();
+    const horaUTC = agora.getUTCHours();
+    const horaBrasilia = (horaUTC - 3 + 24) % 24;
+
+    if (horaBrasilia !== 18) {
+      console.log(`⏰ Fora do horário amanhã (UTC: ${horaUTC}h | BR: ${horaBrasilia}h)`);
+      return res.json({ 
+        success: true, 
+        message: `Lembretes amanhã às 18h BR (agora: ${horaBrasilia}h)`,
+        executado: false 
+      });
+    }
+
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    const amanhaStr = amanha.toISOString().split('T')[0];
+    
+    console.log(`🔔 Iniciando lembretes para amanhã: ${amanhaStr}`);
+    
+    // 🔍 BUSCAR AGENDAMENTOS - CORRIGIDO
+    const { data: agendamentos, error } = await supabase
+      .from("agendamentos")
+      .select("id, cliente, nome, horario, data, status, notificado_amanha")
+      .eq("data", amanhaStr)
+      .in("status", ["confirmado", "pendente"])
+      .neq("status", "cancelado")
+      .is("notificado_amanha", null);
+
+    if (error) throw error;
+
+    if (!agendamentos || agendamentos.length === 0) {
+      console.log("📭 Nenhum agendamento para notificar amanhã");
+      return res.json({ 
+        success: true, 
+        message: "Nenhum agendamento para notificar amanhã",
+        total: 0 
+      });
+    }
+
+    console.log(`📨 Encontrados ${agendamentos.length} agendamentos para amanhã`);
+
+    // 🔥 AGRUPAMENTO
+    const agendamentosPorCliente = {};
+    agendamentos.forEach(agendamento => {
+      const clienteId = agendamento.cliente;
+      if (!agendamentosPorCliente[clienteId]) {
+        agendamentosPorCliente[clienteId] = [];
+      }
+      agendamentosPorCliente[clienteId].push(agendamento);
+    });
+
+    const resultados = [];
+    const clientesNotificados = new Set();
+
+    // 📱 ENVIAR NOTIFICAÇÕES
+    for (const [clienteId, agendamentosCliente] of Object.entries(agendamentosPorCliente)) {
+      if (clientesNotificados.has(clienteId)) {
+        console.log(`⚠️ Cliente ${clienteId} já notificado, pulando...`);
+        continue;
+      }
+
+      try {
+        let titulo, mensagem, dados;
+        const idsParaMarcar = agendamentosCliente.map(a => a.id);
+
+        if (agendamentosCliente.length === 1) {
+          const agendamento = agendamentosCliente[0];
+          titulo = '📅 Lembrete para Amanhã!';
+          mensagem = `Você tem agendamento com ${agendamento.nome} amanhã às ${agendamento.horario}`;
+          dados = {
+            tipo: 'lembrete_amanha',
+            agendamento_id: agendamento.id.toString()
+          };
+        } else {
+          const horarios = agendamentosCliente
+            .sort((a, b) => a.horario.localeCompare(b.horario))
+            .map(a => `• ${a.horario} - ${a.nome}`)
+            .join('\n');
+          
+          titulo = `📅 Você tem ${agendamentosCliente.length} agendamentos amanhã!`;
+          mensagem = `Seus agendamentos de amanhã:\n${horarios}`;
+          dados = {
+            tipo: 'lembrete_amanha_multiplos',
+            total_agendamentos: agendamentosCliente.length.toString()
+          };
+        }
+
+        const sucesso = await enviarNotificacaoParaUsuario(clienteId, titulo, mensagem, dados);
+        
+        if (sucesso) {
+          agendamentosNotificados.push(...idsParaMarcar);
+          clientesNotificados.add(clienteId);
+        }
+
+        resultados.push({
+          cliente_id: clienteId,
+          sucesso: sucesso,
+          total_agendamentos: agendamentosCliente.length
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 500)); // Aumentei para 500ms
+        
+      } catch (error) {
+        console.error(`❌ Erro no cliente ${clienteId}:`, error);
+        resultados.push({ cliente_id: clienteId, sucesso: false, erro: error.message });
+      }
+    }
+
+    // 💾 ATUALIZAR BANCO - CORRIGIDO (sem updated_at)
+    if (agendamentosNotificados.length > 0) {
+      await supabase
+        .from("agendamentos")
+        .update({ 
+          notificado_amanha: new Date().toISOString()
+          // ❌ REMOVIDO: updated_at não existe na sua tabela
+        })
+        .in("id", agendamentosNotificados);
+    }
+
+    const totalClientes = Object.keys(agendamentosPorCliente).length;
+    const sucessos = resultados.filter(r => r.sucesso).length;
+    
+    console.log(`🎯 Lembretes amanhã: ${sucessos}/${totalClientes} clientes notificados`);
+
+    res.json({
+      success: true,
+      message: `Lembretes para amanhã enviados para ${sucessos} clientes`,
+      total_agendamentos: agendamentos.length,
+      total_clientes: totalClientes,
+      notificacoes_enviadas: sucessos,
+      agendamentos_marcados_como_notificados: agendamentosNotificados.length
+    });
+
+  } catch (error) {
+    console.error("❌ Erro em lembretes para amanhã:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      agendamentos_notificados: agendamentosNotificados.length
+    });
+  }
+});
+
 // Chame esta função no startup
 atualizarEstruturaPerfis();
 // ---------------- Error Handling ----------------
@@ -2486,6 +2822,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
