@@ -327,89 +327,87 @@ const cacheManager = {
   }
 };
 
-// 🔥 FUNÇÃO COMPLETA PARA ENVIAR NOTIFICAÇÕES FCM
-async function enviarNotificacao(pushToken, titulo, mensagem, dadosExtras = {}) {
+
+
+// 🔥 ADICIONE ESTA FUNÇÃO NO SEU BACKEND (server.js)
+async function limparTokensInvalidos() {
   try {
-    if (!pushToken) {
-      console.log('❌ Token FCM não fornecido');
-      return false;
+    console.log('🧹 Iniciando limpeza de tokens FCM inválidos...');
+    
+    // Busca todos os tokens
+    const { data: todosTokens, error } = await supabase
+      .from('user_push_tokens')
+      .select('id, push_token, user_id, device_name');
+    
+    if (error) throw error;
+    
+    if (!todosTokens || todosTokens.length === 0) {
+      console.log('📭 Nenhum token para verificar');
+      return;
     }
-
-    // Verifica se o Firebase está configurado
-    if (!admin.apps.length) {
-      console.log('❌ Firebase Admin não inicializado');
-      return false;
-    }
-
-    const message = {
-      token: pushToken,
-      notification: {
-        title: titulo,
-        body: mensagem,
-      },
-      data: {
-        ...dadosExtras,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-        sound: 'default',
-        timestamp: new Date().toISOString()
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          sound: 'default',
-          channel_id: 'high_importance_channel',
-          icon: 'ic_notification',
-          color: '#FF6B35'
-        }
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-            alert: {
-              title: titulo,
-              body: mensagem
+    
+    console.log(`🔍 Verificando ${todosTokens.length} tokens...`);
+    
+    const tokensParaRemover = [];
+    
+    // Testa cada token
+    for (const token of todosTokens) {
+      try {
+        // Tenta enviar notificação de teste silenciosa
+        const message = {
+          token: token.push_token,
+          data: {
+            tipo: 'teste_silencioso',
+            timestamp: new Date().toISOString()
+          },
+          webpush: {
+            headers: {
+              Urgency: 'low'
             }
           }
-        }
-      },
-      webpush: {
-        headers: {
-          Urgency: 'high'
+        };
+        
+        await admin.messaging().send(message);
+        console.log(`✅ Token válido: ${token.device_name} (${token.user_id})`);
+        
+      } catch (error) {
+        if (error.code === 'messaging/registration-token-not-registered' || 
+            error.code === 'messaging/invalid-argument') {
+          
+          tokensParaRemover.push(token.id);
+          console.log(`❌ Token inválido: ${token.device_name} - ${error.code}`);
         }
       }
-    };
-
-    console.log('📤 Enviando notificação FCM...', { 
-      token: pushToken.substring(0, 10) + '...',
-      titulo,
-      mensagem 
-    });
-
-    const response = await admin.messaging().send(message);
-    console.log('✅ Notificação enviada com sucesso:', response);
-    return true;
-    
-  } catch (error) {
-    console.error('❌ Erro ao enviar notificação FCM:', error);
-    
-    // Tratamento específico de erros comuns do FCM
-    if (error.code === 'messaging/registration-token-not-registered') {
-      console.log('🔄 Removendo token inválido/desregistrado:', pushToken);
-      await supabase
-        .from('user_push_tokens')
-        .delete()
-        .eq('push_token', pushToken);
-    } else if (error.code === 'messaging/invalid-argument') {
-      console.log('❌ Token FCM inválido:', pushToken);
-    } else if (error.code === 'messaging/internal-error') {
-      console.log('❌ Erro interno do FCM');
+      
+      // Delay para não sobrecarregar o FCM
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    return false;
+    // Remove tokens inválidos
+    if (tokensParaRemover.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('user_push_tokens')
+        .delete()
+        .in('id', tokensParaRemover);
+      
+      if (deleteError) {
+        console.error('❌ Erro ao remover tokens:', deleteError);
+      } else {
+        console.log(`✅ ${tokensParaRemover.length} tokens inválidos removidos`);
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro na limpeza de tokens:', error);
   }
 }
+
+// 🔥 EXECUTA A LIMPEZA NO STARTUP
+limparTokensInvalidos();
+
+// 🔥 E AGENDA PARA RODAR A CADA 6 HORAS
+setInterval(limparTokensInvalidos, 6 * 60 * 60 * 1000);
+
 
 
 // 🔥 ROTA MELHORADA PARA SALVAR TOKEN FCM
@@ -522,45 +520,101 @@ app.post("/api/testar-notificacao", authMiddleware, async (req, res) => {
 });
 
     
-// 🔥 ENVIAR NOTIFICAÇÃO PARA MÚLTIPLOS DISPOSITIVOS DE UM USUÁRIO
-async function enviarNotificacaoParaUsuario(userId, titulo, mensagem, dadosExtras = {}) {
+// 🔥 ATUALIZE A FUNÇÃO enviarNotificacao NO BACKEND
+async function enviarNotificacao(pushToken, titulo, mensagem, dadosExtras = {}) {
   try {
-    // Buscar todos os tokens do usuário
-    const { data: tokens, error } = await supabase
-      .from('user_push_tokens')
-      .select('push_token, device_name')
-      .eq('user_id', userId);
-
-    if (error || !tokens || tokens.length === 0) {
-      console.log('📱 Nenhum token encontrado para o usuário:', userId);
+    if (!pushToken) {
+      console.log('❌ Token FCM não fornecido');
       return false;
     }
 
-    console.log(`📤 Enviando notificação para ${tokens.length} dispositivo(s) do usuário ${userId}`);
+    // Verifica se o Firebase está configurado
+    if (!admin.apps.length) {
+      console.log('❌ Firebase Admin não inicializado');
+      return false;
+    }
 
-    const promises = tokens.map(tokenData => 
-      enviarNotificacao(
-        tokenData.push_token, 
-        titulo, 
-        mensagem, 
-        {
-          ...dadosExtras,
-          device: tokenData.device_name
+    const message = {
+      token: pushToken,
+      notification: {
+        title: titulo,
+        body: mensagem,
+      },
+      data: {
+        ...dadosExtras,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK', // Mantém compatibilidade
+        sound: 'default',
+        timestamp: new Date().toISOString()
+      },
+      webpush: {
+        headers: {
+          Urgency: 'high'
+        },
+        notification: {
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/badge-72x72.png'
         }
-      )
-    );
+      }
+    };
 
-    const results = await Promise.allSettled(promises);
-    const sucessos = results.filter(result => result.status === 'fulfilled' && result.value).length;
+    console.log('📤 Enviando notificação FCM Web...', { 
+      token: pushToken.substring(0, 15) + '...',
+      titulo,
+      mensagem 
+    });
 
-    console.log(`✅ Notificações enviadas: ${sucessos}/${tokens.length} sucessos`);
-    return sucessos > 0;
+    const response = await admin.messaging().send(message);
+    console.log('✅ Notificação enviada com sucesso:', response);
+    return true;
     
   } catch (error) {
-    console.error('❌ Erro ao enviar notificações para usuário:', error);
+    console.error('❌ Erro ao enviar notificação FCM:', error);
+    
+    // 🔥 TRATAMENTO ESPECÍFICO PARA WEB
+    if (error.code === 'messaging/registration-token-not-registered' || 
+        error.code === 'messaging/invalid-argument' ||
+        error.message.includes('not found')) {
+      
+      console.log('🔄 Removendo token FCM web inválido:', pushToken.substring(0, 20) + '...');
+      
+      try {
+        const { error: deleteError } = await supabase
+          .from('user_push_tokens')
+          .delete()
+          .eq('push_token', pushToken);
+          
+        if (deleteError) {
+          console.log('❌ Erro ao remover token do banco:', deleteError);
+        } else {
+          console.log('✅ Token web inválido removido do banco');
+        }
+      } catch (dbError) {
+        console.log('❌ Erro ao acessar banco para remover token:', dbError);
+      }
+    }
+    
     return false;
   }
 }
+
+// 🔥 ADICIONE ESTA ROTA NO BACKEND PARA LIMPEZA MANUAL
+app.get("/api/limpar-tokens-invalidos", async (req, res) => {
+  try {
+    console.log('🧹 Limpeza manual de tokens inválidos solicitada');
+    
+    await limparTokensInvalidos();
+    
+    res.json({
+      success: true,
+      message: 'Limpeza de tokens inválidos concluída'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro na limpeza manual:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== CONFIGURAÇÃO DEEPSEEK IA ====================
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -2822,6 +2876,7 @@ app.listen(PORT, () => {
   console.log('✅ Firebase Admin: ' + (admin.apps.length ? 'CONFIGURADO' : 'NÃO CONFIGURADO'));
   console.log('📱 Notificações FCM: ' + (process.env.FIREBASE_PROJECT_ID ? 'PRONTAS' : 'NÃO CONFIGURADAS'));
 });
+
 
 
 
